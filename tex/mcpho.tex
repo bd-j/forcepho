@@ -1,0 +1,198 @@
+\documentclass[modern]{aastex6} 
+\setlength{\parskip}{\baselineskip}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+
+\newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
+\newcommand{\given}{\,|\,}
+
+\newcommand{\counts}{C}
+\newcommand{\countrate}{\hat{C}}
+\newcommand{\exptime}{t_{\mathrm{exp}}}
+\newcommand{\model}{\mathcal{M}}
+\newcommand{\psf}{\mathcal{P}}
+\newcommand{\prf}{\mathcal{R}}
+\newcommand{\qe}{Q}
+\newcommand{\scene}{\mathcal{S}}
+\newcommand{\like}{\mathcal{L}}
+\newcommand{\normal}{\mathcal{N}}
+
+
+\begin{document}
+%\title{Image Forward Modeling Techniques}
+\author{Image Forward Modeling Techniques}
+
+%\begin{center}
+%\today
+%\end{center}
+
+\section{Notation}
+I try to use script letters for probability distributions (e.g. $\S$), with parameters as greek letters (e.g. $\gamma$).
+Draws from a distributioin are denoted by $\sim$.
+Functions are given uppercase italic letters (e.g. $\qe$).
+Scalar variables are lowercase italic letters.
+Vector variables are bolded lowercase.
+Matrices are bolded uppercase.
+
+\section{Introduction}
+The goal is to go from the scene to counts in pixels.
+The basic function that we are trying to compute (efficiently) is:
+\begin{eqnarray}
+\countrate_n & = & F_n(\gamma, \beta)
+\end{eqnarray}
+where $\countrate_n$ is the expected counts in the $n$th pixel,
+there are $n=1,2,...N$ pixels,
+$\gamma$ are the parameters describing the instrument (PSF, PRF, distortions, etc.),
+and ${\bf \beta}$ are the parameters describing the scene (i.e. source positions and shapes).
+In the end we will want to calculate
+\begin{eqnarray}
+\like(\{\counts_n\} \given \{\exptime \, \countrate_n\}) & = & \prod_n \, \frac{e^{-\exptime \, \countrate_n} \, (\exptime \, \countrate_n)^{\counts_n}} {\counts_n !}
+\end{eqnarray}
+(or probably the Gaussian likelihood since there will be plenty of counts.)
+Ideally we will also be able to efficiently calculate (analytically) the gradients of the ln-likelihood with respect to any of the source (and perhaps even instrument) parameters.
+Analytic gradients can vastly accelerate both optimization and MCMC bayesian inference.
+
+
+\section{Full Problem}
+What's really happening from a photon's point of view (sort of)?
+First it comes from a distribution $\scene(\alpha, \delta [, \nu] \given \beta)$ which we take to be the instensity distribution on the sky, or the \emph{scene},
+parameterized by $\beta$.
+It then travels through the the atmosphere (if there is one), then the telescope optics, finally reaching the detector plane.
+During this travel the photon is diffracted, so that its position is now in iteself a PDF (called the point spread function, $\psf$).
+Upon striking the detector the wavefunction is collapsed and the detector position is drawn from this PDF, 
+with some probability related to the quantum efficiency of the detector at that position (and the reflectivity of the optics, etc.).
+One must also consider gaps in the detector, and intrapixel sensitivity variations, which might be folded into a spatially dependent QE or pixel response function, 
+or alternatively combined with the PSF somehow.
+The mapping from the celestial position to the detector plane depends on the distortion of the optics and the aforemention probabilistic draw from $\psf$.
+This can all be represented by 
+\begin{eqnarray}
+\label{eqn:photon}
+\alpha_j, \delta_j [, \nu_j] & \sim & \scene(\beta)\\
+x_j, y_j & = & D(\alpha_j, \delta_j)  \nonumber \\ 
+\Delta x_j, \Delta y_j & \sim & \psf(\gamma, x_j, y_j [, \nu_j]) \nonumber \\
+\countrate_n & \propto & \lim_{J\to\infty} \frac{1}{J} \sum^J_{j=1} \qe_n(x_j+ \Delta x_j, y_j + \Delta y_j [, \nu_j]) \nonumber
+\end{eqnarray}
+where $\scene$ is the sky instensity distribution in celestial coordinates 
+and depends on parameters $\beta$,
+$\alpha_j$ and $\delta_j$ are the coordinates of the $j$th draw from $\scene$,
+$D$ is the mapping from celestial to detector coordinates $(x, y)$ including distortion,
+$\psf$ is the point-spread-function in detector coordinates and depends on parameters $\gamma$ as well as the detector location,
+$\Delta x_j, \Delta y_j$ are draws from $\psf$,
+$\qe_n(x, y)$ is the detector quantum efficiency of the $n$th pixel at location $(x, y)$ (usually something close to a bivariate boxcar),
+and $\countrate_n$ is the expected countrate in pixel $n$ per unit time and total number of photons due to celestial sources (i.e. excluding detector background.)
+The scene can be expressed as a sum of individual source distributions $\scene = \sum_{m=1}^M \scene_m$.
+In what follows we will drop $\nu$ from consideration, assuming that $\qe(\nu)$ is a constant that can be factored out.
+
+
+In the limit of infinite exposure time (or very many photons), we can replace the sum of a large dumber of draws with integrals to obtain the expected count rate.
+\begin{eqnarray}
+\label{eqn:psf_convolve}
+\model(x, y | \gamma, \beta) & = & \iint \, dx' \, dy' \, \psf(x - x', y-y' \given \gamma, x', y') \, \scene( D^{-1}(x', y') \given \beta) \\
+\countrate_n & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \model(x, y \given \gamma, \beta) \nonumber
+\end{eqnarray}
+where $A_n$ is the region of the $n$th pixel, 
+$\model$ is the PSF-convolved scene,
+$\psf$ is the point-spread function (which depends on the input position of the photon),
+and $D$ is the mapping from sky coordinates to detector coordinates, including distortions.
+One question is whether it makes more sense to think of the pixels as rectangles in detector coordinates and project the scene into these coordinates as we have done above, 
+or to project the pixel boundaries (and $\psf$ and $\qe$) into celestial coordinates.
+This probably depends on the form of $D$ and on how the $\qe$ and $\psf$ functions are determined.
+Nevertheless, by switching the order of integration we can write
+\begin{eqnarray}
+\label{eqn:prf_integral}
+\prf_n(x', y' | \gamma) & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \psf(x' - x, y' - y \given \gamma, x, y) \\
+\countrate_n & = & \iint \, dx' \, dy' \, \prf_n(x', y' \given \gamma) \, \scene( D^{-1}(x', y') \given \beta) \nonumber
+\end{eqnarray}
+where $\prf_n(x', y')$ gives the response of a pixel to a point source at detector coordinates $(x', y')$ including the effect of the pixel-averaged PSF.
+This form can be easier to compute, since this pixel response function (PRF) can be specified beforehand, or at least once approximated includes the annoying integral over $A_n$.
+
+These convolutions and integrals can be analytically intractable, or time consuming.
+This is especially true the case of complicated forms for $\psf$, $\prf$, $\scene$ or the function $D$.
+Much of the guts of any forward modeling algorithm will be concerned with approximating this integral,
+ especially in a way that yields analytic gradients.
+
+
+\subsection{Approximation by Gaussian Mixtures and Subgridding}
+One method to make the integrals more tractable is to calculate $\prf$ and $\scene$ on fine grids and calculate \ref{eqn:prf_integral} directly on this grid.
+The grid has to be fine enough that the integral can be approximated by a sum; that is, the grid must fully sample the PRF and the scene.
+In principle the precision can be dialed up or down by increasing the fineness of the grids.
+\begin{eqnarray}
+\label{eqn:prf_grid}
+\countrate_{n'} & \approx & \sum_{i,j} \prf_{n'}(x_i, y_j \given \gamma) \, \scene( D^{-1}(x_i, y_j) \given \beta) \nonumber
+\end{eqnarray}
+It can then be rebinned to produce the actual pixel $\countrate_n$.
+One approach to obtain gradients with respect to the parameters $\gamma, \beta$ is to further approximate $\prf$ and $\scene$ by mixtures of Gaussians.
+This allows one to write the countrate as 
+\begin{eqnarray}
+\prf_{n'}(x, y \given \gamma)  & = & \sum_k w_k(\gamma) \, \normal(x, y \given \mu_{k, n'}(\gamma), \Sigma_k(\gamma)) \\
+\scene(x, y \given \beta) & = & \sum_\ell w_\ell(\beta) \, \normal(D^{-1}(x, y) \given \mu_\ell(\beta), \Sigma_\ell(\beta)) \nonumber \\
+\countrate_{n'} & = & \sum_{i,j}\sum_{k} \, w_k \, \normal(x_i, y_j \given \mu_{k, n'}, \Sigma_{k, n'}) \, \sum_\ell w_\ell \, \normal(D^{-1}(x_i, y_j) \given \mu_{\ell}, \Sigma_{\ell}) \nonumber
+\end{eqnarray}
+where $\normal(a, b \given \mu, \Sigma)$ is the bivariate normal distribution with location $\mu$ and covariance matrix $\Sigma$ evaluated at $(a, b)$.
+This is helpful for gradients since the partial derivatives can be written easily as 
+ \begin{eqnarray}
+\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
+\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \Sigma}  & = &  \normal({\bf c} \given \mu, \Sigma) \, (\Sigma^{-1} - \Sigma^{-1}\, ({\bf c}-\mu) \, \transpose{({\bf c}-\mu)}\, \Sigma^{-1}) \nonumber
+\end{eqnarray}
+where we have written the vector ${\bf c} = [a, b]$. 
+These expressions can then be chained with e.g. $\partial \Sigma /\partial \beta$, $\partial \mu /\partial \beta$, and $\partial w/\partial \beta$.
+
+The drawbacks here are:
+   1) evaluating large numbers of exponentials
+   2) finding nice representations of parameterized scenes and PRFs in terms of mixtures of Gaussians such that the gradients of the Gaussian parameters with respect to the scene parameters $\beta$ are relatively simple
+   3) limited accuracy of the mixture of Gaussians approximation.
+   4) Gaussians do not have a defined maximum frequency and are thus always undersampled to some degree by any grid.
+   4) Point sources are dealt with differently than extended sources.
+   5) Location dependent PSF or PRF can be unwieldy.
+One could also replace the $\prf$ mixture of Gaussians with the polynomial or spline approximation discussed below.
+I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delta$-function $\qe$, in which case the PSF and the PRF are equivalent.
+
+\subsection{Approximation by Polynomials and Sampling}
+One way to approximate intractable integrals is through Monte Carlo techniques.
+This has the nice property that the precision of the approximation can be dialed up or down by increasing or decreasing the number of samples.
+In this scheme we represent each component of the scene as a set of draws from $\scene_\ell(\alpha, \delta \given \beta_\ell)$, which we call phonions.
+In order to maintain differentiability with respect to the parameters $\beta$, the draws can be fixed in some latent space $\hat{\alpha}, \hat{\delta}$,
+possibly with some associated weight $\hat{w}$,
+and then transformed to the actual space via affine transformations
+\begin{eqnarray}
+\hat{\alpha}, \hat{\delta} [, \hat{w}] & \sim & \scene(\beta=\beta_0) \\
+\alpha_k, \delta_k & = & F(\hat{\alpha}, \hat{\delta}, \beta) \nonumber \\
+w_k & = & G(\hat{w}, \beta) \\nonumber
+x_k, y_k & \sim & D(\alpha_k, \delta_k) \nonumber
+\end{eqnarray}
+This has easy derivatives, iff $D$, $F$, and $G$ have easy derivatives.
+
+One could then also draw samples from $\psf$ and apply these to the scene samples, following \ref{eqn:photon},
+ but this might result in unwanted sampling noise unless the number of samples is very large (which is inefficient).
+Furthermore the derivatives of $\qe(x, y)$ with respect to $x$ and $y$ are likely to have discontinuities.
+Alternatively, we can use a polynomial approximation to $\prf$ to approximate the integral as
+\begin{eqnarray}
+\prf_n(x_k, y_k) & \approx & \sum_{i,j} \, R_{n, i, j} \, (x_k - x_n)^i \, (y_k - y_n)^j \\
+\countrate_n & \approx & \sum_k \, w_k \, \prf_n(x_k, y_k \given \gamma) \nonumber
+\end{eqnarray}
+where $x_n, y_n$ are the coordinates of the pixel center or some other suitable reference coordinate for that pixel, 
+and the $R_{n,i,j}$ are coefficients to a polynomial approximation of $\prf$.
+This has the benefit of making $\prf$ analytically differentiable with respect to $x, y$ (which in turn depend on the parameters $\beta$.
+We could also use a mixture of Gaussians approximation for $\prf$ described above, but the polynomial  (or a spline) approximation has some nice properties.
+
+
+\subsubsection{Gradients}
+How do we do gradients in this scheme?  We want 
+\begin{eqnarray}
+\frac{\partial\countrate_n}{\partial\beta} & \approx & \sum_k \, \frac{\partial\prf_n(x_k, y_k \given \gamma)}{\partial \beta} \\
+& \approx & \sum_k\sum_{i,j=0} \, R_{n, i, j} \frac{\partial w_k}{\partial \beta}\, i \, j \, \frac{\partial x_k}{\partial \beta}\, \frac{\partial y_k}{\partial \beta} (x_k - x_n)^{i-1} \, (y_k - y_n)^{j-1} \\
+\end{eqnarray}
+
+
+\subsection{Number of function evaluations and possible caching in each scheme}
+
+
+\section{Translation into code}
+I see two kinds of classes, one for approximation of $\prf$ and one for the $\scene$.
+Then one can either draw samples from the scene object or give it a grid on which it will compute the scene (which for a point source will be a single point) and gradients thereof.
+Then supply the PRF objects (each image block or maybe even each pixel will have one) with sample points or grid point(s). 
+Then either multiply the PRF output by the gridded scene, or sum the output over the scene samples to produce $\countrate_n$
+
+
+\end{document}
