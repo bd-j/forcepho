@@ -219,7 +219,7 @@ def rotation_matrix(theta):
 
 if __name__ == "__main__":
     a = 10.
-    b = 5.
+    b = 8.
     theta = np.deg2rad(30)
     x0 = 0.5
     y0 = -0.5
@@ -241,13 +241,14 @@ if __name__ == "__main__":
     lnp = pixel.counts(ptrue)
     print(pixel.counts_and_gradients(galaxy)[1])
 
-    galaxy = Source(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=10, ny=100)
-    pixel_list = [PixelResponse(mu=[i, j]) for i in range(-5, 5) for j in range(-5, 5)]
+    galaxy = Source(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=70, ny=50)
+    nx = ny = 40
+    pixel_list = [PixelResponse(mu=[i, j]) for i in range(-nx/2, nx/2) for j in range(-ny/2, ny/2)]
     pixels = ImageModel(pixel_list)
 
-    snr = 10.
+
     image = pixels.counts(galaxy)
-    unc = image / snr
+    unc = np.sqrt(image)
 
     model = Likelihood(pixels, galaxy, image, unc)
 
@@ -259,7 +260,24 @@ if __name__ == "__main__":
     coo_true = galaxy.coordinates(ptrue)
     coo_start = galaxy.coordinates(p0)
 
-    bounds = [(0, 100), (0., 100), (0, 2 * np.pi), (-10, 10), (-10, 10)]
+    bounds = [(0, 100), (0., 100), (0, np.pi), (-10, 10), (-10, 10)]
     
     from scipy.optimize import minimize
     r = minimize(nll, p0, jac=True, bounds=bounds)
+
+    galaxy.update_vec(ptrue)
+    imgr = pixels.counts_and_gradients(galaxy)
+    
+    import matplotlib.pyplot as pl
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    parn = ['counts',
+            '$\partial counts/ \partial a$','$\partial counts / \partial b$',
+            r'$\partial counts/ \partial \theta$',
+            '$\partial counts / \partial x0$', '$\partial counts / \partial y0$']
+    fig, axes = pl.subplots(2, 3, figsize=(20, 11))
+    for i, ax in enumerate(axes.flat):
+        c = ax.imshow(imgr[i, :].reshape(nx, ny).T, origin='lower')
+        div = make_axes_locatable(ax)
+        cax = div.append_axes("right", size="10%", pad=0.05)
+        cbar = pl.colorbar(c, cax=cax)
+        ax.set_title(parn[i])

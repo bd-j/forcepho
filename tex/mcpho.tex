@@ -151,17 +151,17 @@ I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delt
 \subsection{Approximation by Polynomials and Sampling}
 One way to approximate intractable integrals is through Monte Carlo techniques.
 This has the nice property that the precision of the approximation can be dialed up or down by increasing or decreasing the number of samples.
-In this scheme we represent each component of the scene as a set of draws from $\scene_\ell(\alpha, \delta \given \beta_\ell)$, which we call phonions.
+In this scheme we represent each component of the scene as a set of draws from $\scene_m(\alpha, \delta \given \beta_m)$, which we call phonions.
 In order to maintain differentiability with respect to the parameters $\beta$, the draws can be fixed in some latent space $\hat{\alpha}, \hat{\delta}$,
 possibly with some associated weight $\hat{w}$,
 and then transformed to the actual space via affine transformations
 \begin{eqnarray}
 \hat{\alpha}, \hat{\delta} [, \hat{w}] & \sim & \scene(\beta=\beta_0) \\
 \alpha_k, \delta_k & = & F(\hat{\alpha}, \hat{\delta}, \beta) \nonumber \\
-w_k & = & G(\hat{w}, \beta) \\nonumber
+w_k & = & G(\hat{w}, \beta) \nonumber \\
 x_k, y_k & \sim & D(\alpha_k, \delta_k) \nonumber
 \end{eqnarray}
-This has easy derivatives, iff $D$, $F$, and $G$ have easy derivatives.
+where $F$ is an affine transformation. This has easy derivatives, iff $D$, and $G$ have easy derivatives.
 
 One could then also draw samples from $\psf$ and apply these to the scene samples, following \ref{eqn:photon},
  but this might result in unwanted sampling noise unless the number of samples is very large (which is inefficient).
@@ -180,13 +180,55 @@ We could also use a mixture of Gaussians approximation for $\prf$ described abov
 \subsubsection{Gradients}
 How do we do gradients in this scheme?  We want 
 \begin{eqnarray}
-\frac{\partial\countrate_n}{\partial\beta} & \approx & \sum_k \, \frac{\partial\prf_n(x_k, y_k \given \gamma)}{\partial \beta} \\
-& \approx & \sum_k\sum_{i,j=0} \, R_{n, i, j} \frac{\partial w_k}{\partial \beta}\, i \, j \, \frac{\partial x_k}{\partial \beta}\, \frac{\partial y_k}{\partial \beta} (x_k - x_n)^{i-1} \, (y_k - y_n)^{j-1} \\
+\frac{\partial\countrate_n}{\partial\beta} & \approx & \sum_k \, \frac{\partial\prf_n(x_k, y_k \given \gamma)}{\partial \beta} \nonumber \\
+& \approx & \sum_k\sum_{i,j=0} \, R_{n, i, j} \frac{\partial w_k}{\partial \beta}\, i \, j \, \frac{\partial x_k}{\partial \beta}\, \frac{\partial y_k}{\partial \beta} (x_k - x_n)^{i-1} \, (y_k - y_n)^{j-1}
 \end{eqnarray}
 
+\subsubsection{Draws from the Scene}
+There are a frew ways to consider drawing from the scene.
+Perhaps the closest to the photon case would be to draw directly from some bivariate flux distribution.
+This can be accomplished by calculating the inverse of the bivariate cumulative flux distribution (CFD),
+ and then transforming uniform (or regular) sampling in the cumulative flux distribution to $x, y$ or $r, \phi$ pairs.
+However, because the flux distributions are usually circularly symmetric in the latent space, we can separate into a CFD as a function of $r$ with a uniform distribution in $\phi$.
+
+Here's what that would look like for a Sersic profile with scale length of 1 (we can change this and the ellipticity through affine transformations) and Sersic index $\eta$.
+\begin{eqnarray}
+ p(r) & = & \frac{2\pi}{f_{\mbox{total}}} \, r e^{-r^{1/\eta}} \nonumber \\
+ p(z)  & = & \frac{2\pi \eta }{f_{\mbox{total}}} \, z^{2\eta - 1} e^{-z} \nonumber \\
+f_{\mbox{total}} & = & 2\pi\eta \Gamma(2\eta) \nonumber \\ 
+CFD(r) & = & \int_0^r \, p(r') \, dr'  \nonumber \\
+   & = & \gamma(2\eta, r^{1/\eta}) / \Gamma(2\eta) \\
+\end{eqnarray}
+where $\Gamma(n)$ is the gamma function and $\gamma(n, z)$ is the incomplete gamma function.
+Transforming uniform or regular draws from the CFD into values for $R$ thus requires the inverse incomplete gamma function.
+However, this transformation depends on the value of $\eta$.
+Thus everytime a new $\eta$ value is considered, we will need to redo the transformation.
+In this case the latent variables are actually the draws from the CFD.
+So if we want to vary $\eta$ in the fit then the gradients of this transformation with respect to $\eta$.
+Unfortunately there is no way to move between different Sersic indices via only affine transformations of any latent space.
+This means we lose the nice quality of keeping all of our transformations simple (i.e. without expensive transcendental functions).
+
+The requirement that we re-transform the CFD draws in draws in $R$ above leads to some additional complexity for derivative calculation, 
+since we now need to add another level to the chain rule.
+Alternatively, we can associate \emph{weights} to each draw from a fiducial latent CFD.
+In this case, instead of re-transforming the CFD draws into $R$ draws, 
+we can simply reweight the draws based on the ratio of the desired p(R) to the fiducial p(R) at that $R$.
 
 \subsection{Number of function evaluations and possible caching in each scheme}
 
+\subsection{Levels of parallelization}
+There are various places we could parallelize this code, 
+some of them more amenable to GPU or MIC parallelization:
+\begin{itemize}
+
+\item at the sample level ($k$)
+
+\item at the pixel level ($n$)
+
+\item at the source level ($m$) (this is probably a bad idea, since number of sources may not be well matched to the number of processors, and may be variable.)
+
+\item at the image level
+\end{itemize}
 
 \section{Translation into code}
 I see two kinds of classes, one for approximation of $\prf$ and one for the $\scene$.
