@@ -7,15 +7,19 @@ except:
     _HAS_GRADIENTS = False
 
 
+from scipy.special import gammaincinv, gamma
+
+
 class Source(object):
 
-    # this is not the right wat to deal with parameters.
+    # this is not the right way to deal with parameters.
     n = 4.0
     x0 = 0.
     y0 = 0.
     theta = np.deg2rad(30)
     a = 2.
     b = 1.
+
     hasgrad = _HAS_GRADIENTS
 
 

@@ -8,6 +8,8 @@ except:
 
 
 class PixelResponse(object):
+
+    hasgrad = _HAS_GRADIENTS
     
     def __init__(self, mu, Sigma=[1,1.]):
         """Initialize object with parameters of the pixel response function.
@@ -32,7 +34,10 @@ class PixelResponse(object):
         """
         self.source = source
         c = self.counts(self.source.params)
-        g = self.counts_gradient(self.source.params)
+        if source.hasgrad:
+            g = self.counts_gradient(self.source.params)
+        else:
+            g = None
         return c, g
 
     def counts(self, params):
@@ -48,7 +53,10 @@ class PixelResponse(object):
         return grad(self.counts)
 
     def counts_gradient(self, params):
-        return self._counts_gradient(params)
+        if self.hasgrad:
+            return self._counts_gradient(params)
+        else:
+            return None
 
 
 class ImageModel(object):
@@ -65,11 +73,15 @@ class ImageModel(object):
         return self.image
 
     def counts_and_gradients(self, source):
-        self.image = np.zeros([len(source.params) + 1, self.npix])
+        if source.hasgrad:
+            self.image = np.zeros([len(source.params) + 1, self.npix])
+        else:
+            self.image = np.zeros([1, self.npix])
         for i, p in enumerate(self.pixels):
             v, g = p.counts_and_gradients(source)
             self.image[0, i] = v
-            self.image[1:,i] = g
+            if source.hasgrad:
+                self.image[1:,i] = g
         return self.image
 
     @property
@@ -77,21 +89,23 @@ class ImageModel(object):
         return len(self.pixels)    
 
 
-class Likelihood(object):
+class Likelihood(ImageModel):
 
-    def __init__(self, Pixels, Source, data, unc):
-        self.model = Pixels
+    def __init__(self, pixel_list, Source, data, unc):
+        self.pixels = pixel_list
         self.source = Source
         self.data = data
         self.unc = unc
 
     def lnlike(self, params):
         self.source.update_vec(params)
-        image = self.model.counts_and_gradients(self.source)
+        image = self.counts_and_gradients(self.source)
         delta = self.data - image[0, :]
         chi = delta / self.unc
         lnlike = -0.5 * np.sum(chi**2)
-        lnlike_grad = np.sum(chi / self.unc * image[1:, :] , axis=-1)
+        if image.shape[0] > 1:
+            lnlike_grad = np.sum(chi / self.unc * image[1:, :] , axis=-1)
+        else:
+            lnlike_grad = None
         return lnlike, lnlike_grad
-
 
