@@ -301,7 +301,7 @@ if __name__ == "__main__":
     fig_fit = plot_gradients(pf)
     
             
-    # -- Plot likelihood gradients ------
+    # -- Plot chisq gradients ------
     sys.exit()
     parn = [r'residual ($\Delta$)',
             r'$\partial \Delta/ \partial a$',r'$\partial \Delta / \partial b$',
