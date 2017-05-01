@@ -2,7 +2,7 @@ try:
     import autograd.numpy as np
     from autograd import grad, elementwise_grad
     _HAS_GRADIENTS = True
-except:
+except(ImportError):
     import numpy as np
     _HAS_GRADIENTS = False
 
@@ -66,7 +66,7 @@ class ImageModel(object):
 
     def counts(self, source):
         self.image = np.zeros(self.npix)
-        for i, p in enumerate(self.pixels):
+        for i, p in enumerate(self.pixels):  # So gross
             p.source = source
             self.image[i] = p.counts(source.params)
 
@@ -77,7 +77,7 @@ class ImageModel(object):
             self.image = np.zeros([len(source.params) + 1, self.npix])
         else:
             self.image = np.zeros([1, self.npix])
-        for i, p in enumerate(self.pixels):
+        for i, p in enumerate(self.pixels):   # So gross
             v, g = p.counts_and_gradients(source)
             self.image[0, i] = v
             if source.hasgrad:

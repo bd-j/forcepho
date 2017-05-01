@@ -2,7 +2,7 @@ try:
     import autograd.numpy as np
     from autograd import grad, elementwise_grad
     _HAS_GRADIENTS = True
-except:
+except(ImportError):
     import numpy as np
     _HAS_GRADIENTS = False
 
@@ -58,7 +58,7 @@ class Source(object):
         return rp
 
 
-    def weights(self, x, y):
+    def weights(self, params):
         """Optionally reweight the samples
         """
         return 1.0

@@ -1,5 +1,11 @@
-import autograd.numpy as np
-from autograd import grad, elementwise_grad
+try:
+    import autograd.numpy as np
+    from autograd import grad, elementwise_grad
+except(ImportError):
+    import numpy
+
+import matplotlib.pyplot as pl
+import time
 
 from source import Source, scale_matrix, rotation_matrix
 from model import PixelResponse, ImageModel, Likelihood
@@ -21,16 +27,16 @@ def countrate(params):
     rp = np.dot(rot, np.dot(scale, r)) + params[-2:, None]
 
     # convolution with gaussian centered at 0 and width 1.0 in each direction
-    c = np.sum(np.exp(-rp**2))# + rp[1, :]**2)
+    c = np.sum(np.exp(-np.sum(rp**2, axis=0)))
     return c
 
 
 if __name__ == "__main__":
-    a = 10.
-    b = 8.
-    theta = np.deg2rad(30)
-    x0 = 0.5
-    y0 = -0.5
+    a = 10. # semi-major axis
+    b = 8.  # semi-minor axis
+    theta = np.deg2rad(30)  # position angle (CCW from positive x-axis)
+    x0 = 0.5  # center x
+    y0 = -0.5  # center y
     ptrue = np.array([a, b, theta, x0, y0])
 
     # --- Testing junk -----
@@ -97,7 +103,6 @@ if __name__ == "__main__":
         galaxy.update_vec(parvec)
         imgr = pixels.counts_and_gradients(galaxy)
 
-        import matplotlib.pyplot as pl
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         parn = ['counts',
                 '$\partial counts/ \partial a$','$\partial counts / \partial b$',
@@ -112,12 +117,12 @@ if __name__ == "__main__":
             ax.set_title(parn[i])
         return fig
 
-
-    sys.exit()
+    #sys.exit()
     fig_true = plot_gradients(ptrue)
+    fig_start = plot_gradients(p0)
     fig_fit = plot_gradients(pf)
-    
-            
+    pl.show()
+
     # -- Plot chisq gradients ------
     sys.exit()
     parn = [r'residual ($\Delta$)',
