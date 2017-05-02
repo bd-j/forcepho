@@ -2,7 +2,7 @@ try:
     import autograd.numpy as np
     from autograd import grad, elementwise_grad
 except(ImportError):
-    import numpy
+    import numpy as np
 
 import matplotlib.pyplot as pl
 import time
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
 
     # --- Set up the galaxy and pixels -----
-    galaxy = Source(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=1.0)
+    galaxy = PhonionSource(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=1.0)
     npx = npy = 40
     pixel_list = [PixelResponse(mu=[i, j]) for i in range(-npx/2, npx/2) for j in range(-npy/2, npy/2)]
     imod = ImageModel(pixel_list)

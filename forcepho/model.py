@@ -7,7 +7,57 @@ except(ImportError):
     _HAS_GRADIENTS = False
 
 
+ln2pi = np.log(2 * np.pi)
+    
+class GaussianMixturePSF(object)
+
+    """An object which approximates the PSF by a mixture of gaussians.  This
+    allows for analytic convolution with GaussianMixtureSources, under the
+    assumption that the PSF does not change across the source.
+    """
+
+    def convolve(self, params):
+        """Convolve via sums of mean vectors and covariance matrices and products of amplitudes.
+        """
+        ns = self.source.ncomp
+        nr = self.ncomp
+
+        source_mu, source_sigma, source_amp = self.source.gaussians(params)
+        mu = source_mu[None, :, :] + self.means[:, None, :]
+        sigma = source_sigma[None, :, :, :] + self.covar[:, None, :, :]
+        amplitude = source_amp[None, :] * self.amplitudes[:, None]
+        return mu.reshape(nr*ns, 2), sigma.reshape(nr*ns, 2, 2), amplitude.reshape(nr*ns)
+
+    def counts(self, params):
+        gaussians = self.convolve(params)
+        mu, sigma, amplitude = gaussians
+        c = np.zeros(len(x))
+        for (m, s, a) in gaussians:
+            c += a * normal(x - m, s)
+        return c
+
+
+def normal(x, sigma):
+    """Calculate the normal density at x, assuming mean of zero.
+
+    :param x:
+        ndarray of shape (n, 2)
+    """
+    ln_density = -0.5 * np.matmul(x, np.matmul(np.linalg.inv(sigma), x.T))
+    # sign, logdet = np.linalg.slogdet(sigma)
+    # ln_density -= 0.5 * (logdet + ln2pi)
+    # density = sign * np.exp(ln_density)
+    density = np.exp(ln_density) / np.sqrt(2 * np.pi * np.linalg.det(sigma))
+    return density
+
+
 class PixelResponse(object):
+
+    """An object which applies the pixel response function to a set of point
+    sources to compute the pixel counts (and gradients thereof with respect to
+    the source properties).  This is incredibly general, since the PRF can be
+    different for every pixel
+    """
 
     hasgrad = _HAS_GRADIENTS
     
@@ -44,8 +94,8 @@ class PixelResponse(object):
         """Return the pixel response to the source with given params.
         """
         rp = self.source.coordinates(params)
-        # weights = self.source.weights(params)
-        c = np.sum(np.exp(-np.sum((rp - self.mu[:, None])**2, axis=0)))
+        weights = self.source.weights(params)
+        c = np.sum(weights * np.exp(-np.sum((rp - self.mu[:, None])**2, axis=0)))
         return c
 
     @property
