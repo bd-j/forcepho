@@ -9,7 +9,7 @@ except(ImportError):
 
 ln2pi = np.log(2 * np.pi)
     
-class GaussianMixturePSF(object)
+class GaussianMixtureResponse(object)
 
     """An object which approximates the PSF by a mixture of gaussians.  This
     allows for analytic convolution with GaussianMixtureSources, under the
@@ -29,6 +29,7 @@ class GaussianMixturePSF(object)
         return mu.reshape(nr*ns, 2), sigma.reshape(nr*ns, 2, 2), amplitude.reshape(nr*ns)
 
     def counts(self, params):
+        x = self.points
         gaussians = self.convolve(params)
         mu, sigma, amplitude = gaussians
         c = np.zeros(len(x))
@@ -77,15 +78,16 @@ class PixelResponse(object):
 
         #assert np.all((self.Sigma.shape) == 2)
 
-    def counts_and_gradients(self, source):
+    def counts_and_gradients(self, params, source=None):
         """Return the pixel response to the source object, as well as the
         gradients of the pixel response with respect to parameters of the
         source.
         """
-        self.source = source
-        c = self.counts(self.source.params)
-        if source.hasgrad:
-            g = self.counts_gradient(self.source.params)
+        if source is not None:
+            self.source = source
+        c = self.counts(params)
+        if self.source.hasgrad:
+            g = self.counts_gradient(params)
         else:
             g = None
         return c, g
@@ -128,10 +130,10 @@ class ImageModel(object):
         else:
             self.image = np.zeros([1, self.npix])
         for i, p in enumerate(self.pixels):   # So gross
-            v, g = p.counts_and_gradients(source)
+            v, g = p.counts_and_gradients(source.params, source=source)
             self.image[0, i] = v
             if source.hasgrad:
-                self.image[1:,i] = g
+                self.image[1:, i] = g
         return self.image
 
     @property

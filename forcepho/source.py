@@ -26,7 +26,6 @@ class PhonionSource(object):
 
     hasgrad = _HAS_GRADIENTS
 
-
     def __init__(self, nx=10, ny=10, **kwargs):
         self.points = self.draw_samples(nx, ny)
         self.update(**kwargs)
@@ -41,7 +40,6 @@ class PhonionSource(object):
         self.theta = vec[2]
         self.x0 = vec[3]
         self.y0 = vec[4]
-
         
     @property
     def params(self):
@@ -76,41 +74,34 @@ class GaussianMixtureSource(object):
     """
 
     # this is not the right way to deal with parameters.
-    n = 4.0
-    x0 = 0.
-    y0 = 0.
-    theta = np.deg2rad(30)
-    a = 2.
-    b = 1.
+    ind_n = 5
+    ind_a = 0
+    ind_b = 1
+    ind_theta = 2
+    ind_mean = (3, 4)
 
     hasgrad = _HAS_GRADIENTS
 
     def __init__(self):
         pass
-    
-    @property
-    def params(self):
-        return np.array([self.a, self.b, self.theta, self.x0, self.y0])
-
 
     def amplitudes(self, params):
         pass
     
     def covariance_matrices(self, params):
-        rot = rotation_matrix(params[2])
-        s = 1 / np.sqrt(params[0] * params[1])
-        scale = scale_matrix(params[0] * s, params[1] * s)
+        rot = rotation_matrix(params[self.ind_pa])
+        s = 1 / np.sqrt(params[self.ind_a] * params[self.ind_b])
+        scale = scale_matrix(params[self.ind_a] * s, params[self.ind_b] * s)
 
         t = np.dot(rot, scale)
         covar = np.matmul(t, np.matmul(self.covar, t.T))
         return covar
 
     def means(self, params):
-        return np.zeros([self.ncomp, 2]) + params[None, -2:]
+        return np.zeros([self.ncomp, 2]) + params[None, self.ind_mean]
 
-
-
-
+    def gaussians(self, params):
+        return self.means(params), self.covariance_matrices(params), self.amplitudes(params)
 
 
 

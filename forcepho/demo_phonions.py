@@ -7,7 +7,7 @@ except(ImportError):
 import matplotlib.pyplot as pl
 import time
 
-from source import Source, scale_matrix, rotation_matrix
+from source import PhonionSource, scale_matrix, rotation_matrix
 from model import PixelResponse, ImageModel, Likelihood
 
 from source import sample_xy_grid, sample_sersic_flux
@@ -53,7 +53,9 @@ if __name__ == "__main__":
     # --- Set up the galaxy and pixels -----
     galaxy = PhonionSource(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=1.0)
     npx = npy = 40
-    pixel_list = [PixelResponse(mu=[i, j]) for i in range(-npx/2, npx/2) for j in range(-npy/2, npy/2)]
+    pixel_list = [PixelResponse(mu=[i, j])
+                  for i in range(-npx/2, npx/2)
+                  for j in range(-npy/2, npy/2)]
     imod = ImageModel(pixel_list)
 
     import sys
