@@ -75,7 +75,10 @@ def sersic_profile(x, n=4, rh=1, sigma=0.0, order=100):
     if sigma <= 0.0:
         return np.exp(-(x / r0)**(1.0 / n) + alpha)
     else:
-        p = -0.5 * (x / sigma)**2
+        # xx = np.concatenate([x, np.atleast_1d(rh)])
+        xx = x
+        print(sigma, r0, rh, n)
+        p = -0.5 * (xx / sigma)**2
         A = np.exp(p)
         total = 0
         for k in range(order):
@@ -84,12 +87,11 @@ def sersic_profile(x, n=4, rh=1, sigma=0.0, order=100):
             term = (-1)**k / factorial(k)
             term *= (np.sqrt(2.) * sigma / r0)** (k / n)
             term *= gamma(mu)
-            term *= hyper(mu, 1, p)
-        total += term
-        return A * total
+            term *= hyper(mu, 1, -p)
+            total += term
+        value = A * total * np.exp(alpha)
+        return value #[:-1] / value[-1], value[-1]
 
-
-    
 
 def normal_oned(x, mu, A, sigma):
     """Lay down mutiple gaussians on the x-axis.
@@ -118,7 +120,7 @@ def normal(x, sigma):
 if __name__ == "__main__":
 
     # Set up gaussians in pixel space
-    minrad, maxrad, dlnr = 0.005, 4.0, np.log(2)
+    minrad, maxrad, dlnr = 0.001, 4.0, np.log(2)
     lnradii = np.arange(np.log(minrad), np.log(maxrad), dlnr)
     radii = np.exp(lnradii)
     
@@ -137,6 +139,7 @@ if __name__ == "__main__":
     # 
     for i, (ns, rh) in enumerate(product(ngrid, rgrid)):
         print(ns, rh)
+        x = np.arange(0.0005, rh * 4, 0.001)
         res = fit_gaussians(nsersic=ns, rh=rh, radii=lnradii, x=x)
         result[i]['nsersic'] = ns
         result[i]['rh'] = rh

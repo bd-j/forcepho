@@ -104,7 +104,6 @@ class GaussianMixtureSource(object):
         return self.means(params), self.covariance_matrices(params), self.amplitudes(params)
 
 
-
 def scale_matrix(a, b):
         return np.array([[a, 0],
                         [0, b]])
