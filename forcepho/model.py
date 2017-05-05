@@ -8,7 +8,8 @@ except(ImportError):
 
 
 ln2pi = np.log(2 * np.pi)
-    
+
+
 class GaussianMixtureResponse(object)
 
     """An object which approximates the PSF by a mixture of gaussians.  This
