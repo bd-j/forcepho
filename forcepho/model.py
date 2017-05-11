@@ -25,21 +25,21 @@ class GaussianMixtureResponse(object):
         self.covar = np.array([np.diag([r, r]) for r in radii])
         self.amplitudes = np.array(amplitudes)
     
-    def convolve(self, params):
+    def convolve(self, params, source):
         """Convolve via sums of mean vectors and covariance matrices and products of amplitudes.
         """
-        ns = self.source.ncomp
+        ns = source.ncomp
         nr = self.ncomp
 
-        source_mu, source_sigma, source_amp = self.source.gaussians(params)
+        source_mu, source_sigma, source_amp = source.gaussians(params)
         mu = source_mu[None, :, :] + self.means[:, None, :]
         sigma = source_sigma[None, :, :, :] + self.covar[:, None, :, :]
         amplitude = source_amp[None, :] * self.amplitudes[:, None]
         return mu.reshape(nr*ns, 2), sigma.reshape(nr*ns, 2, 2), amplitude.reshape(nr*ns)
 
-    def counts(self, params):
+    def counts(self, params, source):
         x = self.points
-        gaussians = self.convolve(params)
+        gaussians = self.convolve(params, source)
         mu, sigma, amplitude = gaussians
         #c = 1.0 * np.zeros(len(x))
         #for (m, s, a) in zip(*gaussians):
@@ -50,19 +50,19 @@ class GaussianMixtureResponse(object):
 
     def counts_and_gradients(self, params):
         if self.source.hasgrad:
-            self.image = np.zeros([len(source.params) + 1, self.npix])
+            self.image = np.zeros([len(params) + 1, self.npix])
         else:
             self.image = np.zeros([1, self.npix])
         for i, p in enumerate(self.pixels):   # So gross
-            v, g = p.counts_and_gradients(source.params, source=source)
+            v, g = p.counts_and_gradients(params, source)
             self.image[0, i] = v
             if source.hasgrad:
                 self.image[1:, i] = g
         return self.image
     
-    def counts_gradient(self, params):
+    def counts_gradient(self, params, source):
         if self.hasgrad:
-            return self._counts_gradient(params)
+            return self._counts_gradient(params, source)
         else:
             return None
 

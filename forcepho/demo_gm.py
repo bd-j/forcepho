@@ -61,11 +61,11 @@ if __name__ == "__main__":
     psf.points = points
 
     galaxy = source.GaussianMixtureSource(radii=radii, amplitudes=amplitudes)#, x0=x0, y0=y0, nx=50, ny=70, n=1.0)
-    psf.source = galaxy
+    #psf.source = galaxy
 
 
-    c = psf.counts(ptrue)
-    cj = psf.counts_gradient(ptrue)
+    c = psf.counts(ptrue, galaxy)
+    cj = psf.counts_gradient(ptrue, galaxy)
     imgr = np.vstack([c, cj.T])
 
     fig = plot_gradients(imgr)
