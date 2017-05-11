@@ -75,14 +75,16 @@ class GaussianMixtureSource(object):
 
     # this is not the right way to deal with parameters.
     ind_n = 5
-    ind_a = 0
-    ind_b = 1
-    ind_pa = 2
-    ind_mean = (3, 4)
+    ind_rh = 4
+    ind_rho = 0
+    ind_pa = 1
+    ind_mean = (2, 3)
 
     hasgrad = _HAS_GRADIENTS
 
-    def __init__(self, amplitudes=[], radii=[]):
+    def __init__(self, amplitudes=[], radii=[], rh=1.0, n=4.0):
+        self.rh = rh
+        self.n = n
         self._radii = radii
         self._amplitudes = amplitudes
         self.ncomp = len(radii)
@@ -93,8 +95,10 @@ class GaussianMixtureSource(object):
 
     def covariance_matrices(self, params):
         rot = rotation_matrix(params[self.ind_pa])
-        s = 1 / np.sqrt(params[self.ind_a] * params[self.ind_b])
-        scale = scale_matrix(params[self.ind_a] * s, params[self.ind_b] * s)
+        sa = 1. / self.rh / np.sqrt(params[self.ind_rho])
+        sb = np.sqrt(params[self.ind_rho]) / self.rh
+        scale = scale_matrix(1. / np.sqrt(params[self.ind_rho]),
+                             np.sqrt(params[self.ind_rho]))
 
         t = np.dot(rot, scale)
         covar = np.matmul(t, np.matmul(self.covar, t.T))

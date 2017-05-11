@@ -41,10 +41,12 @@ class GaussianMixtureResponse(object):
         x = self.points
         gaussians = self.convolve(params)
         mu, sigma, amplitude = gaussians
-        c = 1.0 * np.zeros(len(x))
-        for (m, s, a) in zip(*gaussians):
-            c = c + a * normal(x - m, s)
-        return c
+        #c = 1.0 * np.zeros(len(x))
+        #for (m, s, a) in zip(*gaussians):
+        #    c = c + a * normal(x - m, s)
+        d = x[None, :, :] - mu[:, None, :]
+        c = normal(d, sigma)
+        return c.sum(axis=0)
 
     def counts_and_gradients(self, params):
         if self.source.hasgrad:
@@ -68,23 +70,24 @@ class GaussianMixtureResponse(object):
     def _counts_gradient(self):
         return jacobian(self.counts, argnum=0)
 
-    
-#dd = x - m
-#r = np.matmul(np.linalg.inv(s), dd[:, :, None])
-#k = np.squeeze(np.matmul(dd[:, None, :], r))
-    
+#d = x[None, :, :] - mu[:, None, :]
+#r = np.matmul(np.linalg.inv(sigma[:, None, :, :]), d[:, :, :, None])
+#k = np.matmul(d[:, :, None, :], r)
+
 def normal(x, sigma):
     """Calculate the normal density at x, assuming mean of zero.
 
     :param x:
         ndarray of shape (n, 2)
     """
-    ln_density = -0.5 * np.matmul(x[:, None, :], np.matmul(np.linalg.inv(sigma), x[:, :, None]))
+    ln_density = -0.5 * np.matmul(x[:, :, None, :],
+                                  np.matmul(np.linalg.inv(sigma[:, None, :, :]),
+                                            x[:, :, :, None]))
     # sign, logdet = np.linalg.slogdet(sigma)
     # ln_density -= 0.5 * (logdet + ln2pi)
     # density = sign * np.exp(ln_density)
-    density = np.exp(ln_density) / np.sqrt(2 * np.pi * np.linalg.det(sigma))
-    return density[:, 0, 0]
+    density = np.exp(ln_density) / np.sqrt(2 * np.pi * np.linalg.det(sigma[:, None, None, None]))
+    return density[:, :, 0, 0]
 
 
 class PixelResponse(object):

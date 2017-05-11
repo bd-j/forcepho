@@ -32,8 +32,8 @@ def countrate(params):
 
 
 if __name__ == "__main__":
-    a = 10. # semi-major axis
-    b = 8.  # semi-minor axis
+    a = 4. # semi-major axis
+    b = 2.  # semi-minor axis
     theta = np.deg2rad(30)  # position angle (CCW from positive x-axis)
     x0 = 0.5  # center x
     y0 = -0.5  # center y
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
 
     # --- Set up the galaxy and pixels -----
-    galaxy = PhonionSource(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=1.0)
+    galaxy = PhonionSource(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=4.0)
     npx = npy = 40
     pixel_list = [PixelResponse(mu=[i, j])
                   for i in range(-npx/2, npx/2)
