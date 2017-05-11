@@ -77,17 +77,20 @@ class GaussianMixtureSource(object):
     ind_n = 5
     ind_a = 0
     ind_b = 1
-    ind_theta = 2
+    ind_pa = 2
     ind_mean = (3, 4)
 
     hasgrad = _HAS_GRADIENTS
 
-    def __init__(self):
-        pass
+    def __init__(self, amplitudes=[], radii=[]):
+        self._radii = radii
+        self._amplitudes = amplitudes
+        self.ncomp = len(radii)
+        self.covar = np.array([np.diag([r**2,r**2]) for r in radii])
 
     def amplitudes(self, params):
-        pass
-    
+        return self._amplitudes
+
     def covariance_matrices(self, params):
         rot = rotation_matrix(params[self.ind_pa])
         s = 1 / np.sqrt(params[self.ind_a] * params[self.ind_b])

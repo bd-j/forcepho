@@ -1,6 +1,6 @@
 try:
     import autograd.numpy as np
-    from autograd import grad, elementwise_grad
+    from autograd import grad, elementwise_grad, jacobian
     _HAS_GRADIENTS = True
 except(ImportError):
     import numpy as np
@@ -10,13 +10,21 @@ except(ImportError):
 ln2pi = np.log(2 * np.pi)
 
 
-class GaussianMixtureResponse(object)
+class GaussianMixtureResponse(object):
 
     """An object which approximates the PSF by a mixture of gaussians.  This
     allows for analytic convolution with GaussianMixtureSources, under the
     assumption that the PSF does not change across the source.
     """
 
+    hasgrad = _HAS_GRADIENTS
+
+    def __init__(self, amplitudes=[], radii=[], mu=0., points=None):
+        self.ncomp = len(amplitudes)
+        self.means = np.array([[mu, mu] for i in range(self.ncomp)])
+        self.covar = np.array([np.diag([r, r]) for r in radii])
+        self.amplitudes = np.array(amplitudes)
+    
     def convolve(self, params):
         """Convolve via sums of mean vectors and covariance matrices and products of amplitudes.
         """
@@ -33,24 +41,50 @@ class GaussianMixtureResponse(object)
         x = self.points
         gaussians = self.convolve(params)
         mu, sigma, amplitude = gaussians
-        c = np.zeros(len(x))
-        for (m, s, a) in gaussians:
-            c += a * normal(x - m, s)
+        c = 1.0 * np.zeros(len(x))
+        for (m, s, a) in zip(*gaussians):
+            c = c + a * normal(x - m, s)
         return c
 
+    def counts_and_gradients(self, params):
+        if self.source.hasgrad:
+            self.image = np.zeros([len(source.params) + 1, self.npix])
+        else:
+            self.image = np.zeros([1, self.npix])
+        for i, p in enumerate(self.pixels):   # So gross
+            v, g = p.counts_and_gradients(source.params, source=source)
+            self.image[0, i] = v
+            if source.hasgrad:
+                self.image[1:, i] = g
+        return self.image
+    
+    def counts_gradient(self, params):
+        if self.hasgrad:
+            return self._counts_gradient(params)
+        else:
+            return None
 
+    @property
+    def _counts_gradient(self):
+        return jacobian(self.counts, argnum=0)
+
+    
+#dd = x - m
+#r = np.matmul(np.linalg.inv(s), dd[:, :, None])
+#k = np.squeeze(np.matmul(dd[:, None, :], r))
+    
 def normal(x, sigma):
     """Calculate the normal density at x, assuming mean of zero.
 
     :param x:
         ndarray of shape (n, 2)
     """
-    ln_density = -0.5 * np.matmul(x, np.matmul(np.linalg.inv(sigma), x.T))
+    ln_density = -0.5 * np.matmul(x[:, None, :], np.matmul(np.linalg.inv(sigma), x[:, :, None]))
     # sign, logdet = np.linalg.slogdet(sigma)
     # ln_density -= 0.5 * (logdet + ln2pi)
     # density = sign * np.exp(ln_density)
     density = np.exp(ln_density) / np.sqrt(2 * np.pi * np.linalg.det(sigma))
-    return density
+    return density[:, 0, 0]
 
 
 class PixelResponse(object):
@@ -58,7 +92,8 @@ class PixelResponse(object):
     """An object which applies the pixel response function to a set of point
     sources to compute the pixel counts (and gradients thereof with respect to
     the source properties).  This is incredibly general, since the PRF can be
-    different for every pixel
+    different for every pixel.  It's also slow because to make an image one has
+    to make a Python loop over PixelResponse objects.  
     """
 
     hasgrad = _HAS_GRADIENTS
@@ -95,6 +130,8 @@ class PixelResponse(object):
 
     def counts(self, params):
         """Return the pixel response to the source with given params.
+
+        Should allow here for vectorization (and use jacobian for the gradients)
         """
         rp = self.source.coordinates(params)
         weights = self.source.weights(params)
