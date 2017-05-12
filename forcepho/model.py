@@ -10,7 +10,46 @@ except(ImportError):
 ln2pi = np.log(2 * np.pi)
 
 
-class GaussianMixtureResponse(object):
+class PixelResponse(object):
+
+
+    def lnlike(self, params, source):
+        image, imgrad = self.counts_and_gradients(params, source)
+        delta = self.data - image
+        chi = delta / self.unc
+        lnlike = -0.5 * np.sum(chi**2)
+        if imgrad is None > 1:
+            lnlike_grad = None
+        else:
+            lnlike_grad = np.sum(chi / self.unc * imgrad , axis=0)
+
+        return lnlike, lnlike_grad
+
+    
+    def counts_and_gradients(self, params, source):
+        """Return the pixel response to the source object, as well as the
+        gradients of the pixel response with respect to parameters of the
+        source.
+        """
+        c = self.counts(params, source)
+        if self.hasgrad and source.hasgrad:
+            g = self.counts_gradient(params, source)
+        else:
+            g = None
+        return c, g
+    
+    def counts_gradient(self, params, source):
+        if self.hasgrad:
+            return self._counts_gradient(params, source)
+        else:
+            return None
+
+    @property
+    def _counts_gradient(self):
+        return jacobian(self.counts, argnum=0)
+
+
+class GaussianMixtureResponse(PixelResponse):
 
     """An object which approximates the PSF by a mixture of gaussians.  This
     allows for analytic convolution with GaussianMixtureSources, under the
@@ -48,27 +87,6 @@ class GaussianMixtureResponse(object):
         c = normal(d, sigma)
         return c.sum(axis=0)
 
-    def counts_and_gradients(self, params):
-        if self.source.hasgrad:
-            self.image = np.zeros([len(params) + 1, self.npix])
-        else:
-            self.image = np.zeros([1, self.npix])
-        for i, p in enumerate(self.pixels):   # So gross
-            v, g = p.counts_and_gradients(params, source)
-            self.image[0, i] = v
-            if source.hasgrad:
-                self.image[1:, i] = g
-        return self.image
-    
-    def counts_gradient(self, params, source):
-        if self.hasgrad:
-            return self._counts_gradient(params, source)
-        else:
-            return None
-
-    @property
-    def _counts_gradient(self):
-        return jacobian(self.counts, argnum=0)
 
 #d = x[None, :, :] - mu[:, None, :]
 #r = np.matmul(np.linalg.inv(sigma[:, None, :, :]), d[:, :, :, None])
@@ -78,7 +96,13 @@ def normal(x, sigma):
     """Calculate the normal density at x, assuming mean of zero.
 
     :param x:
-        ndarray of shape (n, 2)
+        ndarray of shape (ngauss, npix, 2)
+
+    :param sigma:
+        ndarray pf shape (ngauss, 2, 2)
+
+    returns density:
+        ndarray of shape (ngauss, npix)
     """
     ln_density = -0.5 * np.matmul(x[:, :, None, :],
                                   np.matmul(np.linalg.inv(sigma[:, None, :, :]),
@@ -86,119 +110,54 @@ def normal(x, sigma):
     # sign, logdet = np.linalg.slogdet(sigma)
     # ln_density -= 0.5 * (logdet + ln2pi)
     # density = sign * np.exp(ln_density)
-    density = np.exp(ln_density) / np.sqrt(2 * np.pi * np.linalg.det(sigma[:, None, None, None]))
-    return density[:, :, 0, 0]
+    density = np.exp(ln_density)[:, :, 0, 0]
+    return density / np.sqrt(2 * np.pi * np.linalg.det(sigma)[:, None])
 
 
-class PixelResponse(object):
+class PhonionPixelResponse(PixelResponse):
 
     """An object which applies the pixel response function to a set of point
     sources to compute the pixel counts (and gradients thereof with respect to
-    the source properties).  This is incredibly general, since the PRF can be
+    the source properties).  This is incredibly general, since in principle the PRF can be
     different for every pixel.  It's also slow because to make an image one has
     to make a Python loop over PixelResponse objects.  
     """
 
     hasgrad = _HAS_GRADIENTS
     
-    def __init__(self, mu, Sigma=[1,1.]):
+    def __init__(self, mu, Sigma=[1., 1.]):
         """Initialize object with parameters of the pixel response function.
+        Note that each mu and sigma corresponds to a single pixel.
+
         """
-        self.mu = np.array(mu)
-        assert self.mu.shape == (2,)
+        self.mu = np.atleast_2d(mu)
+        assert self.mu.shape[1] == 2
 
         s = np.atleast_1d(Sigma)
+        assert s.shape[0] == 2
         if s.ndim == 1:
             self.Sigma = np.diag(s)
         elif ndim == 2:
             self.Sigma = s
         else:
-            raise(ValueError, "Sigma must be one or 2-d")
+            raise(ValueError, "Sigma must be one- or two-dimensional")
 
         #assert np.all((self.Sigma.shape) == 2)
 
-    def counts_and_gradients(self, params, source=None):
-        """Return the pixel response to the source object, as well as the
-        gradients of the pixel response with respect to parameters of the
-        source.
-        """
-        if source is not None:
-            self.source = source
-        c = self.counts(params)
-        if self.source.hasgrad:
-            g = self.counts_gradient(params)
-        else:
-            g = None
-        return c, g
 
-    def counts(self, params):
+    def counts(self, params, source):
         """Return the pixel response to the source with given params.
 
         Should allow here for vectorization (and use jacobian for the gradients)
         """
-        rp = self.source.coordinates(params)
-        weights = self.source.weights(params)
-        c = np.sum(weights * np.exp(-np.sum((rp - self.mu[:, None])**2, axis=0)))
-        return c
-
-    @property
-    def _counts_gradient(self):
-        return grad(self.counts)
-
-    def counts_gradient(self, params):
-        if self.hasgrad:
-            return self._counts_gradient(params)
-        else:
-            return None
-
-
-class ImageModel(object):
-
-    def __init__(self, pixel_list):
-        self.pixels = pixel_list
-
-    def counts(self, source):
-        self.image = np.zeros(self.npix)
-        for i, p in enumerate(self.pixels):  # So gross
-            p.source = source
-            self.image[i] = p.counts(source.params)
-
-        return self.image
-
-    def counts_and_gradients(self, source):
-        if source.hasgrad:
-            self.image = np.zeros([len(source.params) + 1, self.npix])
-        else:
-            self.image = np.zeros([1, self.npix])
-        for i, p in enumerate(self.pixels):   # So gross
-            v, g = p.counts_and_gradients(source.params, source=source)
-            self.image[0, i] = v
-            if source.hasgrad:
-                self.image[1:, i] = g
-        return self.image
-
-    @property
-    def npix(self):
-        return len(self.pixels)    
-
-
-class Likelihood(ImageModel):
-
-    def __init__(self, pixel_list, Source, data, unc):
-        self.pixels = pixel_list
-        self.source = Source
-        self.data = data
-        self.unc = unc
-
-    def lnlike(self, params):
-        self.source.update_vec(params)
-        image = self.counts_and_gradients(self.source)
-        delta = self.data - image[0, :]
-        chi = delta / self.unc
-        lnlike = -0.5 * np.sum(chi**2)
-        if image.shape[0] > 1:
-            lnlike_grad = np.sum(chi / self.unc * image[1:, :] , axis=-1)
-        else:
-            lnlike_grad = None
-        return lnlike, lnlike_grad
-
+        rp = source.coordinates(params)  # (nphony, 2)
+        weights = source.weights(params)  # (nphony)
+        delta = rp[None, :, :] - self.mu[:, None, :]  # (npix, nphony, 2)
+        # this is returns (npix, nphony, 1, 1)
+        ln_density = -0.5 * np.matmul(delta[:, :, None, :],
+                                  np.matmul(np.linalg.inv(self.Sigma[None, None, :, :]),
+                                            delta[:, :, :, None]))
+        #  and this returns (npix, nphoony)
+        density = (weights[None, :] * np.exp(ln_density[:, :, 0, 0]) /
+                   np.sqrt(2 * np.pi * np.linalg.det(self.Sigma)))
+        return density.sum(axis=-1)

@@ -4,76 +4,55 @@ try:
 except(ImportError):
     import numpy as np
 
-import matplotlib.pyplot as pl
+from itertools import product
 import time
 
-from source import PhonionSource, scale_matrix, rotation_matrix
-from model import PixelResponse, ImageModel, Likelihood
+import numpy as np    
+import matplotlib.pyplot as pl
 
-from source import sample_xy_grid, sample_sersic_flux
-r = sample_xy_grid(10, 10)
-r = sample_sersic_flux(10, 10, 4.0)
-
-def countrate(params):
-
-    #a, b, theta, mux, muy = params
-    #rot = np.array([[np.cos(params[2]), -np.sin(params[2])],
-    #                [np.sin(params[2]), np.cos(params[2])]])
-    rot = rotation_matrix(params[2])
-    #scale = np.array([[params[0], 0],
-    #                  [0, params[1]]])
-    scale = scale_matrix(params[0], params[1])
-    
-    rp = np.dot(rot, np.dot(scale, r)) + params[-2:, None]
-
-    # convolution with gaussian centered at 0 and width 1.0 in each direction
-    c = np.sum(np.exp(-np.sum(rp**2, axis=0)))
-    return c
+import source, model
 
 
 if __name__ == "__main__":
-    a = 4. # semi-major axis
-    b = 2.  # semi-minor axis
+    rh = 3 # half-light radius
+    rho = 0.5 # minor/major axis ratio
+    a = rh / np.sqrt(rho) # semi-major axis
+    b = rh * np.sqrt(rho) # semi-minor axis
+    
     theta = np.deg2rad(30)  # position angle (CCW from positive x-axis)
     x0 = 0.5  # center x
     y0 = -0.5  # center y
-    ptrue = np.array([a, b, theta, x0, y0])
-
-    # --- Testing junk -----
-    #lnp = countrate(ptrue)
-    #counts_grad = grad(countrate)
-    #print(counts_grad(ptrue))
-    #galaxy = Source(a=a, b=b, theta=theta, x0=x0, y0=y0)
-    #pixel = PixelResponse(mu=[0., 0.])
-    #pixel.source = galaxy
-    #lnp = pixel.counts(ptrue)
-    #print(pixel.counts_and_gradients(galaxy)[1])
+    ptrue = np.array([rho, theta, x0, y0, rh])
 
 
     # --- Set up the galaxy and pixels -----
-    galaxy = PhonionSource(a=a, b=b, theta=theta, x0=x0, y0=y0, nx=50, ny=70, n=4.0)
+    galaxy = source.PhonionSource(nx=50, ny=70, n=4.0)
     npx = npy = 40
-    pixel_list = [PixelResponse(mu=[i, j])
-                  for i in range(-npx/2, npx/2)
-                  for j in range(-npy/2, npy/2)]
-    imod = ImageModel(pixel_list)
+    pixel_centers = np.array(list(product(np.arange(-npx/2, npx/2), np.arange(-npy/2, npy/2))))
+    imod = [model.PhonionPixelResponse(px) for px in pixel_centers]
+    
 
     import sys
-    #sys.exit()
+    sys.exit()
 
     # ---- Fake image -----
-    image = imod.counts(galaxy)
+    image = np.array([pix.counts(ptrue, galaxy) for pix in imod])
     unc = np.sqrt(image)
-    coo_true = galaxy.coordinates(galaxy.params)
+    coo_true = galaxy.coordinates(ptrue)
+
+    imod.data = image
+    imod.unc = unc
 
     # ---- Likelihood object and negative ln-likelihood for minimization
-    model = Likelihood(pixel_list, galaxy, image, unc)
     def nll(params):
-        v, g = model.lnlike(params)
+        blob = list([pix.lnlike(ptrue, galaxy) for pix in imod])
+        v = np.array([b[0] for b in blob])
+        g = np.array([b[1] for b in blob]))
         return -v, -g
 
     def nll_nograd(params):
-        v, g = model.lnlike(params)
+        blob = list([pix.lnlike(ptrue, galaxy) for pix in imod])
+        v = np.array([b[0] for b in blob])        
         return -v
 
     # --- Initial parameter value -----

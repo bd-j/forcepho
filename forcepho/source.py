@@ -17,53 +17,43 @@ class PhonionSource(object):
     ``weights`` method.
     """
     # this is not the right way to deal with parameters.
-    n = 4.0
-    x0 = 0.
-    y0 = 0.
-    theta = np.deg2rad(30)
-    a = 2.
-    b = 1.
+    ind_n = 5
+    ind_rh = 4
+    ind_rho = 0
+    ind_pa = 1
+    ind_mean = (2, 3)
 
     hasgrad = _HAS_GRADIENTS
 
     def __init__(self, nx=10, ny=10, **kwargs):
-        self.points = self.draw_samples(nx, ny)
         self.update(**kwargs)
+        self.points = self.draw_samples(nx, ny)
 
     def update(self, **kwargs):
         for k, v  in kwargs.items():
             self.__dict__[k] = v  # HAAAACK        
 
-    def update_vec(self, vec):  # super hacky
-        self.a = vec[0]
-        self.b = vec[1]
-        self.theta = vec[2]
-        self.x0 = vec[3]
-        self.y0 = vec[4]
-        
-    @property
-    def params(self):
-        return np.array([self.a, self.b, self.theta, self.x0, self.y0])
-
     def draw_samples(self, nx, ny):
-        return sample_sersic_flux(nx, ny, self.n)
+        return (sample_sersic_flux(nx, ny, self.n)).T
     
     def coordinates(self, params):
         """Return the detector coordinates of the source phonions given params
+        
         """
-        rot = rotation_matrix(params[2])
-        #scale = np.array([[params[0], 0],
-        #                  [0, params[1]]])
-        scale = scale_matrix(params[0], params[1])
-    
-        rp = np.dot(rot, np.dot(scale, self.points)) + params[-2:, None]
+        rot = rotation_matrix(params[self.ind_pa])
+        rh = params[self.ind_rh]
+        scale = scale_matrix(rh / np.sqrt(params[self.ind_rho]),
+                             rh * np.sqrt(params[self.ind_rho]))
+        offset = params[None, self.ind_mean]
+
+        rp = np.dot(self.points, np.dot(scale.T, rot.T)) + offset
         return rp
 
 
     def weights(self, params):
         """Optionally reweight the samples
         """
-        return 1.0
+        return np.array([1.0])
 
 
 class GaussianMixtureSource(object):
@@ -95,8 +85,8 @@ class GaussianMixtureSource(object):
 
     def covariance_matrices(self, params):
         rot = rotation_matrix(params[self.ind_pa])
-        sa = 1. / self.rh / np.sqrt(params[self.ind_rho])
-        sb = np.sqrt(params[self.ind_rho]) / self.rh
+        #sa = 1. / self.rh / np.sqrt(params[self.ind_rho])
+        #sb = np.sqrt(params[self.ind_rho]) / self.rh
         scale = scale_matrix(1. / np.sqrt(params[self.ind_rho]),
                              np.sqrt(params[self.ind_rho]))
 
