@@ -12,32 +12,19 @@ ln2pi = np.log(2 * np.pi)
 
 class PixelResponse(object):
 
-
     def lnlike(self, params, source):
-        image, imgrad = self.counts_and_gradients(params, source)
+        image = self.counts(params, source)
+        imgrad = self.counts_gradient(params, source)
         delta = self.data - image
         chi = delta / self.unc
         lnlike = -0.5 * np.sum(chi**2)
-        if imgrad is None > 1:
+        if imgrad is None:
             lnlike_grad = None
         else:
-            lnlike_grad = np.sum(chi / self.unc * imgrad , axis=0)
+            lnlike_grad = np.sum(chi / self.unc * imgrad, axis=0)
 
         return lnlike, lnlike_grad
 
-    
-    def counts_and_gradients(self, params, source):
-        """Return the pixel response to the source object, as well as the
-        gradients of the pixel response with respect to parameters of the
-        source.
-        """
-        c = self.counts(params, source)
-        if self.hasgrad and source.hasgrad:
-            g = self.counts_gradient(params, source)
-        else:
-            g = None
-        return c, g
-    
     def counts_gradient(self, params, source):
         if self.hasgrad:
             return self._counts_gradient(params, source)
