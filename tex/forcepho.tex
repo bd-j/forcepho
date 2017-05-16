@@ -6,6 +6,7 @@
 
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
 \newcommand{\given}{\,|\,}
+\renewcommand{\det}[1]{||{#1}||}
 
 \newcommand{\counts}{C}
 \newcommand{\countrate}{\hat{C}}
@@ -130,6 +131,7 @@ This allows one to write the countrate as
 \countrate_{n'} & = & \sum_{i,j}\sum_{k} \, w_k \, \normal(x_i, y_j \given \mu_{k, n'}, \Sigma_{k, n'}) \, \sum_\ell w_\ell \, \normal(D^{-1}(x_i, y_j) \given \mu_{\ell}, \Sigma_{\ell}) \nonumber
 \end{eqnarray}
 where $\normal(a, b \given \mu, \Sigma)$ is the bivariate normal distribution with location $\mu$ and covariance matrix $\Sigma$ evaluated at $(a, b)$.
+
 This is helpful for gradients since the partial derivatives can be written easily as 
  \begin{eqnarray}
 \frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
@@ -147,6 +149,53 @@ The drawbacks here are:
    5) Location dependent PSF or PRF can be unwieldy.
 One could also replace the $\prf$ mixture of Gaussians with the polynomial or spline approximation discussed below.
 I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delta$-function $\qe$, in which case the PSF and the PRF are equivalent.
+
+\subsubsection{Method for approximating Sersic profiles with Gaussians}
+Following \citet{hogg_mog}, but we: 
+  1) use absolute pixel space; 
+  2) fix the radii of the gaussians, including one at r=0;
+  3) apply a small blurring to the sersic profile and Gaussians before fitting (using analytic Sersic blurring formulae from \citet{trujillo01}); and
+  4) Fit for the amplitudes as a function of both $n_{sersic}$ and half-light radius $r_h$.
+
+We do this for two reasons.
+First because we don't want to be calculating tons of gaussians below a pixel scale that matters for the PRF, 
+and can make other approximations that are only well defined in pixel space.
+Second because the fixed radii of the gaussians will allow us to spline the amplitudes as a function of $n_{sersic}$ and $r_h$ for easy derivatives, so that we can fit for $n$.
+
+
+\subsubsection{Analytic convolutions and transformations to pixel space}
+Assuming that we have represented the galaxy and the PRF as mixtures of Gaussians we can write the convolution of the galaxy with the PRF as
+\begin{eqnarray}
+C(\mu_p) & = & \sum_{m=1}^M \sum_{\ell=1}^L F, \, \, a_m \, a_\ell, \, \normal(\mu_p \given \mu_m + \mu_\ell, \Sigma'_m + \Sigma_\ell)
+\end{eqnarray}
+Where the $a$ are the normalized amplitudes of the Gaussian, 
+and $\Sigma'_m$ describes the galaxy Gaussian rotated and stretched into the image plane.
+For a single term, we can write more explicitly
+\begin{eqnarray}
+C_{m, \ell}(\mu_p) & = & \, \frac{ a_m \, a_\ell, \, \det{F}}{2\pi}  \, exp(-0.5 \, (\mu_p -\mu_{m,\ell}) \, F \, \transpose{(\mu_p -\mu_{m,\ell})}) \\
+F & = & (\Sigma'_m + \Sigma_\ell)^{-1} \\
+\mu_{m,\ell} & = & \mu_m + \mu_\ell \\
+\Sigma'_m = R \, S \, \Sigma_m \, \transpose{(R\, S)} 
+\end{eqnarray}
+where $R$ is the rotation matrix parameterized by an angle, $S$ is the scale matrix, and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian.
+The exponential in pixel space has 6 parameters $\phi_g$:
+$A = (a_m \, a_\ell, \, \det{F}){2\pi}$,
+$\mu_{m,\ell} = x_{m, \ell}, y_{m, \ell}$,
+$F_{xx}$,
+$F_{yy}$,
+and $F_{xy}=F_{yx}$
+
+There are 7 galaxy source parameter $theta_s$s:
+$F$ the total flux,
+$\alpha, \delta$ the celestial coordinates,
+$n, r_h$ the profile parameters,
+and $q, \varphi$ the axis ratio ($b/a$) and position angle.
+In general we will want to construct the Jacobian between $\phi_g$ and $\theta_s$ for each Gaussian.
+
+
+Now, one option is to let the size of each galaxy Gaussian be set by the scale matrix $S$, so that the whole collection of gaussians grows through $S$.  
+However, if for any reason we have made the absolute pixel scale important in our approximation of the Sersic profile by Gaussians (for example by adding a subpixel blurring before fitting the profiles, as described above) then this will be problematic and internally inconsistent.
+
 
 \subsection{Approximation by Polynomials and Sampling}
 One way to approximate intractable integrals is through Monte Carlo techniques.
