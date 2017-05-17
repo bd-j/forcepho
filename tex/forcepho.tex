@@ -166,29 +166,29 @@ Second because the fixed radii of the gaussians will allow us to spline the ampl
 \subsubsection{Analytic convolutions and transformations to pixel space}
 Assuming that we have represented the galaxy and the PRF as mixtures of Gaussians we can write the convolution of the galaxy with the PRF as
 \begin{eqnarray}
-C(\mu_p) & = & \sum_{m=1}^M \sum_{\ell=1}^L F, \, \, a_m \, a_\ell, \, \normal(\mu_p \given \mu_m + \mu_\ell, \Sigma'_m + \Sigma_\ell)
+C(\mu_p) & = & \sum_{m=1}^M \sum_{\ell=1}^L F, \, \, a_m \, a_\ell \, \normal(\mu_p \given \mu_m + \mu_\ell, \Sigma'_m + \Sigma_\ell)
 \end{eqnarray}
 Where the $a$ are the normalized amplitudes of the Gaussian, 
 and $\Sigma'_m$ describes the galaxy Gaussian rotated and stretched into the image plane.
 For a single term, we can write more explicitly
 \begin{eqnarray}
-C_{m, \ell}(\mu_p) & = & \, \frac{ a_m \, a_\ell, \, \det{F}}{2\pi}  \, exp(-0.5 \, (\mu_p -\mu_{m,\ell}) \, F \, \transpose{(\mu_p -\mu_{m,\ell})}) \\
+C_{m, \ell}(\mu_p) & = & \, \frac{ a_m \, a_\ell \, \det{F}}{2\pi}  \, exp(-0.5 \, (\mu_p -\mu_{m,\ell}) \, F \, \transpose{(\mu_p -\mu_{m,\ell})}) \\
 F & = & (\Sigma'_m + \Sigma_\ell)^{-1} \\
 \mu_{m,\ell} & = & \mu_m + \mu_\ell \\
-\Sigma'_m = R \, S \, \Sigma_m \, \transpose{(R\, S)} 
+\Sigma'_m & = & R \, S \, \Sigma_m \, \transpose{(R\, S)} 
 \end{eqnarray}
-where $R$ is the rotation matrix parameterized by an angle, $S$ is the scale matrix, and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian.
+where $R$ is the rotation matrix parameterized by an angle, $S$ is the scale matrix, and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian in the untransformed (circularly symmetric) space.
 The exponential in pixel space has 6 parameters $\phi_g$:
-$A = (a_m \, a_\ell, \, \det{F}){2\pi}$,
-$\mu_{m,\ell} = x_{m, \ell}, y_{m, \ell}$,
-$F_{xx}$,
+the amplitude $A = (a_m \, a_\ell \, \det{F})/(2\pi)$,
+the two parameters of the mean $\mu_{m,\ell} = x_{m, \ell}, y_{m, \ell}$,
+and the three parameters of the inverse covariance matrix $F_{xx}$,
 $F_{yy}$,
 and $F_{xy}=F_{yx}$
 
-There are 7 galaxy source parameter $theta_s$s:
-$F$ the total flux,
-$\alpha, \delta$ the celestial coordinates,
-$n, r_h$ the profile parameters,
+There are 7 galaxy source parameters $\theta_s$:
+the total flux $F$,
+the celestial coordinates $\alpha, \delta$,
+the profile parameters $n, r_h$,
 and $q, \varphi$ the axis ratio ($b/a$) and position angle.
 In general we will want to construct the Jacobian between $\phi_g$ and $\theta_s$ for each Gaussian.
 
