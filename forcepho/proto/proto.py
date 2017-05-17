@@ -80,20 +80,21 @@ def counts_pg(pixel, gaussian, jacobian=None):
     #    grad_source[m] += j * grad[n]
 
 
-def counts_p(pixels, source):
+def counts_p(pixels, source_params):
     """Add all gaussians (and gradients thereof) for a given source to a given pixel
 
     :param pixels:
         Pixel centers, array of shape (2, Npix)
 
     :param source:
-        Source parameters, array of shape (Ntheta,) with Ntheta usually 7
+        Source parameters, dictionary of length (Ntheta,) with Ntheta usually 7
     """
     
     # These could be done with a `source` object with `as_mixture()` and
     # `mixture_jacobian()` methods
-    gaussians = source_to_mixture(*source)  # shape (Ng, Nphi)
-    jacobians = source_mixture_jacobian(*source) # shape (Ng, Nphi, Ntheta)
+    source.update(**source_params)
+    gaussians = source.as_mixture()  # shape (Ng, Nphi)
+    jacobians = source.mixture_jacobian() # shape (Ng, Nphi, Ntheta)
 
     # allocate output
     image = np.zeros(pixels.shape[-1])
@@ -108,34 +109,39 @@ def counts_p(pixels, source):
     return image, gradient
 
 
-def source_to_mixture(xs, ys, q, pa, n, rh, flux):
-    """Calculate the parameters of a gaussian mixture from a given set of
-    source parameters.  This should be a method of a `Source` class.
-    """
-
-    gaussians = np.empty([ng, nphi])
-
-    return gaussians
-
-
-def source_mixture_jacobian(xs, ys, q, pa, n, rh, flux):
-    """Calculate the jacobian matrices of the transformation from source to
-    gaussian parameters.  This should be a method of a `Source` class.  Also it
-    should allow for the return of sparse matrices
-    """
-
-    jacobian = np.empty([ng, nphi, ntheta])
-
-
 class Source(object):
 
-    def __init__(self):
-        pass
+    def __init__(self, xs, ys, q, pa, n, rh, flux):
+        self.params = {}
 
     def update(self, **params):
         for k, v in params.items():
             self.params[k] = v
+        self.dirtiness = 1
 
     def as_mixture(self):
+        """Calculate the parameters of a gaussian mixture from a given set of
+        source parameters.  This should be a method of a `Source` class.
+        """
         gaussians = np.empty([ng, nphi])
         return gaussians
+
+    def mixture_jacobian(self, sparse=False):
+        """Calculate the jacobian matrices of the transformation from source to
+        gaussian parameters.  This should be a method of a `Source` class.
+        Also it should allow for the return of sparse matrices
+        """
+        if self.dirtiness > 0:
+            self._jacobian = np.empty([ng, nphi, ntheta])
+            self.dirtiness = 0
+
+        return self._jacobian
+
+
+class Stamp(object):
+
+    def distortion_transform(self):
+        pass
+
+    def apply_prf(self, gaussians):
+        pass
