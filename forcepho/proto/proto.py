@@ -37,7 +37,7 @@ def counts_pg_native(dx, dy, fxx, fyy, fxy, A, second_order=True):
     G = np.exp(-0.5 * (dx*vx + dy*vy))
  
     if second_order:
-        H = 1 + (vx*vx + vy*vy -fxx -fyy) / 3.
+        H = 1 + (vx*vx + vy*vy - fxx - fyy) / 3.
     else:
         H = 1.0
 
@@ -145,3 +145,13 @@ class Stamp(object):
 
     def apply_prf(self, gaussians):
         pass
+
+
+def scale_matrix(q):
+        return np.array([[1/q, 0],
+                        [0, q]])
+
+
+def rotation_matrix(theta):
+        return np.array([[np.cos(theta), -np.sin(theta)],
+                         [np.sin(theta), np.cos(theta)]])

@@ -3,6 +3,7 @@
 
 \usepackage{graphicx}
 \usepackage{amsmath}
+\usepackage[normalem]{ulem}
 
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
 \newcommand{\given}{\,|\,}
@@ -29,12 +30,12 @@
 %\end{center}
 
 \section{Notation}
-I try to use script letters for probability distributions (e.g. $\S$), with parameters as greek letters (e.g. $\gamma$).
-Draws from a distributioin are denoted by $\sim$.
+I try to use script letters for probability distributions (e.g. $\scene$), with parameters as greek letters (e.g. $\gamma$).
+Draws from a distribution are denoted by $\sim$.
 Functions are given uppercase italic letters (e.g. $\qe$).
 Scalar variables are lowercase italic letters.
-Vector variables are bolded lowercase.
-Matrices are bolded uppercase.
+Vector variables are \sout{bolded} lowercase.
+Matrices are \sout{bolded} uppercase.
 
 \section{Introduction}
 The goal is to go from the scene to counts in pixels.
@@ -114,9 +115,10 @@ Much of the guts of any forward modeling algorithm will be concerned with approx
  especially in a way that yields analytic gradients.
 
 
-\subsection{Approximation by Gaussian Mixtures and Subgridding}
+\section{Approximation by Gaussian Mixtures and Subgridding}
 One method to make the integrals more tractable is to calculate $\prf$ and $\scene$ on fine grids and calculate \ref{eqn:prf_integral} directly on this grid.
-The grid has to be fine enough that the integral can be approximated by a sum; that is, the grid must fully sample the PRF and the scene.
+The grid has to be fine enough that the integral can be approximated by a sum; 
+  that is, the grid must fully sample the PRF and the scene.
 In principle the precision can be dialed up or down by increasing the fineness of the grids.
 \begin{eqnarray}
 \label{eqn:prf_grid}
@@ -132,29 +134,20 @@ This allows one to write the countrate as
 \end{eqnarray}
 where $\normal(a, b \given \mu, \Sigma)$ is the bivariate normal distribution with location $\mu$ and covariance matrix $\Sigma$ evaluated at $(a, b)$.
 
-This is helpful for gradients since the partial derivatives can be written easily as 
- \begin{eqnarray}
-\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
-\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \Sigma}  & = &  \normal({\bf c} \given \mu, \Sigma) \, (\Sigma^{-1} - \Sigma^{-1}\, ({\bf c}-\mu) \, \transpose{({\bf c}-\mu)}\, \Sigma^{-1}) \nonumber
-\end{eqnarray}
-where we have written the vector ${\bf c} = [a, b]$. 
-These expressions can then be chained with e.g. $\partial \Sigma /\partial \beta$, $\partial \mu /\partial \beta$, and $\partial w/\partial \beta$.
-
 The drawbacks here are:
    1) evaluating large numbers of exponentials
    2) finding nice representations of parameterized scenes and PRFs in terms of mixtures of Gaussians such that the gradients of the Gaussian parameters with respect to the scene parameters $\beta$ are relatively simple
    3) limited accuracy of the mixture of Gaussians approximation.
    4) Gaussians do not have a defined maximum frequency and are thus always undersampled to some degree by any grid.
-   4) Point sources are dealt with differently than extended sources.
    5) Location dependent PSF or PRF can be unwieldy.
 One could also replace the $\prf$ mixture of Gaussians with the polynomial or spline approximation discussed below.
 I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delta$-function $\qe$, in which case the PSF and the PRF are equivalent.
 
-\subsubsection{Method for approximating Sersic profiles with Gaussians}
+\subsection{Method for Approximating Sersic profiles with Gaussians}
 Following \citet{hogg_mog}, but we: 
   1) use absolute pixel space; 
-  2) fix the radii of the gaussians, including one at r=0;
-  3) apply a small blurring to the sersic profile and Gaussians before fitting (using analytic Sersic blurring formulae from \citet{trujillo01}); and
+  2) fix the radii of the gaussians (in pixel space), including one at $r=0$;
+  3) apply a small blurring to the Sersic profile and Gaussians before fitting (using analytic Sersic blurring formulae from \citet{trujillo01}); and
   4) Fit for the amplitudes as a function of both $n_{sersic}$ and half-light radius $r_h$.
 
 We do this for two reasons.
@@ -162,8 +155,43 @@ First because we don't want to be calculating tons of gaussians below a pixel sc
 and can make other approximations that are only well defined in pixel space.
 Second because the fixed radii of the gaussians will allow us to spline the amplitudes as a function of $n_{sersic}$ and $r_h$ for easy derivatives, so that we can fit for $n$.
 
+This all results in a fixed number $M$ of Gaussians for each profile,
+with amplitudes $a_m(n, r_h)$, zero mean, and covariances $\Sigma_{m,i,j} = \delta_{i,j} \, r_m^2$ 
+where here $\delta_{i,j}$ is the Kroneker-$\delta$ and $r_m$ is the dispersion  of the $m$th  Gaussian (in pixels).
+We also renormalize so that 
+\begin{eqnarray}
+%\sum_m^M \frac{a_m}{2\,\pi\,\sqrt{\det{\Sigma_m}}} & = & 1
+\sum_m^M a_m & = & 1
+\end{eqnarray}
 
-\subsubsection{Analytic convolutions and transformations to pixel space}
+\subsection{Astrometric Distortions}
+We need to be able to convert between celestial coordinates and on-sky parameters (e.g. the half-light radius in arcseconds, the position angle on the sky) to image or pixel coordinates.
+We will make the approximation that for any region of interest the astrometric distortion can  be approximated by an affine transformation.
+Indeed this will be part of the definition of a region of interest.
+
+The standard FITS style astrometry for such a situation \citep{greisen02} is something like
+\begin{eqnarray}
+c & = & T \, (\mu_p - \mu_0) + c_0
+\end{eqnarray}
+where $c$ are the celestial coordinates ($\alpha$, $\delta$),
+$\mu_p$ are the pixel coordinates ($x$, $y$),
+$\mu_0$ gives an image or region dependent reference pixel,
+$c_0$ are the celestial coordinates of that reference pixel,
+and $T$ is the region dependent transformation matrix (often represented in FITS headers by \texttt{CD\_ij} entries).
+$T$ need not have a determinant of 1, but it must be non-singular. 
+
+We will define
+\begin{eqnarray}
+D & = & T^{-1} \\
+\mu_p & = & D \, (c - c_0) + \mu_0 \nonumber \\
+d & = &\sqrt{\det{D}} \nonumber
+\end{eqnarray}
+and use the matrix $D$ going forward.
+The scalar $d$ is a dilation factor.
+Note that for a given subregion of a particular exposure the matrix $D$ and the reference coordinates $\mu_0$, $c_0$ are fixed.
+
+
+\subsection{Analytic convolutions and transformations to pixel space}
 Assuming that we have represented the galaxy and the PRF as mixtures of Gaussians we can write the convolution of the galaxy with the PRF as
 \begin{eqnarray}
 I(\mu_p) & = & \sum_{m=1}^M \sum_{\ell=1}^L \psi \, \, a_m \, a_\ell \, \normal(\mu_p \given \mu_m + \mu_\ell, \Sigma'_m + \Sigma_\ell)
@@ -176,9 +204,9 @@ and $\Sigma_\ell$ and $\mu_\ell$ describe a PSF gaussian.
 For a single term, we can write more explicitly
 \begin{eqnarray}
 I_{m, \ell}(\mu_p) & = & \, \frac{ \psi \, a_m \, a_\ell \, \sqrt{\det{F}}}{2\pi}  \, \exp(-0.5 \, \transpose{(\mu_p -\mu_{m,\ell})} \, F \, (\mu_p -\mu_{m,\ell})) \\
-F & = & (\Sigma'_m + \Sigma_\ell)^{-1} \\
-\mu_{m,\ell} & = & \mu_m + \mu_\ell \\
-\Sigma'_m & = & \transpose{(R \, S)} \, \Sigma_m \, R\, S 
+F & = & (\Sigma'_m + \Sigma_\ell)^{-1} \nonumber \\
+\mu_{m,\ell} & = & \mu_m + \mu_\ell \nonumber \\
+\Sigma'_m & = & \transpose{(R \, S)} \, \Sigma_m \, R\, S  \nonumber 
 \end{eqnarray}
 where $R$ is the rotation matrix parameterized by a position angle $\varphi$, $S$ is the scale matrix parameterized by the axis ratio $q$, and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian in the untransformed (circularly symmetric) space.
 The exponential in pixel space has 6 parameters $\phi_g$:
@@ -191,8 +219,10 @@ and $F_{xy}=F_{yx}$
 There are 7 on sky galaxy source parameters $\theta_s$:
 the total flux $\psi$,
 the celestial coordinates $\alpha, \delta$,
-the profile parameters $n, r_h$,
-and $q, \varphi$ the axis ratio ($b/a$) and position angle.
+the Sersic index $n$, 
+the half-light radius in  celestial units (e.g. degrees or arcseconds) $\rho_h$,
+the axis ratio $q = (b/a)$,
+and position angle\ $varphi$.
 In general we will want to construct the Jacobian between $\phi_g$ and $\theta_s$ for each Gaussian.
 
 Need to add in the astrometric distortion affine transformtion to go from sky coordinates to pixel coordinates.
@@ -201,7 +231,19 @@ Now, one option is to let the size of each galaxy Gaussian be set by the scale m
 However, if for any reason we have made the absolute pixel scale important in our approximation of the Sersic profile by Gaussians (for example by adding a subpixel blurring before fitting the profiles, as described above) then this will be problematic and internally inconsistent.
 
 
-\subsection{Approximation by Polynomials and Sampling}
+\subsection{Gradients}
+This is helpful for gradients since the partial derivatives can be written easily as 
+ \begin{eqnarray}
+\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
+\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \Sigma}  & = &  \normal({\bf c} \given \mu, \Sigma) \, (\Sigma^{-1} - \Sigma^{-1}\, ({\bf c}-\mu) \, \transpose{({\bf c}-\mu)}\, \Sigma^{-1}) \nonumber
+\end{eqnarray}
+where we have written the vector ${\bf c} = [a, b]$. 
+These expressions can then be chained with e.g. $\partial \Sigma /\partial \beta$, $\partial \mu /\partial \beta$, and $\partial w/\partial \beta$.
+
+
+
+
+\section{Approximation by Polynomials and Sampling}
 One way to approximate intractable integrals is through Monte Carlo techniques.
 This has the nice property that the precision of the approximation can be dialed up or down by increasing or decreasing the number of samples.
 In this scheme we represent each component of the scene as a set of draws from $\scene_m(\alpha, \delta \given \beta_m)$, which we call phonions.
