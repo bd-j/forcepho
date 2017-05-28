@@ -37,18 +37,18 @@ def counts_pg_native(dx, dy, fxx, fyy, fxy, A, second_order=True):
     G = np.exp(-0.5 * (dx*vx + dy*vy))
  
     if second_order:
-        H = 1 + (vx*vx + vy*vy - fxx - fyy) / 3.
+        H = 1 + (vx*vx + vy*vy - fxx - fyy) / 24.
     else:
         H = 1.0
 
     c_h = A * G
     C = c_h * H
     dC_dA = G * H
-    dC_dx = C*vx - second_order * c_h * 2./3. * (fxx*vx +fxy*vy) 
-    dC_dy = C*vy - second_order * c_h * 2./3. * (fyy*vy +fxy*vx)
-    dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 3.
-    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 3.
-    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 3.
+    dC_dx = C*vx - second_order * c_h * 2./24. * (fxx*vx +fxy*vy) 
+    dC_dy = C*vy - second_order * c_h * 2./24. * (fyy*vy +fxy*vx)
+    dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 24.
+    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
+    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
 
     return np.array(C), np.array([dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy, dC_dA]).T
 
