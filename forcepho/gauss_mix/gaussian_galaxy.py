@@ -46,6 +46,12 @@ def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
 
     :param x:
         The vector of pixel locations at which the profiles will be compared.
+
+    :param asmooth:
+        Strength of the smoothness regularization (based on penalizing large gradients in amplitudes)
+
+    :param arpenalty:
+        Strength of the penalty for large outer gaussians.
     """
     maxrad = x.max()
 
@@ -265,6 +271,32 @@ def gauss_cfd(x, amplitudes, radii):
         else:
             num += a * gamma(1) * gammainc(1, 0.5 * (x/r)**2)
     return num / np.sum(amplitudes)
+
+
+def amplitude_table(hname="gauss_gal_results/v3/mog_model.smooth=0.2.h5"):
+    dat = h5py.File(hname, "r")
+    radii = np.array(dat['radii'])
+    rtext = ['A_r_{:3.1f}'.format(r) for r in radii]
+    rr = ' '.join(['{:3.1f}'.format(r) for r in radii])
+    header = ("# Amplitudes for gaussian mixture approximations to (smoothed) Sersic profiles.\n"
+              "# The first two columns give the Sersic index and half light radius of the galaxy profile.\n"
+              "# The subsequent columns give the relative weights of the 2-d symmetric gaussian with \n"
+              "#   the given dispersions that best fits the galaxy profile.\n"
+              "# The dispersions of each gaussian are fixed from profile to profile, and are\n"
+              "# " + rr + "\n"
+              "# Both the sersic profile and the gausians were convolved with a gaussian \n"
+              "#   of dispersion {:3.2f} before fitting.\n"
+              "# Produced by gaussian_galaxy.py\n\n").format(dat.attrs['smoothing'])
+    cols = '# n  r_h  ' + ' '.join(rtext)
+    fmt = ['{:3.1f}','{:4.2f}'] + len(radii) * ['{:5.3e}']
+    fmt = '  '.join(fmt)
+    with open(hname.replace('.h5', '.tbl'), 'w') as out:
+        out.write(header + '\n')
+        out.write(cols + '\n')
+        for i, a in enumerate(dat['amplitudes']):
+            vals = [dat['nsersic'][i], dat['rh'][i]] + (a/a.sum()).tolist()
+            line = fmt.format(*vals)
+            out.write(line + '\n')
 
 
 def plot_amps(radii, amps):
