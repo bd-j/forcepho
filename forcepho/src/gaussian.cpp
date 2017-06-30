@@ -248,15 +248,15 @@ void WorkPlan:computeGaussianDeriv(Gaussian &g, float xpix, float ypix, float dI
     dI_dA = Gp*C;
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
     AGp = amplitude*Gp;
-    dI_dmux = AGp*(vx*C - (2.0/3.0)*(Fxx*vx + Fxy*vy);
+    dI_dmux = AGp*(vx*C - (2.0/24.0)*(Fxx*vx + Fxy*vy);
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
-    dI_dmuy = AGp*(vy*C - (2.0/3.0)*(Fyy*vy + Fxy*vx);
+    dI_dmuy = AGp*(vy*C - (2.0/24.0)*(Fyy*vy + Fxy*vx);
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
-    dI_dFxx = AGp*(-0.5*dx*dx*C + (1.0/3.0)*(2.0*dx*vx-1.0));
+    dI_dFxx = AGp*(-0.5*dx*dx*C + (1.0/24.0)*(2.0*dx*vx-1.0));
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
-    dI_dFyy = AGp*(-0.5*dy*dy*C + (1.0/3.0)*(2.0*dy*vy-1.0));
+    dI_dFyy = AGp*(-0.5*dy*dy*C + (1.0/24.0)*(2.0*dy*vy-1.0));
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
-    dI_dFxy = AGp*(-dx*dy*C + (2.0/3.0)*(dy*vx+dx*vy));
+    dI_dFxy = AGp*(-dx*dy*C + (2.0/24.0)*(dy*vx+dx*vy));
     // Multiply by dGaussian_dScene to get the derivatives dI_dScene.
     // TODO: Need to provide the multiplies
 }

@@ -3,20 +3,155 @@
 import numpy as np
 
 
-def counts_pg_native(dx, dy, fxx, fyy, fxy, A, second_order=True):
+class Gaussian(object):
+    """This is description of one Gaussian, in pixel locations, as well as the
+    derivatives of this Gaussian wrt to the Scene model parameters.
+
+    The gaussian is described by 
+    * Amplitude A
+    * Inverse Covariance matrix [[Fxx, Fxy], [Fxy, Fyy]]
+    * center xcen, ycen
+
+    """
+    A = 0.
+    xcen = 0.
+    ycen = 0.
+    Fxx = 0.
+    Fxy = 0.
+    Fyy = 0.
+    #float dGaussian_dScene[NDERIV];
+
+
+class Galaxy(object):
+    """Parameters describing a galaxy in the celestial plane.
+    """
+    id = 0
+    psi = 0. # flux
+    ra = 0.
+    dec = 0.
+    q = 0.  # axis ratio
+    phi = 0.  # position angle (N of E)
+    n = 0.  # sersic index
+    r = 0.  # half-light radius (arcsec)
+    fixed = False
+    ngauss = 10
+    radii = np.arange(ngauss)
+
+
+    def amplitudes(self):
+        return amps
+
+    def amp_derivs(self):
+        # ngauss x nscene_params, only two are nonzero (n and r)
+        return amp_derivs
+
+    def covariances(self):
+        # ngauss x 2 x 2
+        # this has no derivatives, since the radii are fixed.
+        return covars
+
+    
+    
+class Scene(object):
+    """A collection of fixed and free galaxies describing the scene
+    """
+    
+class GaussianImageGalaxy(object):
+    """ A list of gaussians corresponding to one galaxy, after image
+    distortions, PSF, and in the pixel space.
+    """
+    id = 0
+
+
+class PostageStamp(object):
+    """A list of pixel values and locations, along with the distortion matrix,
+    astrometry, and PSF.
+
+    The astrometry is such that 
+    :math:`x = D \, (c - c_0) + x_0`
+    where x_0 are the reference pixel coordinates, c_0 are the reference pixel
+    *celestial* coordinates (in degrees of RA and Dec), and D is the
+    distortion_matrix.
+    """
+    # Size of the stamp
+    nx = 100
+    ny = 100
+
+    # The distortion matrix D
+    distortion = np.ones([2,2])
+    # The sky coordinates of the reference pixel
+    crval = np.zeros([2])
+    # The pixel coordinates of the reference pixel
+    crpix = np.zeros([2])
+
+    def sky_to_pix(self, sky):
+        pix = np.dot(self.distortion, sky - self.crval) + crpix
+        return pix
+
+    def pix_to_sky(self, pix):
+        pass
+
+
+def convert_to_gaussians(galaxy, stamp):
+    """Takes the galaxy parameters into a set of ImagePlaneGaussians,
+    including PSF, and keeping track of the dGaussian_dScene
+    """
+    # Get the transformation matrix
+    D = stamp.distortion
+    R = rotation_matrix(galaxy.phi)
+    S = scale_matrix(galaxy.q)
+    T = np.dot(D, np.dot(R, S))
+    # And it's deriative with respect to scene parameters
+    # blah
+
+    # get galaxy component means, covariances, and amplitudes in the pixel space
+    gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
+    gamps = galaxy.amplitudes(galaxy.n, galaxy.r)
+    gmean = stamp.sky_to_pix([galaxy.ra, galaxy.dec])
+
+    # convolve with the PSF for this stamp, yield Ns x Np sets of means, covariances, and amplitudes.
+    #covar = gcovar[:, None, :, :] + stamp.psf_covar[None, :, :, :]
+    #amps = gamps[:, None] * stamp.psf_amplitudes[None, :]
+    #means = gmeans[:, None, :] + stamp.psf_means[None, :, :]
+
+    gig = GaussianImageGalaxy(galaxy.ngauss, stamp.psf.ngauss,
+                              id=(galaxy.id, stamp.id))
+    for i in range(galaxy.ngauss):
+        # gcovar = np.matmul(T, np.matmul(np.eye(self.covariances[i]), T.T))
+        for j in range(stamp.psf.ngauss):
+            gaussid = (galaxy.id, stamp.id, i, j)
+            # convolve the jth Galaxy component with the ith PSF component
+            covar = gcovar[i] + stamp.psf.covariances[j]
+            fxx = covar[0, 0]
+            fyy = covar[1, 0]
+            fyy = covar[1, 1]
+            xcen, ycen = gmean + stamp.psf.means[j]
+            a = gamps[i] * stamp.psf.amplitudes[j]
+            # adjust a for the determinant of F
+            # blah
+            # Now get derivatives
+            # blah
+
+            # And add to list of gaussians
+            gig.gaussians[i, j] = Gaussian(a, xcen, ycen, fxx, fxy, fyy,
+                                           id=gaussid, derivs=None))
+
+    return gig
+
+
+def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     """Calculate the counts and gradient for one pixel, one gaussian.  This
     basically amounts to evalutating the gaussian (plus second order term) and
     the gradients with respect to the 6 input terms.
 
-    :param dx, dy: 
-        The location at which to evaluate the gaussian.  E.g.
-        dx = x_{0,pixel} - x_{0,gaussian}
+    :param g: 
+        A Gaussian() instance
 
-    :param fxx, fyy, fxy:
-        Specification of the (inverse) covariance matrix for the gaussian
+    :param xpix:
+        The x coordinate of the pixel(s) at which counts and gradient are desired.
 
-    :param A:
-        The amplitude of the gaussian
+    :param ypix:
+        The y coordinate of the pixel(s) at which counts and gradient are desired.
 
     :returns counts:
         The counts in this pixel due to this gaussian
@@ -31,21 +166,27 @@ def counts_pg_native(dx, dy, fxx, fyy, fxy, A, second_order=True):
     # inv_det = fxx*fyy + 2*fxy
     # norm = np.sqrt((inv_det / 2*np.pi))
 
-    vx = fxx * dx + fxy * dy
-    vy = fyy * dy + fxy * dx
+    dx = xpix - g.xcen
+    dy = ypix - g.ycen
+    vx = g.Fxx * dx + g.Fxy * dy
+    vy = g.Fyy * dy + g.Fxy * dx
     #G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
-    G = np.exp(-0.5 * (dx*vx + dy*vy))
+    Gp = np.exp(-0.5 * (dx*vx + dy*vy))
  
     if second_order:
-        H = 1 + (vx*vx + vy*vy - fxx - fyy) / 24.
+        H = 1 + (vx*vx + vy*vy - g.Fxx - g.Fyy) / 24.
     else:
         H = 1.0
 
-    c_h = A * G
+    c_h = A * Gp
     C = c_h * H
-    dC_dA = G * H
-    dC_dx = C*vx - second_order * c_h * 2./24. * (fxx*vx +fxy*vy) 
-    dC_dy = C*vy - second_order * c_h * 2./24. * (fyy*vy +fxy*vx)
+
+    if not compute_deriv:
+        return np.array(C)
+
+    dC_dA = Gp * H
+    dC_dx = C*vx - second_order * c_h * 2./24. * (g.Fxx*vx + g.Fxy*vy) 
+    dC_dy = C*vy - second_order * c_h * 2./24. * (g.Fyy*vy + g.Fxy*vx)
     dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 24.
     dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
     dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
@@ -137,14 +278,6 @@ class Source(object):
 
         return self._jacobian
 
-
-class Stamp(object):
-
-    def distortion_transform(self):
-        pass
-
-    def apply_prf(self, gaussians):
-        pass
 
 
 def scale_matrix(q):
