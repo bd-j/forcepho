@@ -3,15 +3,17 @@
 import numpy as np
 
 
-class Gaussian(object):
+class ImageGaussian(object):
     """This is description of one Gaussian, in pixel locations, as well as the
     derivatives of this Gaussian wrt to the Scene model parameters.
 
-    The gaussian is described by 
+    The gaussian is described by 6 parameters
     * Amplitude A
     * Inverse Covariance matrix [[Fxx, Fxy], [Fxy, Fyy]]
     * center xcen, ycen
 
+    In the Scene space there are 7 parameters, so the dgauss_dscene matrix is 6
+    x 7 (mostly zeros)
     """
     A = 0.
     xcen = 0.
@@ -23,7 +25,15 @@ class Gaussian(object):
 
 
 class Galaxy(object):
-    """Parameters describing a galaxy in the celestial plane.
+    """Parameters describing a galaxy in the celestial plane (i.e. the Scene parameters)
+    For each galaxy there are 7 parameters.
+    * psi: total flux
+    * ra: right ascension (degrees)
+    * dec: declination (degrees)
+    * q, phi: axis ratio and position angle (might be parameterized differently)
+    * n: sersic index
+    * r: half-light radius (arcsec)
+    
     """
     id = 0
     psi = 0. # flux
@@ -37,32 +47,52 @@ class Galaxy(object):
     ngauss = 10
     radii = np.arange(ngauss)
 
-
+    @property
     def amplitudes(self):
+        """Code here for getting amplitudes from a splined look-up table
+        (dependent on self.n and self.r)
+        """
         return amps
 
+    @property
     def amp_derivs(self):
+        """Code here for getting amplitude derivatives from a splined look-up
+        table (dependent on self.n and self.r)
+        """
         # ngauss x nscene_params, only two are nonzero (n and r)
         return amp_derivs
 
+    @property
     def covariances(self):
+        """This just constructs a set of covariance matrices based on the radii
+        """
         # ngauss x 2 x 2
         # this has no derivatives, since the radii are fixed.
         return covars
 
-    
-    
+
 class Scene(object):
     """A collection of fixed and free galaxies describing the scene
     """
     
 class GaussianImageGalaxy(object):
     """ A list of gaussians corresponding to one galaxy, after image
-    distortions, PSF, and in the pixel space.
+    distortions, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++
+    code.
     """
     id = 0
 
 
+class PointSpreadFunction(object):
+    """Gaussian Mixture approximation to a PSF.
+    """
+
+    ngauss = 1
+    covariances = np.array(self.ngauss * [[1.,0.], [0., 1.]])
+    means = np.zeros([self.ngauss, 2])
+    amplitudes = np.ones(self.ngauss)
+    
+    
 class PostageStamp(object):
     """A list of pixel values and locations, along with the distortion matrix,
     astrometry, and PSF.
@@ -73,6 +103,9 @@ class PostageStamp(object):
     *celestial* coordinates (in degrees of RA and Dec), and D is the
     distortion_matrix.
     """
+
+    id = 1
+
     # Size of the stamp
     nx = 100
     ny = 100
@@ -83,6 +116,8 @@ class PostageStamp(object):
     crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
     crpix = np.zeros([2])
+
+    psf = PointSpreadFunction()
 
     def sky_to_pix(self, sky):
         pix = np.dot(self.distortion, sky - self.crval) + crpix
@@ -106,7 +141,7 @@ def convert_to_gaussians(galaxy, stamp):
 
     # get galaxy component means, covariances, and amplitudes in the pixel space
     gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
-    gamps = galaxy.amplitudes(galaxy.n, galaxy.r)
+    gamps = galaxy.amplitudes
     gmean = stamp.sky_to_pix([galaxy.ra, galaxy.dec])
 
     # convolve with the PSF for this stamp, yield Ns x Np sets of means, covariances, and amplitudes.
@@ -133,8 +168,8 @@ def convert_to_gaussians(galaxy, stamp):
             # blah
 
             # And add to list of gaussians
-            gig.gaussians[i, j] = Gaussian(a, xcen, ycen, fxx, fxy, fyy,
-                                           id=gaussid, derivs=None))
+            gig.gaussians[i, j] = ImageGaussian(a, xcen, ycen, fxx, fxy, fyy,
+                                                id=gaussid, derivs=None))
 
     return gig
 
@@ -142,7 +177,8 @@ def convert_to_gaussians(galaxy, stamp):
 def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     """Calculate the counts and gradient for one pixel, one gaussian.  This
     basically amounts to evalutating the gaussian (plus second order term) and
-    the gradients with respect to the 6 input terms.
+    the gradients with respect to the 6 input terms.  Like `computeGaussian`
+    and `computeGaussianDeriv` in the C++ code.
 
     :param g: 
         A Gaussian() instance
@@ -157,7 +193,8 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
         The counts in this pixel due to this gaussian
 
     :returns grad:
-        The gradient of the counts with respect to the 6 parameters
+        The gradient of the counts with respect to the 6 parameters of the
+        gaussian in image coordinates
     """
 
     # All transformations should keep the determinant of the covariance matrix
@@ -192,92 +229,6 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
 
     return np.array(C), np.array([dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy, dC_dA]).T
-
-
-def counts_pg(pixel, gaussian, jacobian=None):
-    """Apply the Jacobian transformation to the gradients to bring them from
-    the space of the gaussian parameters (phi) to the source parameters (theta)
-    
-    :param pixel:
-        The pixel center, shape (2, Npix)
-
-    :param gaussian:
-        The gaussian parameters, shape (Nphi,)
-
-    :param optional:
-        The jacobian of the transformation from gaussian parameters phi to
-        source parameters theta, shape (Nphi, Ntheta)
-    """
-    dx = pixel[0] - gaussian[0]  # (Npix,)
-    dy = pixel[1] - gaussian[1]  # (Npix,)
-    counts, grad_native = counts_pg_native(dx, dy, *gaussian[2:])  # (Npix,), (Npix, Nphi)
-    if jacobian is None:
-        return counts, grad_native
-    else:
-        grad_source += np.dot(grad_native, jacobian)  # (Npix, Ntheta)
-        return counts, grad_source
-    # Sparse matrix multiply instead of np.dot
-    #for (m,n), j in jacobian.items():
-    #    grad_source[m] += j * grad[n]
-
-
-def counts_p(pixels, source_params):
-    """Add all gaussians (and gradients thereof) for a given source to a given pixel
-
-    :param pixels:
-        Pixel centers, array of shape (2, Npix)
-
-    :param source:
-        Source parameters, dictionary of length (Ntheta,) with Ntheta usually 7
-    """
-    
-    # These could be done with a `source` object with `as_mixture()` and
-    # `mixture_jacobian()` methods
-    source.update(**source_params)
-    gaussians = source.as_mixture()  # shape (Ng, Nphi)
-    jacobians = source.mixture_jacobian() # shape (Ng, Nphi, Ntheta)
-
-    # allocate output
-    image = np.zeros(pixels.shape[-1])
-    gradient = np.zeros(pixels.shape[-1], jacobians.shape[-1])
-
-    for g, gaussian in enumerate(gaussians):
-        # for p, mu in enumerate(pixels.T):
-        c, grad = counts_pg(pixels, gaussian, jacobian=jacobians[g])
-        image += c
-        gradient += grad
-
-    return image, gradient
-
-
-class Source(object):
-
-    def __init__(self, xs, ys, q, pa, n, rh, flux):
-        self.params = {}
-
-    def update(self, **params):
-        for k, v in params.items():
-            self.params[k] = v
-        self.dirtiness = 1
-
-    def as_mixture(self):
-        """Calculate the parameters of a gaussian mixture from a given set of
-        source parameters.  This should be a method of a `Source` class.
-        """
-        gaussians = np.empty([ng, nphi])
-        return gaussians
-
-    def mixture_jacobian(self, sparse=False):
-        """Calculate the jacobian matrices of the transformation from source to
-        gaussian parameters.  This should be a method of a `Source` class.
-        Also it should allow for the return of sparse matrices
-        """
-        if self.dirtiness > 0:
-            self._jacobian = np.empty([ng, nphi, ntheta])
-            self.dirtiness = 0
-
-        return self._jacobian
-
 
 
 def scale_matrix(q):

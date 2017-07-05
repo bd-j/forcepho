@@ -227,7 +227,7 @@ void WorkPlan:computeGaussian(Gaussian &g, float xpix, float ypix, float *pixel_
 	// Gp = exp(-0.5*(dx*dx*Fxx + 2.0*dx*dy*Fxy + dy*dy*Fxy)); 
     	// or vx*dx+vy*dy
     Gp = -0.5*(vx*dx + vy*dy);
-    C = 1 + (1.0/3.0)*(vx*vx + vy*vy - Fxx - Fyy);
+    C = 1 + (1.0/24.0)*(vx*vx + vy*vy - Fxx - Fyy);
     Gp = exp(Gp);    // TODO: could switch to exp2, if faster
     pixel_value -= amplitude*Gp*C;
     return;
@@ -242,7 +242,7 @@ void WorkPlan:computeGaussianDeriv(Gaussian &g, float xpix, float ypix, float dI
 	// Gp = exp(-0.5*(dx*dx*Fxx + 2.0*dx*dy*Fxy + dy*dy*Fxy)); 
     	// or vx*dx+vy*dy
     Gp = -0.5*(vx*dx + vy*dy);
-    C = 1 + (1.0/3.0)*(vx*vx + vy*vy - Fxx - Fyy);
+    C = 1 + (1.0/24.0)*(vx*vx + vy*vy - Fxx - Fyy);
     Gp = exp(Gp);    // TODO: could switch to exp2, if faster
     Gp *= ierror;    // We are scaling all of the derivatives by the inverse pixel error
     dI_dA = Gp*C;
