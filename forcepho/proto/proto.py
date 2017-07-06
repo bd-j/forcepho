@@ -136,8 +136,13 @@ def convert_to_gaussians(galaxy, stamp):
     R = rotation_matrix(galaxy.phi)
     S = scale_matrix(galaxy.q)
     T = np.dot(D, np.dot(R, S))
-    # And it's deriative with respect to scene parameters
-    # blah
+
+    # And its deriatives with respect to scene parameters
+    dS_dq = scale_matrix_deriv(galaxy.q)
+    dR_dphi = rotation_matrix_deriv(galaxy.phi)
+    #dT_dScene = np.zeros([7, 2, 2])
+    dT_dScene[3] = np.dot(D, np.dot(R, dS_dq))
+    dT_dScene[4] = np.dot(D, np.dot(dR_dphi, S))
 
     # get galaxy component means, covariances, and amplitudes in the pixel space
     gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
@@ -152,26 +157,79 @@ def convert_to_gaussians(galaxy, stamp):
     gig = GaussianImageGalaxy(galaxy.ngauss, stamp.psf.ngauss,
                               id=(galaxy.id, stamp.id))
     for i in range(galaxy.ngauss):
-        # gcovar = np.matmul(T, np.matmul(np.eye(self.covariances[i]), T.T))
+        # gcovar = np.matmul(T, np.matmul(galaxy.covariances[i], T.T))
         for j in range(stamp.psf.ngauss):
             gaussid = (galaxy.id, stamp.id, i, j)
             # convolve the jth Galaxy component with the ith PSF component
             covar = gcovar[i] + stamp.psf.covariances[j]
-            fxx = covar[0, 0]
-            fyy = covar[1, 0]
-            fyy = covar[1, 1]
+            f = np.linalg.inv(covar)
+            fxx = f[0, 0]
+            fxy = f[1, 0]
+            fyy = f[1, 1]
             xcen, ycen = gmean + stamp.psf.means[j]
             a = gamps[i] * stamp.psf.amplitudes[j]
             # adjust a for the determinant of F
             # blah
             # Now get derivatives
-            # blah
-
+            dSigma_dScene = (np.matmul(dT_dScene, np.matmul(gcovar, T.T)) +
+                             np.matmul(T, np.matmul(gcovar, np.transpose(dT_dScene, [0,2,1])))
+                             )
+            df_dScene = np.matmul(f, np.matmul(dSigma_dScene, f))
+            
             # And add to list of gaussians
             gig.gaussians[i, j] = ImageGaussian(a, xcen, ycen, fxx, fxy, fyy,
                                                 id=gaussid, derivs=None))
 
     return gig
+
+
+def get_gaussian_gradients(galaxy, stamp, gig):
+    # Get the transformation matrix
+    D = stamp.distortion
+    R = rotation_matrix(galaxy.phi)
+    S = scale_matrix(galaxy.q)
+    T = np.dot(D, np.dot(R, S))
+
+    # And its deriatives with respect to scene parameters
+    dS_dq = scale_matrix_deriv(galaxy.q)
+    dR_dphi = rotation_matrix_deriv(galaxy.phi)
+    #dT_dScene = np.zeros([7, 2, 2])
+    dT_dq = np.dot(D, np.dot(R, dS_dq))
+    dT_dphi = np.dot(D, np.dot(dR_dphi, S))
+
+    # get galaxy component means, covariances, and amplitudes in the pixel space
+    gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
+    gamps = galaxy.amplitudes
+    gmean = stamp.sky_to_pix([galaxy.ra, galaxy.dec])
+
+    
+    for i in range(galaxy.ngauss):
+        # gcovar = np.matmul(T, np.matmul(galaxy.covariances[i], T.T))
+        for j in range(stamp.psf.ngauss):
+            gaussid = (galaxy.id, stamp.id, i, j)
+            # convolve the jth Galaxy component with the ith PSF component
+            covar = gcovar[i] + stamp.psf.covariances[j]
+            F = np.linalg.inv(covar)
+            detF
+            Fxx = f[0, 0]
+            Fxy = f[1, 0]
+            Fyy = f[1, 1]
+            xcen, ycen = gmean + stamp.psf.means[j]
+            a = gamps[i] * stamp.psf.amplitudes[j]
+            # adjust a for the determinant of F
+            # blah
+            # Now get derivatives
+            #dSigma_dq = (np.matmul(dT_dScene, np.matmul(gcovar, T.T)) +
+            #                 np.matmul(T, np.matmul(gcovar, np.transpose(dT_dScene, [0,2,1])))
+            #                 )
+            
+            dSigma_dphi = 
+            dF_dq = np.matmul(f, np.matmul(dSigma_dScene, f))
+            
+            # And add to list of gaussians
+            gig.gaussians[i, j] = ImageGaussian(a, xcen, ycen, fxx, fxy, fyy,
+                                                id=gaussid, derivs=None))
+
 
 
 def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
@@ -228,7 +286,7 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
     dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
 
-    return np.array(C), np.array([dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy, dC_dA]).T
+    return np.array(C), np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy]).T
 
 
 def scale_matrix(q):
@@ -239,3 +297,13 @@ def scale_matrix(q):
 def rotation_matrix(theta):
         return np.array([[np.cos(theta), -np.sin(theta)],
                          [np.sin(theta), np.cos(theta)]])
+
+
+def scale_matrix_deriv(q):
+        return np.array([[-1/q**2, 0],
+                        [0, 1]])
+
+
+def rotation_matrix_deriv(theta):
+        return np.array([[-np.sin(theta), -np.cos(theta)],
+                         [np.cos(theta), -np.sin(theta)]])
