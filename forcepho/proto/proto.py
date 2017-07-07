@@ -55,11 +55,11 @@ class Galaxy(object):
         return amps
 
     @property
-    def amp_derivs(self):
+    def amplitude_derivs(self):
         """Code here for getting amplitude derivatives from a splined look-up
         table (dependent on self.n and self.r)
         """
-        # ngauss x nscene_params, only two are nonzero (n and r)
+        # ngauss x 2, first row is d/dn, second is d/dr
         return amp_derivs
 
     @property
@@ -193,42 +193,37 @@ def get_gaussian_gradients(galaxy, stamp, gig):
     # And its deriatives with respect to scene parameters
     dS_dq = scale_matrix_deriv(galaxy.q)
     dR_dphi = rotation_matrix_deriv(galaxy.phi)
-    #dT_dScene = np.zeros([7, 2, 2])
     dT_dq = np.dot(D, np.dot(R, dS_dq))
     dT_dphi = np.dot(D, np.dot(dR_dphi, S))
 
-    # get galaxy component means, covariances, and amplitudes in the pixel space
-    gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
-    gamps = galaxy.amplitudes
-    gmean = stamp.sky_to_pix([galaxy.ra, galaxy.dec])
-
-    
     for i in range(galaxy.ngauss):
-        # gcovar = np.matmul(T, np.matmul(galaxy.covariances[i], T.T))
+        gcovar = galaxy.covariances[i]
         for j in range(stamp.psf.ngauss):
             gaussid = (galaxy.id, stamp.id, i, j)
             # convolve the jth Galaxy component with the ith PSF component
-            covar = gcovar[i] + stamp.psf.covariances[j]
-            F = np.linalg.inv(covar)
-            detF
-            Fxx = f[0, 0]
-            Fxy = f[1, 0]
-            Fyy = f[1, 1]
-            xcen, ycen = gmean + stamp.psf.means[j]
-            a = gamps[i] * stamp.psf.amplitudes[j]
-            # adjust a for the determinant of F
-            # blah
+            Sigma = np.matmul(T, np.matmul(gcovar, T.T)) + stamp.psf.covariances[j]
+            F = np.linalg.inv(Sigma)
+            detF = np.linalg.det(F)
+            am, al = gamps[i], stamp.psf.amplitudes[j]
+            K = galaxy.psi * am * al * detF**(0.5) / (2 * np.pi)
             # Now get derivatives
-            #dSigma_dq = (np.matmul(dT_dScene, np.matmul(gcovar, T.T)) +
-            #                 np.matmul(T, np.matmul(gcovar, np.transpose(dT_dScene, [0,2,1])))
-            #                 )
-            
-            dSigma_dphi = 
-            dF_dq = np.matmul(f, np.matmul(dSigma_dScene, f))
-            
+            dSigma_dq = np.matmul(T, np.matmul(gcovar, dT_dq.T)) + np.matmul(dT_dq, np.matmul(gcovar, T.T))
+            dSigma_dphi = np.matmul(T, np.matmul(gcovar, dT_dphi.T)) + np.matmul(dT_dphi, np.matmul(gcovar, T.T))
+            dF_dq = -np.matmul(F, np.matmul(dSigma_dq, F))  # 3
+            dF_dphi = -np.matmul(F, np.matmul(dSigma_dphi, F))  # 3
+            ddetF_dq = detF * np.trace(np.matmul(Sigma, dF_dq))
+            ddetF_dphi = detF * np.trace(np.matmul(Sigma, dF_dphi))
+            dA_dq = K / (2 * detF) * ddetF_dq  # 1
+            dA_dphi = K / (2 * detF) * ddetF_dphi  # 1
+            dA_dpsi = K / galaxy.psi # 1
+            dA_dn = K / am * galaxy.amplitude_derivs[i, 0] # 1
+            dA_dr = K / am * galaxy.amplitude_derivs[i, 1] # 1
             # And add to list of gaussians
-            gig.gaussians[i, j] = ImageGaussian(a, xcen, ycen, fxx, fxy, fyy,
-                                                id=gaussid, derivs=None))
+            inds = [0, 1, 3] # slice into a flattened symmetric matrix to get unique components
+            derivs = [dA_dpsi, dA_dq, dA_dphi, dA_dn, dA_dr, D.flatten(), dF_dq.flat[inds], dF_dphi.flat[inds]]
+            gig.gaussians[i, j].derivs = derivs
+
+    return gig
 
 
 
