@@ -2,6 +2,11 @@
 
 import numpy as np
 
+__all__ = ["ImageGaussian", "Star", "Galaxy", "GaussianImageGalaxy",
+           "PostageStamp", "PointSpreadFunction",
+           "convert_to_gaussians", "get_gaussian_gradients", "compute_gaussian"]
+
+
 
 class ImageGaussian(object):
     """This is description of one Gaussian, in pixel locations, as well as the
@@ -15,15 +20,68 @@ class ImageGaussian(object):
     In the Scene space there are 7 parameters, so the dgauss_dscene matrix is 6
     x 7 (mostly zeros)
     """
-    A = 0.
+    amp = 0.
     xcen = 0.
     ycen = 0.
-    Fxx = 0.
-    Fxy = 0.
-    Fyy = 0.
+    fxx = 0.
+    fxy = 0.
+    fyy = 0.
+
+    # derivs = [dA_dpsi, dA_dq, dA_dphi, dA_dn, dA_dr, D.flatten(), dF_dq.flat[inds], dF_dphi.flat[inds]]
+    derivs = None  # this is the dGaussian_dScene Jacobian matrix, in a sparse format
     #float dGaussian_dScene[NDERIV];
+    
+
+class Star(object):
+
+    id = 0
+    psi = 0. # flux
+    ra = 0.
+    dec = 0.
+    q = 1.
+    phi = 0.
+    n = 0.
+    r = 0.
+    fixed = False
+    ngauss = 1
+    radii = np.zeros(0)
 
 
+    def __init__(self):
+        pass
+    
+    @property
+    def covariances(self):
+        """This just constructs a set of covariance matrices based on the radii
+        """
+        # ngauss x 2 x 2
+        # this has no derivatives, since the radii are fixed.
+        return np.zeros([1, 2, 2])
+
+    @property
+    def amplitudes(self):
+        """Code here for getting amplitudes from a splined look-up table
+        (dependent on self.n and self.r)
+        """
+        return np.ones(1)
+
+    @property
+    def damplitude_dn(self):
+        """Code here for getting amplitude derivatives from a splined look-up
+        table (dependent on self.n and self.r)
+        """
+        # ngauss array of da/dn
+        return np.zeros(1)
+
+    @property
+    def damplitude_dr(self):
+        """Code here for getting amplitude derivatives from a splined look-up
+        table (dependent on self.n and self.r)
+        """
+        # ngauss array of da/dr
+        return np.zeros(1)
+
+    
 class Galaxy(object):
     """Parameters describing a galaxy in the celestial plane (i.e. the Scene parameters)
     For each galaxy there are 7 parameters.
@@ -39,7 +97,7 @@ class Galaxy(object):
     psi = 0. # flux
     ra = 0.
     dec = 0.
-    q = 0.  # axis ratio
+    q = 1.  # axis ratio
     phi = 0.  # position angle (N of E)
     n = 0.  # sersic index
     r = 0.  # half-light radius (arcsec)
@@ -77,9 +135,9 @@ class Galaxy(object):
         """
         # ngauss x 2 x 2
         # this has no derivatives, since the radii are fixed.
-        return covars
+        return (self.radii**2)[:, None, None] * np.eye(2)
 
-
+    
 class Scene(object):
     """A collection of fixed and free galaxies describing the scene
     """
@@ -91,16 +149,21 @@ class GaussianImageGalaxy(object):
     """
     id = 0
 
+    def __init__(self, ngalaxy, npsf, id=None):
+        self.id = id
+        self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
+
 
 class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF.
     """
 
-    ngauss = 1
-    covariances = np.array(self.ngauss * [[1.,0.], [0., 1.]])
-    means = np.zeros([self.ngauss, 2])
-    amplitudes = np.ones(self.ngauss)
-    
+    def __init__(self):
+        self.ngauss = 1
+        self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
+        self.means = np.zeros([self.ngauss, 2])
+        self.amplitudes = np.ones(self.ngauss)
+
     
 class PostageStamp(object):
     """A list of pixel values and locations, along with the distortion matrix,
@@ -129,7 +192,7 @@ class PostageStamp(object):
     psf = PointSpreadFunction()
 
     def sky_to_pix(self, sky):
-        pix = np.dot(self.distortion, sky - self.crval) + crpix
+        pix = np.dot(self.distortion, sky - self.crval) + self.crpix
         return pix
 
     def pix_to_sky(self, pix):
@@ -161,20 +224,25 @@ def convert_to_gaussians(galaxy, stamp):
     for i in range(galaxy.ngauss):
         # gcovar = np.matmul(T, np.matmul(galaxy.covariances[i], T.T))
         for j in range(stamp.psf.ngauss):
-            gaussid = (galaxy.id, stamp.id, i, j)
-            # convolve the jth Galaxy component with the ith PSF component
+            gauss = ImageGaussian()
+            gauss.id = (galaxy.id, stamp.id, i, j)
+            
+            # Convolve the jth Galaxy component with the ith PSF component
+
+            # Covariance matrix
             covar = gcovar[i] + stamp.psf.covariances[j]
             f = np.linalg.inv(covar)
-            fxx = f[0, 0]
-            fxy = f[1, 0]
-            fyy = f[1, 1]
-            xcen, ycen = gmean + stamp.psf.means[j]
+            gauss.fxx = f[0, 0]
+            gauss.fxy = f[1, 0]
+            gauss.fyy = f[1, 1]
+
+            # Now get centers and amplitudes
+            gauss.xcen, gauss.ycen = gmean + stamp.psf.means[j]
             am, al = galaxy.amplitudes[i], stamp.psf.amplitudes[j]
-            a = galaxy.psi * am * al * np.linalg.det(f)**(0.5) / (2 * np.pi)
+            gauss.amp = galaxy.psi * am * al * np.linalg.det(f)**(0.5) / (2 * np.pi)
 
             # And add to list of gaussians
-            gig.gaussians[i, j] = ImageGaussian(a, xcen, ycen, fxx, fxy, fyy,
-                                                id=gaussid, derivs=None)
+            gig.gaussians[i, j] = gauss
 
     return gig
 
@@ -196,32 +264,40 @@ def get_gaussian_gradients(galaxy, stamp, gig):
         gcovar = galaxy.covariances[i]
         gcovar_im = np.matmul(T, np.matmul(gcovar, T.T))
         for j in range(stamp.psf.ngauss):
-            gaussid = (galaxy.id, stamp.id, i, j)
+            #gaussid = (galaxy.id, stamp.id, i, j)
+
             # convolve the jth Galaxy component with the ith PSF component
             Sigma = gcovar_im + stamp.psf.covariances[j]
             F = np.linalg.inv(Sigma)
             detF = np.linalg.det(F)
-            am, al = gamps[i], stamp.psf.amplitudes[j]
+            am, al = galaxy.amplitudes[i], stamp.psf.amplitudes[j]
             K = galaxy.psi * am * al * detF**(0.5) / (2 * np.pi)
+            
             # Now get derivatives
+            # Of F
             dSigma_dq = np.matmul(T, np.matmul(gcovar, dT_dq.T)) + np.matmul(dT_dq, np.matmul(gcovar, T.T))
             dSigma_dphi = np.matmul(T, np.matmul(gcovar, dT_dphi.T)) + np.matmul(dT_dphi, np.matmul(gcovar, T.T))
             dF_dq = -np.matmul(F, np.matmul(dSigma_dq, F))  # 3
             dF_dphi = -np.matmul(F, np.matmul(dSigma_dphi, F))  # 3
             ddetF_dq = detF * np.trace(np.matmul(Sigma, dF_dq))
             ddetF_dphi = detF * np.trace(np.matmul(Sigma, dF_dphi))
+            # of Amplitude
             dA_dq = K / (2 * detF) * ddetF_dq  # 1
             dA_dphi = K / (2 * detF) * ddetF_dphi  # 1
             dA_dpsi = K / galaxy.psi # 1
             dA_dn = K / am * galaxy.damplitude_dn[i] # 1
             dA_dr = K / am * galaxy.damplitude_dr[i] # 1
-            # And add to list of gaussians
+
+            # And derivatives to gaussians
             inds = [0, 1, 3] # slice into a flattened symmetric matrix to get unique components
-            derivs = [dA_dpsi, dA_dq, dA_dphi, dA_dn, dA_dr, D.flatten(), dF_dq.flat[inds], dF_dphi.flat[inds]]
+            derivs = ([dA_dpsi, dA_dq, dA_dphi, dA_dn, dA_dr] + 
+                       D.flatten().tolist() +
+                       dF_dq.flat[inds].tolist() +
+                       dF_dphi.flat[inds].tolist())
+            derivs = np.array(derivs)
             gig.gaussians[i, j].derivs = derivs
 
     return gig
-
 
 
 def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
@@ -255,25 +331,25 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
 
     dx = xpix - g.xcen
     dy = ypix - g.ycen
-    vx = g.Fxx * dx + g.Fxy * dy
-    vy = g.Fyy * dy + g.Fxy * dx
+    vx = g.fxx * dx + g.fxy * dy
+    vy = g.fyy * dy + g.fxy * dx
     #G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
     Gp = np.exp(-0.5 * (dx*vx + dy*vy))
  
     if second_order:
-        H = 1 + (vx*vx + vy*vy - g.Fxx - g.Fyy) / 24.
+        H = 1 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.
     else:
         H = 1.0
 
-    c_h = A * Gp
+    c_h = g.amp * Gp
     C = c_h * H
 
     if not compute_deriv:
         return np.array(C)
 
     dC_dA = Gp * H
-    dC_dx = C*vx - second_order * c_h * 2./24. * (g.Fxx*vx + g.Fxy*vy) 
-    dC_dy = C*vy - second_order * c_h * 2./24. * (g.Fyy*vy + g.Fxy*vx)
+    dC_dx = C*vx - second_order * c_h * 2./24. * (g.fxx*vx + g.fxy*vy) 
+    dC_dy = C*vy - second_order * c_h * 2./24. * (g.fyy*vy + g.fxy*vx)
     dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 24.
     dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
     dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
