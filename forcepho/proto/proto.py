@@ -104,7 +104,7 @@ class Galaxy(object):
     ra = 0.
     dec = 0.
     q = 1.        # axis ratio
-    pa = 0.       # postion angle (N of E)
+    pa = 0.       # postion angle (N of E), in radians
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
 
@@ -113,7 +113,7 @@ class Galaxy(object):
         """Code here for getting amplitudes from a splined look-up table
         (dependent on self.n and self.r)
         """
-        return np.array([0.5, 0.5])
+        return np.ones(self.ngauss) / (self.ngauss * 1.0)
 
     @property
     def damplitude_dsersic(self):
