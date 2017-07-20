@@ -140,11 +140,7 @@ class Galaxy(object):
         # this has no derivatives, since the radii are fixed.
         return (self.radii**2)[:, None, None] * np.eye(2)
 
-    
-class Scene(object):
-    """A collection of fixed and free galaxies describing the scene
-    """
-    
+
 class GaussianImageGalaxy(object):
     """ A list of gaussians corresponding to one galaxy, after image
     distortions, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++

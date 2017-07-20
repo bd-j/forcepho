@@ -4,6 +4,17 @@ import matplotlib.pyplot as pl
 import proto
 
 
+class Scene(object):
+    """A collection of sources describing the scene, and logic for parsing a
+    parameter vector into individual source parameters
+    """
+
+    nsources = 4
+    
+    def thetas(self, params, stamps=None):
+        pass
+
+
 def set_star_params(source, theta):
     flux, ra, dec = theta
     source.ra = ra
@@ -22,8 +33,9 @@ def set_galaxy_params(source, theta):
     source.rh = rh
 
     
-def lnlike(thetas, sources, stamp):
-
+def lnlike(thetas, sources, stamps):
+#def lnlike(pvec, scene, stamp):
+    #sources, thetas = scene.sources, scene.thetas(pvec)
     residual, partials = model_image(thetas, sources, stamp)
     chi = residual * stamp.ierr
     return -0.5 * np.sum(chi**2), np.sum(chi * partials, axis=0)
