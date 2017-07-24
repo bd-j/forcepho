@@ -180,6 +180,7 @@ class PostageStamp(object):
     # Size of the stamp
     nx = 100
     ny = 100
+    npix = 100 * 100
 
     # The distortion matrix D
     distortion = np.eye(2)
@@ -188,7 +189,13 @@ class PostageStamp(object):
     # The pixel coordinates of the reference pixel
     crpix = np.zeros([2])
 
+    # The point spread function
     psf = PointSpreadFunction()
+
+    # The pixel values and residuals
+    pixel_value = np.zeros([nx, ny])
+    residuals = np.zeros([nx, ny])
+    ierr = np.zeros([nx, ny])
 
     def sky_to_pix(self, sky):
         pix = np.dot(self.distortion, sky - self.crval) + self.crpix
