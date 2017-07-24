@@ -29,7 +29,7 @@ def lnlike(thetas, sources, stamps):
     #sources, thetas = scene.sources, scene.thetas(pvec)
     residual, partials = model_image(thetas, sources, stamp)
     chi = residual * stamp.ierr
-    return -0.5 * np.sum(chi**2), np.sum(chi * partials, axis=-1)
+    return -0.5 * np.sum(chi**2), np.sum(chi *stamp.ierr * partials, axis=-1)
 
 
 def model_image(thetas, sources, stamp, use_gradients=slice(None)):

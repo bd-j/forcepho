@@ -1,109 +1,31 @@
 import sys
+from functools import partial
 import numpy as np
 import matplotlib.pyplot as pl
 import proto
 
-
-class Scene(object):
-    """A collection of sources describing the scene, and logic for parsing a
-    parameter vector into individual source parameters
-    """
-
-    nsources = 4
-    
-    def thetas(self, params, stamps=None):
-        pass
+from likelihood import model_image, set_galaxy_params
 
 
-def set_star_params(source, theta):
-    flux, ra, dec = theta
-    source.ra = ra
-    source.dec = dec
-    source.flux = flux
-
-
-def set_galaxy_params(source, theta):
-    flux, ra, dec, q, pa, sersic, rh = theta
-    source.flux = flux
-    source.ra = ra
-    source.dec = dec
-    source.q = q
-    source.pa = pa
-    source.sersic = sersic
-    source.rh = rh
-
-    
-def lnlike(thetas, sources, stamps):
-#def lnlike(pvec, scene, stamp):
-    #sources, thetas = scene.sources, scene.thetas(pvec)
-    residual, partials = model_image(thetas, sources, stamp)
+def negative_lnlike_stamp(theta, source=None, stamp=None, free_inds=slice(0, 3)):
+    stamp.residual = stamp.pixel_values.flatten()
+    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
+    #thetas[0] *= 100
+    residual, partials = model_image(thetas, [source], stamp)
     chi = residual * stamp.ierr
-    return -0.5 * np.sum(chi**2), np.sum(chi * partials, axis=0)
+    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[free_inds, :], axis=-1)
 
 
-def model_image(thetas, sources, stamp, use_gradients=slice(None)):
-    """Loop over all sources in a scene, subtracting each from the image and
-    building up a gradient cube.  Eventually everything interior to this should
-    be moved to C++
-
-    :returns residual:
-        ndarray of shape (npix,)
-
-    :returns partials:
-        ndarray of shape (npix, nsource * ntheta)
-    """
-    ntheta = len(thetas[0][use_gradients])
-    ngrad = len(sources) * ntheta
-    gradients = np.empty([ngrad, stamp.npix])
-
-    for i, (theta, source) in enumerate(zip(thetas, sources)):
-        set_galaxy_params(source, theta)
-        gig = proto.convert_to_gaussians(source, stamp)
-        gig = proto.get_gaussian_gradients(source, stamp, gig)
-        gig.ntheta = ntheta
-
-        sel = slice(i * ntheta, (i+1) * ntheta)
-        gradients[sel, :] = evaluate_gig(gig, stamp, use_gradients=use_gradients)
-
-    return stamp.residual, gradients
-
-
-def evaluate_gig(gig, stamp, use_gradients=slice(None)):
-    """Evaluate one GaussianImageGalaxy, subtract it from the residual, and
-    compute and return dResidual_dtheta
-    """
-    
-    # R is the residual
-    R = stamp.residual
-    dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
-
-    for g in gig.gaussians.flat:
-        I, dI_dphi = proto.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
-        # Accumulate the derivatives w.r.t. theta from each gaussian
-        # This matrix multiply can be optimized (many zeros in g.derivs)
-        dR_dtheta += np.matmul(g.derivs, dI_dphi)[use_gradients, :]
-        R -= I
-
-    # since R is stored in the stamp.residuals, we need only return the
-    # derivatives for this gig
-    return dR_dtheta
-
-
-def work_plan(active_gigs, fixed_gigs, stamp):
-
-    return chisq, dchisq_dtheta, residual 
-
-        
 if __name__ == "__main__":
 
-    galaxy, new = True, True
+    galaxy, new = False, True
     
     # get a stamp and put an image in it
     stamp = proto.PostageStamp()
     stamp.nx = 30
     stamp.ny = 30
     stamp.npix = int(stamp.nx * stamp.ny)
-    stamp.xpix, stamp.ypix = np.meshgrid(np.arange(stamp.nx), np.arange(stamp.ny))
+    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
     stamp.crpix = np.array([stamp.nx/2., stamp.ny/2.])
     stamp.residual = np.zeros(stamp.npix)
 
@@ -119,7 +41,7 @@ if __name__ == "__main__":
     else:
         source = proto.Star()
         use = slice(0, 3)
-        theta = [1, 10., 10., 1., 0., 0., 0.]
+        theta = [100, 10., 10., 1., 0., 0., 0.]
 
     # Set source parameters
     set_galaxy_params(source, theta)
@@ -127,7 +49,7 @@ if __name__ == "__main__":
     stamp.crval = np.array([source.ra, source.dec])
     stamp.crval += 0.5 # move off-center by a half pix
     
-    # New code
+    # ----- New code ------
     if new:
         residual, partials = model_image([theta], [source], stamp,
                                         use_gradients=use)
@@ -145,8 +67,24 @@ if __name__ == "__main__":
             partials = np.matmul(g.derivs, partial_phi)
 
 
-    fig, axes = pl.subplots(3, 3)
-    for i, ddtheta in enumerate(partials):
-        ax = axes.flat[i]
-        ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny))
-    axes.flat[-1].imshow(im.reshape(stamp.nx, stamp.ny))    
+    # --- Optimization -----
+    stamp.pixel_values = -residual.reshape(stamp.nx, stamp.ny)
+    err = stamp.pixel_values.max() * 1e-2
+    #err = np.sqrt(stamp.pixel_values.flatten())
+    stamp.ierr = np.ones(stamp.npix) / err
+
+    if False:
+        fig, axes = pl.subplots(3, 3)
+        for i, ddtheta in enumerate(partials):
+            ax = axes.flat[i]
+            ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        axes.flat[-1].imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')    
+
+    nll = partial(negative_lnlike_stamp, source=source, stamp=stamp)
+    p0 = np.array(theta[:3])
+    bounds = [(0, 1e4), (0., 30), (0, 30)]
+    from scipy.optimize import minimize
+    result = minimize(nll, p0 * 1.005, jac=True, bounds=bounds,
+                      options={'ftol': 1e-22, 'gtol': 1e-22, 'disp':True,
+                               'iprint': 1, 'maxcor': 20}
+                      )

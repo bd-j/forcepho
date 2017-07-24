@@ -15,7 +15,10 @@ from proto import PostageStamp, Star
 class Scene(object):
 
     def set_params(self, theta, stamps=None):
-        self.params = [np.append(theta, np.array([1., 0., 0., 0.]))]
+        # Add all the unused (fixed) galaxy parameters
+        t = theta.copy()
+        t[0] *= 100
+        self.params = [np.append(t, np.array([1., 0., 0., 0.]))]
         self.free_inds = slice(0, 3)
 
 
@@ -79,7 +82,7 @@ def negative_lnlike_stamp(theta, scene=None, stamp=None):
     sources, thetas = scene.sources, scene.params
     residual, partials = model_image(thetas, sources, stamp)
     chi = residual * stamp.ierr
-    return 0.5 * np.sum(chi**2), np.sum(chi * partials[scene.free_inds, :], axis=-1)
+    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[scene.free_inds, :], axis=-1)
 
 
 if __name__ == "__main__":
@@ -92,7 +95,7 @@ if __name__ == "__main__":
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
     ra_init, dec_init = 53.115325, -27.803518
     stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), center_type='celestial')
-    stamp.ierr = stamp.ierr.flatten() #/ 100
+    stamp.ierr = stamp.ierr.flatten() / 1000
     
     # override the WCS so coordinates are in pixels
     # The distortion matrix D
@@ -134,7 +137,7 @@ if __name__ == "__main__":
 
 
     nll = partial(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    chisq_init = nll(theta_init)
+    #chisq_init = nll(theta_init)
 
 
     # --- Chi2 on a grid -----
@@ -151,9 +154,8 @@ if __name__ == "__main__":
                     chi2[i,j,k] = nll(theta)
 
         sys.exit()
-    
-    
-    
+
+
     # ---- Optimization ------
 
     if True:
@@ -162,7 +164,7 @@ if __name__ == "__main__":
             print(x, nll(x))
 
         p0 = theta_init.copy()
-        p0[0] = 3444.0
+        p0[0] = 34.44
         p0[1] = 48.1
         p0[2] = 51.5
         bounds = [(0, 1e4), (0., 100), (0, 100)]
