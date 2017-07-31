@@ -194,7 +194,7 @@ class PostageStamp(object):
 
     # The pixel values and residuals
     pixel_value = np.zeros([nx, ny])
-    residuals = np.zeros([nx, ny])
+    residual = np.zeros([nx, ny])
     ierr = np.zeros([nx, ny])
 
     def sky_to_pix(self, sky):

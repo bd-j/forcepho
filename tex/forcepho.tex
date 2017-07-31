@@ -1,13 +1,14 @@
 \documentclass[modern]{aastex6} 
 \setlength{\parskip}{\baselineskip}
 
-\usepackage{graphicx}
+%\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage[normalem]{ulem}
 
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
 \newcommand{\given}{\,|\,}
 \renewcommand{\det}[1]{||{#1}||}
+\DeclareMathOperator{\trace}{Tr}
 
 \newcommand{\counts}{C}
 \newcommand{\countrate}{\hat{C}}
@@ -58,7 +59,7 @@ Analytic gradients can vastly accelerate both optimization and MCMC bayesian inf
 
 \section{Full Problem}
 What's really happening from a photon's point of view (sort of)?
-First it comes from a distribution $\scene(\alpha, \delta [, \nu] \given \beta)$ which we take to be the instensity distribution on the sky, or the \emph{scene},
+First it comes from a distribution $\scene(\alpha, \delta [, \nu] \given \beta)$ which we take to be the intensity distribution on the sky, or the \emph{scene},
 parameterized by $\beta$.
 It then travels through the the atmosphere (if there is one), then the telescope optics, finally reaching the detector plane.
 During this travel the photon is diffracted, so that its position is now in iteself a PDF (called the point spread function, $\psf$).
@@ -145,20 +146,19 @@ I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delt
 
 \subsection{Method for Approximating Sersic profiles with Gaussians}
 Following \citet{hogg_mog}, but we: 
-  1) use absolute pixel space; 
-  2) fix the radii of the gaussians (in pixel space), including one at $r=0$;
+  1) use absolute celestial units (e.g. mas); 
+  2) fix the radii of the gaussians (on sky), including one at $r=0$;
   3) apply a small blurring to the Sersic profile and Gaussians before fitting (using analytic Sersic blurring formulae from \citet{trujillo01}); and
   4) Fit for the amplitudes as a function of both $n_{sersic}$ and half-light radius $r_h$.
 
 We do this for two reasons.
-First because we don't want to be calculating tons of gaussians below a pixel scale that matters for the PRF, 
-and can make other approximations that are only well defined in pixel space.
+First because we don't want to be calculating tons of gaussians below a scale that matters for the PRF.
 Second because the fixed radii of the gaussians will allow us to spline the amplitudes as a function of $n_{sersic}$ and $r_h$ for easy derivatives, so that we can fit for $n$.
 
 This all results in a fixed number $M$ of Gaussians for each profile,
 with amplitudes $a_m(n, r_h)$, zero mean, and covariances $\Sigma_{m,i,j} = \delta_{i,j} \, r_m^2$ 
-where here $\delta_{i,j}$ is the Kroneker-$\delta$ and $r_m$ is the dispersion  of the $m$th  Gaussian (in pixels).
-We also renormalize so that 
+where here $\delta_{i,j}$ is the Kroneker-$\delta$ and $r_m$ is the dispersion  of the $m$th  Gaussian (in mas or something like it).
+We also re-normalize so that 
 \begin{eqnarray}
 %\sum_m^M \frac{a_m}{2\,\pi\,\sqrt{\det{\Sigma_m}}} & = & 1
 \sum_m^M a_m & = & 1
@@ -187,7 +187,7 @@ D & = & T^{-1} \\
 d & = &\sqrt{\det{D}} \nonumber
 \end{eqnarray}
 and use the matrix $D$ going forward.
-The scalar $d$ is a dilation factor.
+The scalar $d$ is a dilation factor, which would be important if we defined our fixed radii (or rather fixed dispersion) galaxy Gaussians  in the pixel space.
 Note that for a given subregion of a particular exposure the matrix $D$ and the reference coordinates $\mu_0$, $c_0$ are fixed.
 
 
@@ -203,35 +203,93 @@ $\Sigma'_m$  and $\mu_m$ describes a galaxy Gaussian rotated and stretched into 
 and $\Sigma_\ell$ and $\mu_\ell$ describe a PSF gaussian.
 For a single term, we can write more explicitly
 \begin{eqnarray}
-I_{m, \ell}(\mu_p) & = & \, \frac{ \psi \, a_m \, a_\ell \, \sqrt{\det{F}}}{2\pi}  \, \exp(-0.5 \, \transpose{(\mu_p -\mu_{m,\ell})} \, F \, (\mu_p -\mu_{m,\ell})) \\
-F & = & (\Sigma'_m + \Sigma_\ell)^{-1} \nonumber \\
+I_{m, \ell}(\mu_p) & = & \, A  \, \exp(-0.5 \, \transpose{(\mu_p -\mu_{m,\ell})} \, F \, (\mu_p -\mu_{m,\ell})) \\
+A & = & \frac{ \psi \, a_m \, a_\ell \, \sqrt{\det{F}}}{2\pi} \\
+\Sigma & = & (\Sigma'_m + \Sigma_\ell) \nonumber \\
+ F & = & \Sigma^{-1} \nonumber \\
 \mu_{m,\ell} & = & \mu_m + \mu_\ell \nonumber \\
-\Sigma'_m & = & \transpose{(R \, S)} \, \Sigma_m \, R\, S  \nonumber 
+\mu_m & = & D\, (c - c_0) + \mu_0 \nonumber \\  
+\Sigma'_m & = & D\, R \, S \, \Sigma_m \, \transpose{S} \, \transpose{R} \, \transpose{D}\nonumber 
 \end{eqnarray}
-where $R$ is the rotation matrix parameterized by a position angle $\varphi$, $S$ is the scale matrix parameterized by the axis ratio $q$, and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian in the untransformed (circularly symmetric) space.
-The exponential in pixel space has 6 parameters $\phi_g$:
+where $S$ is the scale matrix parameterized by the (on-sky) axis ratio $q$,
+$R$ is the rotation matrix parameterized by the (on-sky) position angle of the major axis $\varphi$, 
+$D$ is the distortion matrix to go from on-sky to pixel coordinates,
+and $\Sigma_m$ is the covariance matrix describing the $m$th Gaussian in the untransformed (circularly symmetric) on-sky coordinate space.
+Note that $\det{R}=\det{S}=1$.
+Also $\det{D}$ is constant.
+
+The Gaussian in pixel space has 6 parameters $\phi_g$:
 the amplitude $A = (\psi \, a_m \, a_\ell \, \sqrt{\det{F}})/(2\pi)$,
 the two parameters of the mean $\mu_{m,\ell} = x_{m, \ell}, y_{m, \ell}$,
 and the three parameters of the inverse covariance matrix $F_{xx}$,
 $F_{yy}$,
-and $F_{xy}=F_{yx}$
+and $F_{xy}=F_{yx}$.
 
-There are 7 on sky galaxy source parameters $\theta_s$:
+There are 7 on-sky galaxy source parameters $\theta_s$:
 the total flux $\psi$,
-the celestial coordinates $\alpha, \delta$,
+the celestial coordinates $c= (\alpha, \delta)$,
 the Sersic index $n$, 
-the half-light radius in  celestial units (e.g. degrees or arcseconds) $\rho_h$,
+the half-light radius in  celestial units (e.g. degrees or milliarcseconds) $r_h$,
 the axis ratio $q = (b/a)$,
-and position angle\ $varphi$.
+and position angle $\varphi$.
 In general we will want to construct the Jacobian between $\phi_g$ and $\theta_s$ for each Gaussian.
 
-Need to add in the astrometric distortion affine transformtion to go from sky coordinates to pixel coordinates.
 
-Now, one option is to let the size of each galaxy Gaussian be set by the scale matrix $S$, so that the whole collection of gaussians grows through $S$.  
-However, if for any reason we have made the absolute pixel scale important in our approximation of the Sersic profile by Gaussians (for example by adding a subpixel blurring before fitting the profiles, as described above) then this will be problematic and internally inconsistent.
+Now, one option to deal with the galaxy size parameter is to let the size of each galaxy Gaussian be set by the scale matrix $S$, so that the whole collection of Gaussians grows by replacing the matrix $S$ above with $S'=s\,S$ where $s$ is a scalar size.
+In this scheme the amplitudes $a_m$ would be functions only of $n$.
+However, the radii of the Gaussians would vary.
+However, if for any reason we have made the absolute scale important in our approximation of the Sersic profile by Gaussians (for example by adding a sub-PRF blurring before fitting the profiles, as described above) then this will be problematic and internally inconsistent.
+We may also want to use fixed radii for other reasons.
+In this case the size of the of the galaxy can come in through the amplitudes only, and the $a_m$ will be functions of both $n$ and $r_h$.
 
 
 \subsection{Gradients}
+We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
+
+We will also need the Jacobian to go from the image plane Gaussian parameters to the galaxy parameters.
+%\begin{table}[h!]
+
+\begin{center}
+$
+\begin{array}{c|ccccccc}
+ & \psi & \alpha & \delta & q & \varphi & n & r_h \\
+\hline
+A      &  \frac{K}{\psi} & -      & -      & \nabla_7 & \nabla_8 &  \frac{K}{a_m}\, \frac{\partial a_m}{\partial n} & \frac{K}{a_m} \,\frac{\partial a_m}{\partial r_h} \\
+x      & -         & D_{00} & D_{01} & -        & -        & -               & - \\
+y      & -         & D_{10} & D_{11} & -        & -        & -               & - \\
+F_{xx} & -         & -      & -      & \nabla_1 & \nabla_4 & -               & - \\
+F_{xy} & -         & -      & -      & \nabla_2 & \nabla_5 & -               & - \\
+F_{yy} & -         & -      & -      & \nabla_3 & \nabla_6 & -               & - \\
+\end{array}
+$
+\end{center}
+%\end{table}
+
+where
+\begin{eqnarray}
+K & = & \frac{\psi \, a_\ell \, a_m \, \sqrt{\det{F}}}{2\pi} \nonumber \\
+\bigl(
+  \begin{smallmatrix}
+    {\nabla_1} & {\nabla_2} \\
+    {\nabla_2} & {\nabla_3}
+  \end{smallmatrix}
+\bigr)
+  & = & \frac{\partial F}{\partial q} \nonumber \\
+\bigl(
+  \begin{smallmatrix}
+    {\nabla_4} & {\nabla_5} \\
+    {\nabla_5} & {\nabla_6}
+  \end{smallmatrix}
+\bigr)
+  & = & \frac{\partial F}{\partial \varphi} \nonumber \\
+\nabla_7 & = & \frac{ K }{2 \, \det{F}}\frac{\partial\det{F}}{\partial q} \nonumber \\
+\nabla_8 & = & \frac{ K }{2 \, \det{F}}\frac{\partial\det{F}}{\partial \varphi} \nonumber \\
+\frac{\partial \det{F}}{\partial \theta} & = & \det{F}\, \trace(\Sigma \, \frac{\partial F}{\partial\theta}) \nonumber \\
+\frac{\partial F}{\partial \theta} & = & -F\, \frac{\partial \Sigma}{\partial \theta} \, F \nonumber \\
+\frac{\partial \Sigma}{\partial q} & = & D\, R\, \frac{\partial S}{\partial q} \, \Sigma_m \, \transpose{S} \, \transpose{R} \, \transpose{D} + D\, R\, S \, \Sigma_m \, \transpose{\frac{\partial S}{\partial q}} \, \transpose{R} \, \transpose{D} \nonumber \\
+\frac{\partial \Sigma}{\partial \varphi} & = & D\, \frac{\partial R}{\partial \varphi} \, S\, \Sigma_m \, \transpose{S} \, \transpose{R} \, \transpose{D} +  D\, R\, S \, \Sigma_m \, \transpose{S} \, \transpose{\frac{\partial R}{\partial \varphi}} \, \transpose{D} \nonumber \\
+\end{eqnarray}
+
 This is helpful for gradients since the partial derivatives can be written easily as 
  \begin{eqnarray}
 \frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
@@ -272,14 +330,14 @@ This has the benefit of making $\prf$ analytically differentiable with respect t
 We could also use a mixture of Gaussians approximation for $\prf$ described above, but the polynomial  (or a spline) approximation has some nice properties.
 
 
-\subsubsection{Gradients}
+\subsection{Gradients}
 How do we do gradients in this scheme?  We want 
 \begin{eqnarray}
 \frac{\partial\countrate_n}{\partial\beta} & \approx & \sum_k \, \frac{\partial\prf_n(x_k, y_k \given \gamma)}{\partial \beta} \nonumber \\
 & \approx & \sum_k\sum_{i,j=0} \, R_{n, i, j} \frac{\partial w_k}{\partial \beta}\, i \, j \, \frac{\partial x_k}{\partial \beta}\, \frac{\partial y_k}{\partial \beta} (x_k - x_n)^{i-1} \, (y_k - y_n)^{j-1}
 \end{eqnarray}
 
-\subsubsection{Draws from the Scene}
+\subsection{Draws from the Scene}
 There are a frew ways to consider drawing from the scene.
 Perhaps the closest to the photon case would be to draw directly from some bivariate flux distribution.
 This can be accomplished by calculating the inverse of the bivariate cumulative flux distribution (CFD),

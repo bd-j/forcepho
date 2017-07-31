@@ -51,7 +51,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     xinds = slice(int(lo[0]), int(hi[0]))
     yinds = slice(int(lo[1]), int(hi[1]))
     # only valid for simple tan plane projetcions (i.e. no distortions)
-    crpix -= lo
+    crpix_stamp = crpix - lo
 
     # --- Add image and uncertainty data to Stamp ----
     stamp = PostageStamp()
@@ -68,11 +68,14 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
 
     # --- Add WCS info to Stamp ---
-    stamp.crpix = crpix
+    stamp.crpix = crpix_stamp
     stamp.crval = crval
     stamp.distortion = distortion
     stamp.pixcenter_in_full = center
 
+    # --- Add extra information ---
+    stamp.full_header = dict(hdr)
+    
     return stamp
 
 
@@ -94,6 +97,7 @@ if __name__ == "__main__":
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
     ra_init, dec_init = 53.115325, -27.803518
+    # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
     stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), center_type='celestial')
     stamp.ierr = stamp.ierr.flatten() / 1000
     
@@ -128,12 +132,13 @@ if __name__ == "__main__":
     stamp.residual = np.zeros(stamp.npix)
     resid, partials = model_image(scene.params, sources, stamp)
 
-    fig, axes = pl.subplots(1, 2, sharex=True, sharey=True)
-    ax = axes[1]
-    i = ax.imshow(stamp.pixel_values.T, origin='lower')
-    ax = axes[0]
-    i = ax.imshow(-resid.reshape(stamp.nx, stamp.ny).T, origin='lower')
-    pl.show()
+    if False:
+        fig, axes = pl.subplots(1, 2, sharex=True, sharey=True)
+        ax = axes[1]
+        i = ax.imshow(stamp.pixel_values.T, origin='lower')
+        ax = axes[0]
+        i = ax.imshow(-resid.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        pl.show()
 
 
     nll = partial(negative_lnlike_stamp, scene=scene, stamp=stamp)
@@ -141,9 +146,9 @@ if __name__ == "__main__":
 
 
     # --- Chi2 on a grid -----
-    if False:
-        mux = np.linspace(45, 55., 100)
-        muy = np.linspace(45, 55., 100)
+    if True:
+        mux = np.linspace(47, 53., 100)
+        muy = np.linspace(47, 53., 100)
         flux = np.linspace(3000, 5000., 10)
         chi2 = np.zeros([len(mux), len(muy), len(flux)])
     
@@ -151,7 +156,7 @@ if __name__ == "__main__":
             for j, y in enumerate(muy):
                 for k, f in enumerate(flux):
                     theta = np.array([f, x, y])
-                    chi2[i,j,k] = nll(theta)
+                    chi2[i,j,k] = nll(theta)[0]
 
         sys.exit()
 
@@ -164,11 +169,25 @@ if __name__ == "__main__":
             print(x, nll(x))
 
         p0 = theta_init.copy()
-        p0[0] = 34.44
-        p0[1] = 48.1
-        p0[2] = 51.5
+        p0[0] = 45.6 #34.44
+        p0[1] = 50. #48.1
+        p0[2] = 50. #51.5
         bounds = [(0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=bounds, callback=callback,
                         options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})
 
+        stamp.residual = stamp.pixel_values.flatten()
+        scene.set_params(result.x)
+        resid, partials = model_image(scene.params, scene.sources, stamp)
+        dim = stamp.pixel_values
+        rim = resid.reshape(stamp.nx, stamp.ny)
+        
+        fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
+        images = [dim, dim-rim, rim]
+        labels = ['Data', 'Model', 'Data-Model']
+        for k, ax in enumerate(axes):
+            c = ax.imshow(images[k].T, origin='lower')
+            pl.colorbar(c, ax=ax)
+            ax.set_title(labels[k])
+        
