@@ -18,7 +18,7 @@ def negative_lnlike_stamp(theta, source=None, stamp=None, free_inds=slice(0, 3))
 
 if __name__ == "__main__":
 
-    galaxy, new = False, True
+    galaxy, new = True, True
     
     # get a stamp and put an image in it
     stamp = proto.PostageStamp()
@@ -28,6 +28,7 @@ if __name__ == "__main__":
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
     stamp.crpix = np.array([stamp.nx/2., stamp.ny/2.])
     stamp.residual = np.zeros(stamp.npix)
+    stamp.psf = proto.PointSpreadFunction()
 
     # get a source
     if galaxy:
@@ -38,10 +39,12 @@ if __name__ == "__main__":
         source.pa = np.deg2rad(30.)
         use = slice(0,5)
         theta = [1, 10., 10., 0.5, np.deg2rad(30.), 0., 0.]
+        label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
     else:
         source = proto.Star()
         use = slice(0, 3)
         theta = [100, 10., 10., 1., 0., 0., 0.]
+        label = ['$\psi$', '$x$', '$y$']
 
     # Set source parameters
     set_galaxy_params(source, theta)
@@ -51,7 +54,7 @@ if __name__ == "__main__":
     
     # ----- New code ------
     if new:
-        residual, partials = model_image([theta], [source], stamp,
+        residual, partials = model_image([np.array(theta) * 1.25], [source], stamp,
                                         use_gradients=use)
         im = -residual
     
@@ -73,16 +76,20 @@ if __name__ == "__main__":
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
 
-    if False:
-        fig, axes = pl.subplots(3, 3)
+    if True:
+        fig, axes = pl.subplots(3, 2)
         for i, ddtheta in enumerate(partials):
-            ax = axes.flat[i]
+            ax = axes.flat[i+1]
             ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
-        axes.flat[-1].imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')    
+            ax.text(0.1, 0.85, '$\partial I/\partial${}'.format(label[i]), transform=ax.transAxes)
 
+        ax = axes.flat[0]
+        ax.imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        ax.text(0.1, 0.85, 'Model (I)'.format(label[i]), transform=ax.transAxes)
+        
     nll = partial(negative_lnlike_stamp, source=source, stamp=stamp)
-    p0 = np.array(theta[:3])
-    bounds = [(0, 1e4), (0., 30), (0, 30)]
+    p0 = np.array(theta[use])
+    bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     from scipy.optimize import minimize
     result = minimize(nll, p0 * 1.005, jac=True, bounds=bounds,
                       options={'ftol': 1e-22, 'gtol': 1e-22, 'disp':True,

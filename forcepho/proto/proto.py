@@ -190,7 +190,7 @@ class PostageStamp(object):
     crpix = np.zeros([2])
 
     # The point spread function
-    psf = PointSpreadFunction()
+    #psf = PointSpreadFunction()
 
     # The pixel values and residuals
     pixel_value = np.zeros([nx, ny])

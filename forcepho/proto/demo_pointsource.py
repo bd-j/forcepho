@@ -127,17 +127,25 @@ if __name__ == "__main__":
 
     # --- Initialize and plot ----
     #theta_init = np.array([stamp.pixel_values.sum() * 0.5, stamp.nx/2, stamp.ny/2])
-    theta_init = np.array([stamp.pixel_values.sum() * 0.68, 48.1, 51.5])
+    theta_init = np.array([stamp.pixel_values.sum() * 1.0, 48.1, 51.5])
     scene.set_params(theta_init)
     stamp.residual = np.zeros(stamp.npix)
     resid, partials = model_image(scene.params, sources, stamp)
 
-    if False:
-        fig, axes = pl.subplots(1, 2, sharex=True, sharey=True)
-        ax = axes[1]
+    label = ['flux', 'x', 'y']
+    
+    if True:
+        fig, axes = pl.subplots(3, 2, sharex=True, sharey=True)
+        ax = axes.flat[0]
         i = ax.imshow(stamp.pixel_values.T, origin='lower')
-        ax = axes[0]
+        ax.text(0.1, 0.9, 'Sim. Data', transform=ax.transAxes)
+        ax = axes.flat[1]
         i = ax.imshow(-resid.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        ax.text(0.1, 0.9, 'Initial Model', transform=ax.transAxes)
+        for i, ddtheta in enumerate(partials[scene.free_inds, :]):
+            ax = axes.flat[i+2]
+            ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
+            ax.text(0.1, 0.9, '$\partial I/\partial {}$'.format(label[i]), transform=ax.transAxes)
         pl.show()
 
 
@@ -146,7 +154,7 @@ if __name__ == "__main__":
 
 
     # --- Chi2 on a grid -----
-    if True:
+    if False:
         mux = np.linspace(47, 53., 100)
         muy = np.linspace(47, 53., 100)
         flux = np.linspace(3000, 5000., 10)
@@ -163,7 +171,7 @@ if __name__ == "__main__":
 
     # ---- Optimization ------
 
-    if True:
+    if False:
         def callback(x):
             #nf += 1
             print(x, nll(x))

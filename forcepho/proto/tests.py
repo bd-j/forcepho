@@ -3,10 +3,17 @@ import matplotlib.pyplot as pl
 
 def test_second_order(oversample=10, sigma=2):
 
-    from proto import counts_pg_native
+    from proto import compute_gaussian as counts_pg_native
+    from proto import ImageGaussian
     from proto import scale_matrix, rotation_matrix
+
+    g = ImageGaussian()
     var = np.diag([sigma**2, sigma**2])
     F = np.linalg.inv(var)
+    g.fxx = F[0,0]
+    g.fxy = F[1, 0]
+    g.fyy = F[1, 1]
+    g.amp = 1.0
     
     from itertools import product
     # min and max pixel centers
@@ -26,14 +33,11 @@ def test_second_order(oversample=10, sigma=2):
     subpixels = np.array(list(product(xs, xs)))
 
     # calculate pixel center fluxes
-    im1, gr1 = counts_pg_native(pixels[:,0], pixels[:,1],
-                                F[0,0], F[1,1], F[1,0], 1.0)
-    im2, gr2 = counts_pg_native(pixels[:,0], pixels[:,1],
-                                F[0,0], F[1,1], F[1,0], 1.0,
+    im1, gr1 = counts_pg_native(g, pixels[:,0], pixels[:,1])
+    im2, gr2 = counts_pg_native(g, pixels[:,0], pixels[:,1],
                                 second_order=False)
 
-    ims, grs = counts_pg_native(subpixels[:,0], subpixels[:,1],
-                                F[0,0], F[1,1], F[1,0], 1.0,
+    ims, grs = counts_pg_native(g, subpixels[:,0], subpixels[:,1],
                                 second_order=False)
 
     #g = ((subpixels[:,0] <= 1.0) & (subpixels[:,0] > -0.5) &

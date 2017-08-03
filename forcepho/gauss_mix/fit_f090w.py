@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.cm import get_cmap
+from matplotlib.backends.backend_pdf import PdfPages
 
 import cPickle as pickle
 from astropy.io import fits as pyfits
@@ -77,7 +78,7 @@ def params_to_gauss(answer, oversample=8, start=0, center=504):
 if __name__ == "__main__":
 
     psfname = "/Users/bjohnson/Projects/nircam/mocks/image/psfs/PSF_NIRCam_F090W.fits"
-
+    band = 'f090w'
     # read in the psf and normalize it
     data = np.array(pyfits.getdata(psfname))
     start, stop = 400, 600  # this contains about 88.5% of total flux
@@ -91,8 +92,8 @@ if __name__ == "__main__":
     ans_all_em_random[nmix] = fit_mvn_mix(data, nmix, method_opt='em', method_init='random',
                                           repeat=nrepeat, returnfull=True, dlnlike_thresh=1e-9)
 
-    with open('f090_ng6_em_random.p', 'wb') as out:
-        pickle.dump(ans_all_em_random, out)
+    #with open('f090_ng6_em_random.p', 'wb') as out:
+    #    pickle.dump(ans_all_em_random, out)
     # --- Plotting -----
     # set up the gaussian colorbar
     gcmap = get_cmap('viridis')
@@ -101,20 +102,39 @@ if __name__ == "__main__":
     dummy = pl.contourf(Z, levels, cmap=gcmap)
 
     # set up the figure
-    fig, axes = pl.subplots(nrepeat + 1, 3, sharex=True, sharey=True)
-    d = axes[0, 0].imshow(data, origin='lower')
-    fig.colorbar(d, ax=axes[0,0])
-    axes[0, 1].contour(data, levels=[5e-4, 1e-3, 2e-3], colors='k')
-    cbar=fig.colorbar(d, ax=axes[0,1])
+    #fig, axes = pl.subplots(nrepeat + 1, 3, sharex=True, sharey=True)
+    #d = axes[0, 0].imshow(data, origin='lower')
+    #fig.colorbar(d, ax=axes[0,0])
+    #axes[0, 1].contour(data, levels=[5e-4, 1e-3, 2e-3], colors='k')
+    #cbar=fig.colorbar(d, ax=axes[0,1])
     #cbar.clear()
 
+    pdf = PdfPages('gmpsf_{}_ng{}.pdf'.format(band, nmix))
     for i in range(1, nrepeat+1):
-        m1 = axes[i, 0].imshow((ans_all_em_random[nmix][i-1]['recon_image']), origin='lower')
-        fig.colorbar(m1, ax=axes[i, 0])
-        r = axes[i, 1].imshow((data - ans_all_em_random[nmix][i-1]['recon_image']), origin='lower')
-        fig.colorbar(r, ax=axes[i, 1])
-        gax = axes[i, 2]
-        
+        fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
+        ax = axes[0, 0]
+        d = ax.imshow(data, origin='lower')
+        fig.colorbar(d, ax=ax)
+        ax.text(0.1, 0.9, 'Truth', transform=ax.transAxes)
+        #ax = axes[0, 1]
+        #ax.contour(data, levels=[5e-4, 1e-3, 2e-3], colors='k')
+        #cbar = fig.colorbar(d, ax=ax)
+        #cbar.ax.set_visible(False)
+        #axes[0,2].set_visible(False)
+
+        ax = axes[0, 1]
+        m1 = ax.imshow((ans_all_em_random[nmix][i-1]['recon_image']), origin='lower')
+        fig.colorbar(m1, ax=ax)
+        ax.text(0.1, 0.9, 'Model', transform=ax.transAxes)
+        ax = axes[1, 0]
+        r = ax.imshow((data - ans_all_em_random[nmix][i-1]['recon_image']), origin='lower')
+        fig.colorbar(r, ax=ax)
+        ax.text(0.1, 0.9, 'Residual', transform=ax.transAxes)
+        gax = axes[1, 1]
+
         gax, amps = draw_ellipses(ans_all_em_random[nmix][i-1], gax, cmap=gcmap)
         pl.colorbar(dummy, ax=gax)
-        
+        pdf.savefig(fig)
+        pl.close(fig)
+
+    pdf.close()
