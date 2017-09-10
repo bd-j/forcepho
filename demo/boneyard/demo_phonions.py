@@ -1,3 +1,8 @@
+# ------------
+# Script demonstrating simple foward model with Phonions, using
+# autograd compatible routines
+# -------
+
 try:
     import autograd.numpy as np
     from autograd import grad, elementwise_grad
@@ -10,7 +15,7 @@ import time
 import numpy as np    
 import matplotlib.pyplot as pl
 
-import source, model
+from forcepho.boneyard import source, model
 
 
 if __name__ == "__main__":

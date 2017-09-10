@@ -1,3 +1,8 @@
+# ------------
+# Script demonstrating simple foward model with mixture of gaussians, using
+# autograd compatible routines
+# -------
+
 from itertools import product
 import sys, time
 
@@ -8,7 +13,7 @@ except(ImportError):
     import numpy as np
 import matplotlib.pyplot as pl
 
-import source, model
+from forcepho.boneyard import source, model
 
 
 def plot_gradients(imgr, npx=40, npy=40):
@@ -69,4 +74,4 @@ if __name__ == "__main__":
     imgr = np.vstack([c, cj.T])
 
     fig = plot_gradients(imgr)
-    fig.show()
+    fig.savefig('figures/mog_gradients.pdf')

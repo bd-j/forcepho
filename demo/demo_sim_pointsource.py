@@ -1,17 +1,17 @@
 import sys
-
 from copy import deepcopy
 from functools import partial
+
 import numpy as np
 import matplotlib.pyplot as pl
-
 import astropy.io.fits as fits
 from astropy import wcs
 
-from likelihood import model_image
-from proto import PostageStamp, Star
+from forcepho.gaussmodel import PostageStamp, Star
+from forcepho import psf as pointspread
+from forcepho.likelihood import model_image
 
-       
+
 class Scene(object):
 
     def set_params(self, theta, stamps=None):
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     oversample, center = 8, 504 - 400
     answer = pdat[6][2]
-    stamp.psf = make_psf(answer, oversample=oversample, center=center)
+    stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
     
 
     # --- get the Scene ---

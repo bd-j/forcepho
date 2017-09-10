@@ -1,10 +1,16 @@
+# --------
+# Basic script for fitting mock images with simple single-gaussian sources and
+# PSFs
+# ---------
+
 import sys
 from functools import partial
 import numpy as np
 import matplotlib.pyplot as pl
-import proto
 
-from likelihood import model_image, set_galaxy_params
+from forcepho import gaussmodel as gm
+from forcepho import psf
+from forcepho.likelihood import model_image, set_galaxy_params
 
 
 def negative_lnlike_stamp(theta, source=None, stamp=None, free_inds=slice(0, 3)):
@@ -21,18 +27,18 @@ if __name__ == "__main__":
     galaxy, new = True, True
     
     # get a stamp and put an image in it
-    stamp = proto.PostageStamp()
+    stamp = gm.PostageStamp()
     stamp.nx = 30
     stamp.ny = 30
     stamp.npix = int(stamp.nx * stamp.ny)
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
     stamp.crpix = np.array([stamp.nx/2., stamp.ny/2.])
     stamp.residual = np.zeros(stamp.npix)
-    stamp.psf = proto.PointSpreadFunction()
+    stamp.psf = psf.PointSpreadFunction()
 
     # get a source
     if galaxy:
-        source = proto.Galaxy()
+        source = gm.Galaxy()
         source.ngauss = 4
         source.radii = np.arange(source.ngauss) * 0.5
         source.q = 0.5
@@ -41,7 +47,7 @@ if __name__ == "__main__":
         theta = [1, 10., 10., 0.5, np.deg2rad(30.), 0., 0.]
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
     else:
-        source = proto.Star()
+        source = gm.Star()
         use = slice(0, 3)
         theta = [100, 10., 10., 1., 0., 0., 0.]
         label = ['$\psi$', '$x$', '$y$']
@@ -61,11 +67,11 @@ if __name__ == "__main__":
     
     #  --- OLD code ----
     if not new:
-        gig = proto.convert_to_gaussians(source, stamp)
-        gig = proto.get_gaussian_gradients(source, stamp, gig)
+        gig = gm.convert_to_gaussians(source, stamp)
+        gig = gm.get_gaussian_gradients(source, stamp, gig)
 
         for g in gig.gaussians.flat:
-            im, partial_phi = proto.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
+            im, partial_phi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
             # This matrix multiply can be optimized (many zeros)
             partials = np.matmul(g.derivs, partial_phi)
 
