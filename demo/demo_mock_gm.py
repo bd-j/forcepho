@@ -4,7 +4,7 @@
 # ---------
 
 import sys
-from functools import partial
+from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
@@ -22,9 +22,26 @@ def negative_lnlike_stamp(theta, source=None, stamp=None, free_inds=slice(0, 3))
     return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[free_inds, :], axis=-1)
 
 
+def negative_lnlike_nograd(theta, source=None, stamp=None, free_inds=slice(0, 3)):
+    stamp.residual = stamp.pixel_values.flatten()
+    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
+    #thetas[0] *= 100
+    residual, partials = model_image(thetas, [source], stamp)
+    chi = residual * stamp.ierr
+    return 0.5 * np.sum(chi**2)
+
+
+def get_image(theta, source=None, stamp=None, free_inds=slice(0, 3)):
+    stamp.residual = stamp.pixel_values.flatten() * 0.0
+    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
+    #thetas[0] *= 100
+    residual, partials = model_image(thetas, [source], stamp)
+    return -residual, partials
+
+
 if __name__ == "__main__":
 
-    galaxy, new = True, True
+    galaxy, new = False, True
     
     # get a stamp and put an image in it
     stamp = gm.PostageStamp()
@@ -46,21 +63,25 @@ if __name__ == "__main__":
         use = slice(0,5)
         theta = [1, 10., 10., 0.5, np.deg2rad(30.), 0., 0.]
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
+        bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     else:
         source = gm.Star()
         use = slice(0, 3)
         theta = [100, 10., 10., 1., 0., 0., 0.]
         label = ['$\psi$', '$x$', '$y$']
+        bounds = [(-1e6, 1e6), (-1e5, 1e5), (-1e5, 1e5)]
 
     # Set source parameters
     set_galaxy_params(source, theta)
     # center the image on the source
     stamp.crval = np.array([source.ra, source.dec])
     stamp.crval += 0.5 # move off-center by a half pix
-    
+
+    # ---- Generate mock -------
     # ----- New code ------
     if new:
-        residual, partials = model_image([np.array(theta) * 1.25], [source], stamp,
+        ptrue = np.array(theta) * 1.25
+        residual, partials = model_image([ptrue], [source], stamp,
                                         use_gradients=use)
         im = -residual
     
@@ -76,28 +97,58 @@ if __name__ == "__main__":
             partials = np.matmul(g.derivs, partial_phi)
 
 
-    # --- Optimization -----
-    stamp.pixel_values = -residual.reshape(stamp.nx, stamp.ny)
+
+    stamp.pixel_values = -residual.reshape(stamp.nx, stamp.ny).copy()
     err = stamp.pixel_values.max() * 1e-2
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
+    nll = argfix(negative_lnlike_stamp, source=source, stamp=stamp)
+    nll_nograd = argfix(negative_lnlike_nograd, source=source, stamp=stamp)
 
+
+    # --- Chi2 on a grid ------
+    # needs to be debugged
+    if False:
+        mux = np.linspace(47, 53., 100)
+        muy = np.linspace(47, 53., 100)
+        flux = np.linspace(3000, 5000., 10)
+        chi2 = np.zeros([len(mux), len(muy), len(flux)])
+
+        for i, x in enumerate(mux):
+            for j, y in enumerate(muy):
+                for k, f in enumerate(flux):
+                    theta = np.array([f, x, y])
+                    chi2[i,j,k] = nll(theta)[0]
+
+        sys.exit()
+
+
+    # ---- Plot mock image and gradients thereof -----
     if True:
         fig, axes = pl.subplots(3, 2)
         for i, ddtheta in enumerate(partials):
             ax = axes.flat[i+1]
-            ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
+            c = ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
             ax.text(0.1, 0.85, '$\partial I/\partial${}'.format(label[i]), transform=ax.transAxes)
+            fig.colorbar(c, ax=ax)
 
         ax = axes.flat[0]
-        ax.imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')
-        ax.text(0.1, 0.85, 'Model (I)'.format(label[i]), transform=ax.transAxes)
-        
-    nll = partial(negative_lnlike_stamp, source=source, stamp=stamp)
+        c = ax.imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        ax.text(0.1, 0.85, 'Mock (I)'.format(label[i]), transform=ax.transAxes)
+        fig.colorbar(c, ax=ax)
+
+    # --- Optimization -----
+
+
     p0 = np.array(theta[use])
-    bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     from scipy.optimize import minimize
-    result = minimize(nll, p0 * 1.005, jac=True, bounds=bounds,
-                      options={'ftol': 1e-22, 'gtol': 1e-22, 'disp':True,
-                               'iprint': 1, 'maxcor': 20}
+    def callback(x):
+        print(x, nll(x))
+
+    result = minimize(nll, p0 * 1.5, jac=True, bounds=None, callback=callback, method='BFGS',
+                      options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                       )
+    result_nograd = minimize(nll_nograd, p0 * 1.5, jac=False, bounds=None, callback=callback,
+                      options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
+                      )
+

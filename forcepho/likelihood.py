@@ -1,5 +1,5 @@
 import numpy as np
-import proto
+from . import gaussmodel as gm
 
 
 __all__ = ["lnlike", "model_image", "evaluate_gig",
@@ -35,10 +35,13 @@ def lnlike(thetas, sources, stamps):
 def model_image(thetas, sources, stamp, use_gradients=slice(None)):
     """Loop over all sources in a scene, subtracting each from the image and
     building up a gradient cube.  Eventually everything interior to this should
-    be moved to C++
+    be moved to C++, since the loop is very slow.
 
     :returns residual:
-        ndarray of shape (npix,)
+        ndarray of shape (npix,).  This is the result of *subtracting* all the
+        gaussians of all the sources from the initial (input) value of
+        stamp.residual.  Thus the initial value of stamp.residual should be the
+        measured pixel values.  Note that stamp.residual will be modified.
 
     :returns partials:
         ndarray of shape (nsource * ntheta, npix)
@@ -49,8 +52,8 @@ def model_image(thetas, sources, stamp, use_gradients=slice(None)):
 
     for i, (theta, source) in enumerate(zip(thetas, sources)):
         set_galaxy_params(source, theta)
-        gig = proto.convert_to_gaussians(source, stamp)
-        gig = proto.get_gaussian_gradients(source, stamp, gig)
+        gig = gm.convert_to_gaussians(source, stamp)
+        gig = gm.get_gaussian_gradients(source, stamp, gig)
         gig.ntheta = ntheta
 
         sel = slice(i * ntheta, (i+1) * ntheta)
@@ -69,7 +72,7 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None)):
     dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
 
     for g in gig.gaussians.flat:
-        I, dI_dphi = proto.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
+        I, dI_dphi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
         # Accumulate the derivatives w.r.t. theta from each gaussian
         # This matrix multiply can be optimized (many zeros in g.derivs)
         dR_dtheta += np.matmul(g.derivs, dI_dphi)[use_gradients, :]

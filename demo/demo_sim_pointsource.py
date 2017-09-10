@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     
     imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
-    psfname = '/Users/bjohnson/Codes/image/forcepho/forcepho/gauss_mix/f090_ng6_em_random.p'
+    psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
 
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
@@ -110,7 +110,6 @@ if __name__ == "__main__":
     stamp.crpix = np.zeros([2])
 
     # --- Add the PSF ---
-    from psf import *
     import pickle
     with open(psfname, 'rb') as pf:
         pdat = pickle.load(pf)
@@ -134,7 +133,7 @@ if __name__ == "__main__":
 
     label = ['flux', 'x', 'y']
     
-    if True:
+    if False:
         fig, axes = pl.subplots(3, 2, sharex=True, sharey=True)
         ax = axes.flat[0]
         i = ax.imshow(stamp.pixel_values.T, origin='lower')
@@ -171,7 +170,7 @@ if __name__ == "__main__":
 
     # ---- Optimization ------
 
-    if False:
+    if True:
         def callback(x):
             #nf += 1
             print(x, nll(x))
@@ -182,7 +181,7 @@ if __name__ == "__main__":
         p0[2] = 50. #51.5
         bounds = [(0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
-        result = minimize(nll, p0, jac=True, bounds=bounds, callback=callback,
+        result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                         options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})
 
         stamp.residual = stamp.pixel_values.flatten()
