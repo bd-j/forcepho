@@ -13,35 +13,54 @@ from forcepho import psf
 from forcepho.likelihood import model_image, set_galaxy_params
 
 
-def negative_lnlike_stamp(theta, source=None, stamp=None, free_inds=slice(0, 3)):
+class Scene(object):
+
+    def set_params(self, theta):
+        # Add all the unused (fixed) galaxy parameters
+        t = np.array(theta).copy()
+        if len(t) == 3:
+            # Star
+            self.params = [np.append(t, np.array([1., 0., 0., 0.]))]
+            self.free_inds = slice(0, 3)
+        elif len(t) == 5:
+            # Galaxy
+            self.params = [np.append(np.array(t), np.array([0., 0.]))]
+            self.free_inds = slice(0, 5)
+        else:
+            print("theta vector {} not a valid length: {}".format(theta, len(theta)))
+
+
+
+
+def negative_lnlike_stamp(theta, scene=None, stamp=None):
     stamp.residual = stamp.pixel_values.flatten()
-    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
-    #thetas[0] *= 100
-    residual, partials = model_image(thetas, [source], stamp)
+    scene.set_params(theta)
+    sources, thetas = scene.sources, scene.params
+    residual, partials = model_image(thetas, sources, stamp)
     chi = residual * stamp.ierr
-    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[free_inds, :], axis=-1)
+    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[scene.free_inds, :], axis=-1)
 
 
-def negative_lnlike_nograd(theta, source=None, stamp=None, free_inds=slice(0, 3)):
+def negative_lnlike_nograd(theta, scene=None, stamp=None):
     stamp.residual = stamp.pixel_values.flatten()
-    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
-    #thetas[0] *= 100
-    residual, partials = model_image(thetas, [source], stamp)
+    scene.set_params(theta)
+    sources, thetas = scene.sources, scene.params
+    residual, partials = model_image(thetas, sources, stamp)
     chi = residual * stamp.ierr
     return 0.5 * np.sum(chi**2)
 
 
-def get_image(theta, source=None, stamp=None, free_inds=slice(0, 3)):
-    stamp.residual = stamp.pixel_values.flatten() * 0.0
-    thetas = [np.append(np.array(theta), np.array([1., 0., 0., 0.]))]
-    #thetas[0] *= 100
-    residual, partials = model_image(thetas, [source], stamp)
-    return -residual, partials
+def make_image(theta, scene=None, stamp=None):
+    stamp.residual = np.zeros(stamp.npix)
+    scene.set_params(theta)
+    sources, thetas = scene.sources, scene.params
+    residual, partials = model_image(thetas, sources, stamp)
+    return -residual.reshape(stamp.nx, stamp.ny), partials[scene.free_inds, :]
 
 
 if __name__ == "__main__":
 
-    galaxy, new = False, True
+    galaxy = False
     
     # get a stamp and put an image in it
     stamp = gm.PostageStamp()
@@ -53,58 +72,43 @@ if __name__ == "__main__":
     stamp.residual = np.zeros(stamp.npix)
     stamp.psf = psf.PointSpreadFunction()
 
-    # get a source
+    # get a source and scene
     if galaxy:
         source = gm.Galaxy()
         source.ngauss = 4
         source.radii = np.arange(source.ngauss) * 0.5
         source.q = 0.5
         source.pa = np.deg2rad(30.)
-        use = slice(0,5)
-        theta = [1, 10., 10., 0.5, np.deg2rad(30.), 0., 0.]
+        theta = [100., 10., 10., 0.5, np.deg2rad(30.)]
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
         bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     else:
         source = gm.Star()
-        use = slice(0, 3)
-        theta = [100, 10., 10., 1., 0., 0., 0.]
+        theta = [100., 10., 10.]
         label = ['$\psi$', '$x$', '$y$']
         bounds = [(-1e6, 1e6), (-1e5, 1e5), (-1e5, 1e5)]
 
-    # Set source parameters
-    set_galaxy_params(source, theta)
+    scene = Scene()
+    scene.sources = [source]
+    scene.set_params(theta)
+
     # center the image on the source
-    stamp.crval = np.array([source.ra, source.dec])
-    stamp.crval += 0.5 # move off-center by a half pix
+    stamp.crval = np.array([theta[1], theta[2]])
+    #stamp.crval += 0.5 # move off-center by a half pix
 
     # ---- Generate mock -------
-    # ----- New code ------
-    if new:
-        ptrue = np.array(theta) * 1.25
-        residual, partials = model_image([ptrue], [source], stamp,
-                                        use_gradients=use)
-        im = -residual
-    
-    
-    #  --- OLD code ----
-    if not new:
-        gig = gm.convert_to_gaussians(source, stamp)
-        gig = gm.get_gaussian_gradients(source, stamp, gig)
-
-        for g in gig.gaussians.flat:
-            im, partial_phi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
-            # This matrix multiply can be optimized (many zeros)
-            partials = np.matmul(g.derivs, partial_phi)
-
-
-
-    stamp.pixel_values = -residual.reshape(stamp.nx, stamp.ny).copy()
+    ptrue = np.array(theta) * 1.25
+    true_image, partials = make_image(ptrue, scene, stamp)
+    stamp.pixel_values = true_image.copy()
     err = stamp.pixel_values.max() * 1e-2
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
-    nll = argfix(negative_lnlike_stamp, source=source, stamp=stamp)
-    nll_nograd = argfix(negative_lnlike_nograd, source=source, stamp=stamp)
 
+    # Set up likelihoods
+    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
+    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
+
+    #sys.exit()
 
     # --- Chi2 on a grid ------
     # needs to be debugged
@@ -133,14 +137,14 @@ if __name__ == "__main__":
             fig.colorbar(c, ax=ax)
 
         ax = axes.flat[0]
-        c = ax.imshow(im.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        c = ax.imshow(true_image.T, origin='lower')
         ax.text(0.1, 0.85, 'Mock (I)'.format(label[i]), transform=ax.transAxes)
         fig.colorbar(c, ax=ax)
 
     # --- Optimization -----
 
 
-    p0 = np.array(theta[use])
+    p0 = np.array(theta)
     from scipy.optimize import minimize
     def callback(x):
         print(x, nll(x))
