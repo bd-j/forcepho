@@ -15,7 +15,7 @@ from forcepho.gaussmodel import Star
 from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
 
-def setup_scene(psfname='', size=(100, 100), fudge=1.0):
+def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 
     # --- Get a postage stamp ----
     stamp = make_stamp(size, psfname=psfname)    
@@ -34,6 +34,10 @@ def setup_scene(psfname='', size=(100, 100), fudge=1.0):
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
 
+    if add_noise:
+        noise = np.random.normal(0, err, size=(stamp.nx, stamp.ny))
+        stamp.pixel_values += noise
+    
     return scene, stamp, ptrue, label
 
 
@@ -41,7 +45,7 @@ if __name__ == "__main__":
 
     # --- Get a postage stamp ----
     psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
-    scene, stamp, ptrue, label = setup_scene(size=(50, 50), psfname=psfname)    
+    scene, stamp, ptrue, label = setup_scene(size=(50, 50), psfname=psfname, add_noise=True)    
 
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
     nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
@@ -88,7 +92,11 @@ if __name__ == "__main__":
             #nf += 1
             print(x, nll(x))
 
-        p0 = ptrue * 1.01
+        p0 = ptrue.copy() #* 1.04
+        #p0[0] *= 1.0
+        #p0[1] += 3
+        p0 *= 1.1
+
         bounds = [(0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,

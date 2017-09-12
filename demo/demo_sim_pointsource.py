@@ -11,19 +11,13 @@ from forcepho.gaussmodel import PostageStamp, Star
 from forcepho import psf as pointspread
 from forcepho.likelihood import model_image
 
+from forcepho.gaussmodel import Star
+from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
-class Scene(object):
-
-    def set_params(self, theta, stamps=None):
-        # Add all the unused (fixed) galaxy parameters
-        t = theta.copy()
-        t[0] *= 100
-        self.params = [np.append(t, np.array([1., 0., 0., 0.]))]
-        self.free_inds = slice(0, 3)
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
-               center_type='pixels'):
+               center_type='pixels', psfname=None, fwhm=1.0):
     """Make a postage stamp around the given position using the given image name
     """
     data = fits.getdata(imname)
@@ -73,19 +67,24 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     stamp.distortion = distortion
     stamp.pixcenter_in_full = center
 
+    # --- Add the PSF ---
+    if psfname is not None:
+        import pickle
+        with open(psfname, 'rb') as pf:
+            pdat = pickle.load(pf)
+
+            oversample, center = 8, 504 - 400
+        answer = pdat[6][2]
+        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
+    else:
+        stamp.psf = pointspread.PointSpreadFunction()
+        stamp.psf.covaraniaces *= fwhm/2.355
+    
     # --- Add extra information ---
     stamp.full_header = dict(hdr)
     
     return stamp
 
-
-def negative_lnlike_stamp(theta, scene=None, stamp=None):
-    stamp.residual = stamp.pixel_values.flatten()
-    scene.set_params(theta)
-    sources, thetas = scene.sources, scene.params
-    residual, partials = model_image(thetas, sources, stamp)
-    chi = residual * stamp.ierr
-    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[scene.free_inds, :], axis=-1)
 
 
 if __name__ == "__main__":
@@ -98,9 +97,10 @@ if __name__ == "__main__":
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
     ra_init, dec_init = 53.115325, -27.803518
     # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
-    stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), center_type='celestial')
-    stamp.ierr = stamp.ierr.flatten() / 1000
-    
+    stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), psfname=psfname,
+                       center_type='celestial')
+    stamp.ierr = stamp.ierr.flatten() / 10
+
     # override the WCS so coordinates are in pixels
     # The distortion matrix D
     stamp.distortion = np.eye(2)
@@ -108,38 +108,30 @@ if __name__ == "__main__":
     stamp.crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
     stamp.crpix = np.zeros([2])
-
-    # --- Add the PSF ---
-    import pickle
-    with open(psfname, 'rb') as pf:
-        pdat = pickle.load(pf)
-
-    oversample, center = 8, 504 - 400
-    answer = pdat[6][2]
-    stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
     
 
     # --- get the Scene ---
     scene = Scene()
     sources = [Star()]
     scene.sources = sources
+    label = ['flux', 'x', 'y']
 
-    # --- Initialize and plot ----
+    nll = partial(negative_lnlike_stamp, scene=scene, stamp=stamp)
+    #chisq_init = nll(theta_init)
+
+    # --- Initialize ---
     #theta_init = np.array([stamp.pixel_values.sum() * 0.5, stamp.nx/2, stamp.ny/2])
     theta_init = np.array([stamp.pixel_values.sum() * 1.0, 48.1, 51.5])
-    scene.set_params(theta_init)
-    stamp.residual = np.zeros(stamp.npix)
-    resid, partials = model_image(scene.params, sources, stamp)
+    image_init, partials = make_image(theta_init, sources, stamp)
 
-    label = ['flux', 'x', 'y']
-    
+    # --- Plot initial value ---
     if False:
         fig, axes = pl.subplots(3, 2, sharex=True, sharey=True)
         ax = axes.flat[0]
         i = ax.imshow(stamp.pixel_values.T, origin='lower')
         ax.text(0.1, 0.9, 'Sim. Data', transform=ax.transAxes)
         ax = axes.flat[1]
-        i = ax.imshow(-resid.reshape(stamp.nx, stamp.ny).T, origin='lower')
+        i = ax.imshow(image_init.T, origin='lower')
         ax.text(0.1, 0.9, 'Initial Model', transform=ax.transAxes)
         for i, ddtheta in enumerate(partials[scene.free_inds, :]):
             ax = axes.flat[i+2]
@@ -148,11 +140,7 @@ if __name__ == "__main__":
         pl.show()
 
 
-    nll = partial(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    #chisq_init = nll(theta_init)
-
-
-    # --- Chi2 on a grid -----
+    # --- Chi2 on a grid ---
     if False:
         mux = np.linspace(47, 53., 100)
         muy = np.linspace(47, 53., 100)
@@ -168,7 +156,7 @@ if __name__ == "__main__":
         sys.exit()
 
 
-    # ---- Optimization ------
+    # --- Optimization ---
     if True:
         def callback(x):
             #nf += 1

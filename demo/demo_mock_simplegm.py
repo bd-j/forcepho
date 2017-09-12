@@ -17,16 +17,15 @@ def numerical_image_gradients(theta0, delta):
     dI_dp = 0
     for i, (p, dp) in enumerate(zip(theta0, delta)):
         theta = theta0.copy()
-        theta[i] = p - dp
         imlo, _ = make_image(theta, scene, stamp)
-        theta[i] +=  p + dp
+        theta[i] += dp
         imhi, _ = make_image(theta, scene, stamp)
-        dI_dp.append((imhi - imlo) / (2 * dp))
+        dI_dp.append((imhi - imlo) / (dp))
 
     return np.array(dI_dp)
 
 
-def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=()):
+def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(), add_noise=False):
 
 
     stamp = make_stamp(size, fwhm, offset=offset)
@@ -60,6 +59,11 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=()):
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
 
+    if add_noise:
+        noise = np.random.normal(0, err, size=(stamp.nx, stamp.ny))
+        stamp.pixel_values += noise
+
+    
     return scene, stamp, ptrue, label
 
 
