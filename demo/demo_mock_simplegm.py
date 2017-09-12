@@ -9,70 +9,29 @@ import numpy as np
 import matplotlib.pyplot as pl
 
 from forcepho import gaussmodel as gm
-from forcepho import psf
-from forcepho.likelihood import model_image, set_galaxy_params
+from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
 
-class Scene(object):
+def numerical_image_gradients(theta0, delta):
 
-    def set_params(self, theta):
-        # Add all the unused (fixed) galaxy parameters
-        t = np.array(theta).copy()
-        if len(t) == 3:
-            # Star
-            self.params = [np.append(t, np.array([1., 0., 0., 0.]))]
-            self.free_inds = slice(0, 3)
-        elif len(t) == 5:
-            # Galaxy
-            self.params = [np.append(np.array(t), np.array([0., 0.]))]
-            self.free_inds = slice(0, 5)
-        else:
-            print("theta vector {} not a valid length: {}".format(theta, len(theta)))
+    dI_dp = 0
+    for i, (p, dp) in enumerate(zip(theta0, delta)):
+        theta = theta0.copy()
+        theta[i] = p - dp
+        imlo, _ = make_image(theta, scene, stamp)
+        theta[i] +=  p + dp
+        imhi, _ = make_image(theta, scene, stamp)
+        dI_dp.append((imhi - imlo) / (2 * dp))
+
+    return np.array(dI_dp)
 
 
+def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=()):
 
 
-def negative_lnlike_stamp(theta, scene=None, stamp=None):
-    stamp.residual = stamp.pixel_values.flatten()
-    scene.set_params(theta)
-    sources, thetas = scene.sources, scene.params
-    residual, partials = model_image(thetas, sources, stamp)
-    chi = residual * stamp.ierr
-    return 0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials[scene.free_inds, :], axis=-1)
-
-
-def negative_lnlike_nograd(theta, scene=None, stamp=None):
-    stamp.residual = stamp.pixel_values.flatten()
-    scene.set_params(theta)
-    sources, thetas = scene.sources, scene.params
-    residual, partials = model_image(thetas, sources, stamp)
-    chi = residual * stamp.ierr
-    return 0.5 * np.sum(chi**2)
-
-
-def make_image(theta, scene=None, stamp=None):
-    stamp.residual = np.zeros(stamp.npix)
-    scene.set_params(theta)
-    sources, thetas = scene.sources, scene.params
-    residual, partials = model_image(thetas, sources, stamp)
-    return -residual.reshape(stamp.nx, stamp.ny), partials[scene.free_inds, :]
-
-
-if __name__ == "__main__":
-
-    galaxy = False
+    stamp = make_stamp(size, fwhm, offset=offset)
     
-    # get a stamp and put an image in it
-    stamp = gm.PostageStamp()
-    stamp.nx = 30
-    stamp.ny = 30
-    stamp.npix = int(stamp.nx * stamp.ny)
-    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
-    stamp.crpix = np.array([stamp.nx/2., stamp.ny/2.])
-    stamp.residual = np.zeros(stamp.npix)
-    stamp.psf = psf.PointSpreadFunction()
-
-    # get a source and scene
+    # --- Get a Source and Scene -----
     if galaxy:
         source = gm.Galaxy()
         source.ngauss = 4
@@ -92,18 +51,24 @@ if __name__ == "__main__":
     scene.sources = [source]
     scene.set_params(theta)
 
-    # center the image on the source
-    stamp.crval = np.array([theta[1], theta[2]])
-    #stamp.crval += 0.5 # move off-center by a half pix
 
-    # ---- Generate mock -------
-    ptrue = np.array(theta) * 1.25
+    # --- Generate mock  and add to stamp ---
+    ptrue = np.array(theta) * fudge
     true_image, partials = make_image(ptrue, scene, stamp)
     stamp.pixel_values = true_image.copy()
     err = stamp.pixel_values.max() * 1e-2
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
 
+    return scene, stamp, ptrue, label
+
+
+if __name__ == "__main__":
+
+    # Get a scene and a stamp at some parameters
+    scene, stamp, ptrue, label = setup_scene(galaxy=True, fwhm=2.0, fudge=1.25)
+    true_image, partials = make_image(ptrue, scene, stamp)
+    
     # Set up likelihoods
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
     nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
@@ -141,18 +106,24 @@ if __name__ == "__main__":
         ax.text(0.1, 0.85, 'Mock (I)'.format(label[i]), transform=ax.transAxes)
         fig.colorbar(c, ax=ax)
 
+
+    # ---- Test Gradients ------
+    if True:
+        delta = np.ones_like(ptrue) * 1e-6
+        #numerical
+    
+    
     # --- Optimization -----
+    if True:
+        p0 = ptrue.copy()
+        from scipy.optimize import minimize
+        def callback(x):
+            print(x, nll(x))
 
-
-    p0 = np.array(theta)
-    from scipy.optimize import minimize
-    def callback(x):
-        print(x, nll(x))
-
-    result = minimize(nll, p0 * 1.5, jac=True, bounds=None, callback=callback, method='BFGS',
-                      options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
-                      )
-    result_nograd = minimize(nll_nograd, p0 * 1.5, jac=False, bounds=None, callback=callback,
-                      options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
-                      )
+        result = minimize(nll, p0 * 1.2, jac=True, bounds=None, callback=callback, method='BFGS',
+                        options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
+                        )
+        result_nograd = minimize(nll_nograd, p0 * 1.2, jac=False, bounds=None, callback=callback,
+                        options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
+                        )
 

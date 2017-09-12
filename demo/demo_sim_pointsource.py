@@ -169,7 +169,6 @@ if __name__ == "__main__":
 
 
     # ---- Optimization ------
-
     if True:
         def callback(x):
             #nf += 1
