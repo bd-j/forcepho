@@ -89,7 +89,6 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
 if __name__ == "__main__":
 
-    
     imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
     psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
 

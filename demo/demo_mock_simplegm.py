@@ -12,9 +12,9 @@ from forcepho import gaussmodel as gm
 from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
 
-def numerical_image_gradients(theta0, delta):
+def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
 
-    dI_dp = 0
+    dI_dp = []
     for i, (p, dp) in enumerate(zip(theta0, delta)):
         theta = theta0.copy()
         imlo, _ = make_image(theta, scene, stamp)
@@ -25,7 +25,7 @@ def numerical_image_gradients(theta0, delta):
     return np.array(dI_dp)
 
 
-def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(), add_noise=False):
+def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(30, 30), add_noise=False):
 
 
     stamp = make_stamp(size, fwhm, offset=offset)
@@ -33,11 +33,11 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(), add_nois
     # --- Get a Source and Scene -----
     if galaxy:
         source = gm.Galaxy()
-        source.ngauss = 4
-        source.radii = np.arange(source.ngauss) * 0.5
+        source.ngauss = 1
+        source.radii = np.arange(source.ngauss) * 0.5 + 1.0
         source.q = 0.5
         source.pa = np.deg2rad(30.)
-        theta = [100., 10., 10., 0.5, np.deg2rad(30.)]
+        theta = [100., 10., 10., 0.5, np.deg2rad(10.)]
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
         bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     else:
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
 
     # ---- Plot mock image and gradients thereof -----
-    if True:
+    if False:
         fig, axes = pl.subplots(3, 2)
         for i, ddtheta in enumerate(partials):
             ax = axes.flat[i+1]
@@ -111,11 +111,23 @@ if __name__ == "__main__":
         fig.colorbar(c, ax=ax)
 
 
-    # ---- Test Gradients ------
+    # ---- Test Image Gradients ------
     if True:
         delta = np.ones_like(ptrue) * 1e-6
         #numerical
-    
+        grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
+        image, grad = make_image(ptrue, scene, stamp)
+        fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
+        for i in range(len(ptrue)):
+            g = grad[i,:].reshape(stamp.nx, stamp.ny)
+            c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 0])
+            c = axes[i, 1].imshow(g.T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 1])
+            c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 2])
+            
+
     
     # --- Optimization -----
     if True:
@@ -131,3 +143,17 @@ if __name__ == "__main__":
                         options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                         )
 
+        resid, partials = make_image(result.x, scene, stamp)
+        dim = stamp.pixel_values
+        mim = resid
+        
+        fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
+        images = [dim, mim, dim-mim]
+        labels = ['Data', 'Model', 'Data-Model']
+        for k, ax in enumerate(axes):
+            c = ax.imshow(images[k].T, origin='lower')
+            pl.colorbar(c, ax=ax)
+            ax.set_title(labels[k])
+        
+
+    pl.show()

@@ -51,7 +51,8 @@ if __name__ == "__main__":
     nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
     #chisq_init = nll(theta_init)
     
-    
+
+    # --- Plot a model and gradients thereof ---
     if False:
         theta_init = ptrue * 1.05
         image_init, partials_init = make_image(theta_init, scene, stamp)
@@ -69,6 +70,25 @@ if __name__ == "__main__":
         pl.show()
 
 
+
+    # ---- Test Image Gradients ------
+    if True:
+        delta = np.ones_like(ptrue) * 1e-6
+        #numerical
+        grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
+        image, grad = make_image(ptrue, scene, stamp)
+        fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
+        for i in range(3):
+            g = grad[i,:].reshape(stamp.nx, stamp.ny)
+            c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 0])
+            c = axes[i, 1].imshow(g.T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 1])
+            c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 2])
+        pl.show()
+
+        
     # --- Chi2 on a grid -----
     if False:
         mux = np.linspace(47, 53., 100)
@@ -96,8 +116,6 @@ if __name__ == "__main__":
         #p0[0] *= 1.0
         #p0[1] += 3
         p0 *= 1.1
-
-        bounds = [(0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                           options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})
