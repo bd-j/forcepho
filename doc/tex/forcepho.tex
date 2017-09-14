@@ -39,7 +39,8 @@ Vector variables are \sout{bolded} lowercase.
 Matrices are \sout{bolded} uppercase.
 
 \section{Introduction}
-The goal is to go from the scene to counts in pixels.
+We want a generative model for the image(s) that can be plugged into a likelihood function and an MC sampling scheme.
+Therefore the goal is to go from the scene to counts in pixels.
 The basic function that we are trying to compute (efficiently) is:
 \begin{eqnarray}
 \countrate_n & = & F_n(\gamma, \beta)
@@ -116,11 +117,10 @@ Much of the guts of any forward modeling algorithm will be concerned with approx
  especially in a way that yields analytic gradients.
 
 
-\section{Approximation by Gaussian Mixtures and Subgridding}
+\section{Approximation by Gaussian Mixtures (and Subgridding)}
 One method to make the integrals more tractable is to calculate $\prf$ and $\scene$ on fine grids and calculate \ref{eqn:prf_integral} directly on this grid.
 The grid has to be fine enough that the integral can be approximated by a sum; 
   that is, the grid must fully sample the PRF and the scene.
-In principle the precision can be dialed up or down by increasing the fineness of the grids.
 \begin{eqnarray}
 \label{eqn:prf_grid}
 \countrate_{n'} & \approx & \sum_{i,j} \prf_{n'}(x_i, y_j \given \gamma) \, \scene( D^{-1}(x_i, y_j) \given \beta) \nonumber
@@ -135,6 +135,7 @@ This allows one to write the countrate as
 \end{eqnarray}
 where $\normal(a, b \given \mu, \Sigma)$ is the bivariate normal distribution with location $\mu$ and covariance matrix $\Sigma$ evaluated at $(a, b)$.
 
+
 The drawbacks here are:
    1) evaluating large numbers of exponentials
    2) finding nice representations of parameterized scenes and PRFs in terms of mixtures of Gaussians such that the gradients of the Gaussian parameters with respect to the scene parameters $\beta$ are relatively simple
@@ -144,16 +145,37 @@ The drawbacks here are:
 One could also replace the $\prf$ mixture of Gaussians with the polynomial or spline approximation discussed below.
 I think the Tractor does something like \ref{eqn:psf_convolve} but with a $\delta$-function $\qe$, in which case the PSF and the PRF are equivalent.
 
+\subsection{Undersampling}
+One difficulty in this method is accounting for undersampling of the PRF by the pixels.
+The JWST F090W has pixels $\sim$ FWHM of the PSF.
+One strategy is to make calculations on subpixel grids and then sum/rebin.
+However, this entails quite a bit of extra computation (and gradients have to be tracked).
+Another option is to account for the undersampling by using a second order approximation to the integral of the gaussian over a square pixel.
+In Figure \ref{fig:undersample} there is a demonstration of the accuracy of this apprximation compared to a highly oversampled and rebinned calculation, for a particular subpixel shift and a gaussian PSF with FWHM of 1 pixel.
+If this proves insufficiently accurate, it would not be that difficult (except in compute time) to implement a mild oversampling scheme to improve the accuracy.
+
+
+\subsection{Method for Approximating PSF with Gaussians}
+We've been using an EM algorithm that is fast for gaussian mixtures, implemented by Jerry Anunrojwong (Harvard). 
+The gaussian mixtures are fit to the oversampled PSF images (normalized to unity).
+The likelihood function is a standard $\chi^2$ where the variance of each PSF pixel is proportional to the pixel value.
+The number of gaussians to use is specified before fitting (we can scan over number of gaussians to choose the best number).
+Centers, sizes, and ellipticities of each gaussian are allowed to vary (i.e. are fitted).
+The result of running this on the F090W oversampled PSF image with 6 Gaussians is shown in figure \ref{fig:psf_mixture}.
+The resulting parameters of the gaussian are then converted to units of true (rather than oversampled) image pixels.
+
+
 \subsection{Method for Approximating Sersic profiles with Gaussians}
 Following \citet{hogg_mog}, but we: 
   1) use absolute celestial units (e.g. mas); 
   2) fix the radii of the gaussians (on sky), including one at $r=0$;
   3) apply a small blurring to the Sersic profile and Gaussians before fitting (using analytic Sersic blurring formulae from \citet{trujillo01}); and
   4) Fit for the amplitudes as a function of both $n_{sersic}$ and half-light radius $r_h$.
+  5) Regularize the amplitudes to be smooth as a function of Gaussian radii  for a given $n_{sersic}$ and $r_h$
 
-We do this for two reasons.
+We make these changes for two reasons.
 First because we don't want to be calculating tons of gaussians below a scale that matters for the PRF.
-Second because the fixed radii of the gaussians will allow us to spline the amplitudes as a function of $n_{sersic}$ and $r_h$ for easy derivatives, so that we can fit for $n$.
+Second because the fixed radii of the Gaussians and the smoothness of the amplitude variations will allow us to spline the amplitudes as a function of $n_{sersic}$ and $r_h$ for easy derivatives, so that we can fit for $n$.
 
 This all results in a fixed number $M$ of Gaussians for each profile,
 with amplitudes $a_m(n, r_h)$, zero mean, and covariances $\Sigma_{m,i,j} = \delta_{i,j} \, r_m^2$ 
@@ -163,11 +185,14 @@ We also re-normalize so that
 %\sum_m^M \frac{a_m}{2\,\pi\,\sqrt{\det{\Sigma_m}}} & = & 1
 \sum_m^M a_m & = & 1
 \end{eqnarray}
+An example of the Sersic, smoothed Sersic, and Gaussian approximation thereof is given in Figure \ref{fig:sersic}.  
+
 
 \subsection{Astrometric Distortions}
-We need to be able to convert between celestial coordinates and on-sky parameters (e.g. the half-light radius in arcseconds, the position angle on the sky) to image or pixel coordinates.
+Multiple images will be used to constrain a single source.
+Therefore need to be able to convert between celestial coordinates and on-sky parameters (e.g. the half-light radius in arcseconds, the position angle on the sky) to image or pixel coordinates.
 We will make the approximation that for any region of interest the astrometric distortion can  be approximated by an affine transformation.
-Indeed this will be part of the definition of a region of interest.
+Indeed this will be part of the definition of of coherent region of interest.
 
 The standard FITS style astrometry for such a situation \citep{greisen02} is something like
 \begin{eqnarray}
@@ -234,7 +259,6 @@ the axis ratio $q = (b/a)$,
 and position angle $\varphi$.
 In general we will want to construct the Jacobian between $\phi_g$ and $\theta_s$ for each Gaussian.
 
-
 Now, one option to deal with the galaxy size parameter is to let the size of each galaxy Gaussian be set by the scale matrix $S$, so that the whole collection of Gaussians grows by replacing the matrix $S$ above with $S'=s\,S$ where $s$ is a scalar size.
 In this scheme the amplitudes $a_m$ would be functions only of $n$.
 However, the radii of the Gaussians would vary.
@@ -244,10 +268,10 @@ In this case the size of the of the galaxy can come in through the amplitudes on
 
 
 \subsection{Gradients}
-We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
-
-We will also need the Jacobian to go from the image plane Gaussian parameters to the galaxy parameters.
-%\begin{table}[h!]
+Gradients of the likelihood with respect to the source parameters are useful for optimization and certain efficient kinds of MCMC sampling.
+The gradient in the likelihood is simply related to the gradient in in the pixel counts.
+ We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
+But we will also need the Jacobian to go from the image plane Gaussian parameters to the galaxy parameters.
 
 \begin{center}
 $
@@ -290,15 +314,29 @@ K & = & \frac{\psi \, a_\ell \, a_m \, \sqrt{\det{F}}}{2\pi} \nonumber \\
 \frac{\partial \Sigma}{\partial \varphi} & = & D\, \frac{\partial R}{\partial \varphi} \, S\, \Sigma_m \, \transpose{S} \, \transpose{R} \, \transpose{D} +  D\, R\, S \, \Sigma_m \, \transpose{S} \, \transpose{\frac{\partial R}{\partial \varphi}} \, \transpose{D} \nonumber \\
 \end{eqnarray}
 
-This is helpful for gradients since the partial derivatives can be written easily as 
- \begin{eqnarray}
-\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \mu}  & = &  \normal({\bf c} \given \mu, \Sigma) \, \Sigma^{-1} \, ({\bf c}-\mu)\\
-\frac{\partial\normal( {\bf c} \given \mu, \Sigma)}{\partial \Sigma}  & = &  \normal({\bf c} \given \mu, \Sigma) \, (\Sigma^{-1} - \Sigma^{-1}\, ({\bf c}-\mu) \, \transpose{({\bf c}-\mu)}\, \Sigma^{-1}) \nonumber
-\end{eqnarray}
-where we have written the vector ${\bf c} = [a, b]$. 
-These expressions can then be chained with e.g. $\partial \Sigma /\partial \beta$, $\partial \mu /\partial \beta$, and $\partial w/\partial \beta$.
 
+\section{Translation into code}
+There are two main kinds of classes.
+One is PostageStamps, which contain the image data and information about the image.
+This includes the distortion matrix and the PSF (as a set of gaussians).
+PostageStamps are assumed to have a single constant PSF and a linear coordinate transformation.
+ The other is Sources, which can be PointSources or Sersic profiles, and contain information about the source parameters.
+There is then code which translates the Sources and PostageStamp properties into on-image collections of Gaussians and the associated Jacobians, 
+and another set of code that computes and accumulates the pixel counts and gradients thereof.
 
+\subsection{Levels of parallelization}
+There are various places we could parallelize this code, 
+some of them more amenable to GPU or MIC parallelization:
+\begin{itemize}
+
+\item at the sample level ($k$)
+
+\item at the pixel level ($n$)
+
+\item at the source level ($m$) (this is probably a bad idea, since number of sources may not be well matched to the number of processors, and may be variable.)
+
+\item at the image level
+\end{itemize}
 
 
 \section{Approximation by Polynomials and Sampling}
@@ -337,6 +375,7 @@ How do we do gradients in this scheme?  We want
 & \approx & \sum_k\sum_{i,j=0} \, R_{n, i, j} \frac{\partial w_k}{\partial \beta}\, i \, j \, \frac{\partial x_k}{\partial \beta}\, \frac{\partial y_k}{\partial \beta} (x_k - x_n)^{i-1} \, (y_k - y_n)^{j-1}
 \end{eqnarray}
 
+
 \subsection{Draws from the Scene}
 There are a frew ways to consider drawing from the scene.
 Perhaps the closest to the photon case would be to draw directly from some bivariate flux distribution.
@@ -367,27 +406,68 @@ Alternatively, we can associate \emph{weights} to each draw from a fiducial late
 In this case, instead of re-transforming the CFD draws into $R$ draws, 
 we can simply reweight the draws based on the ratio of the desired p(R) to the fiducial p(R) at that $R$.
 
-\subsection{Number of function evaluations and possible caching in each scheme}
 
-\subsection{Levels of parallelization}
-There are various places we could parallelize this code, 
-some of them more amenable to GPU or MIC parallelization:
-\begin{itemize}
+\begin{figure}
+\includegraphics[width=\textwidth]{figures/undersample.pdf}
+\caption{A demonstration of the effect of undersampling using a symmetric gaussian PSF with FWHM=1.0 native detector pixels (similar to the undersampling of the F090W PSF). The PSF is shifted 0.25 pixels in both x and y. 
+{\it Top Right:} The PSF calculated on a grid oversampled from the native detector pixels by a factor of 8. 
+{\it Middle left:} The oversampled PSF rebinned to the native detector pixel grid, giving an accurate reperesentation of the true pixel counts that would be expected for this PSF.  
+{\it Middle right:} The PSF calculated directly on the native grid using the 2nd-order approximation to the pixel value.  
+{\it Bottom Left:} The ratio of the direct 2nd order calculation to the oversampled and rebinned pixels fluxes, as a function of pixel flux. 
+\label{fig:undersample}}
+\end{figure}
 
-\item at the sample level ($k$)
+\begin{figure}
+\includegraphics[width=\textwidth]{figures/gm_psf_f090w.pdf}
+\caption{A mixture of 6 Gaussians fit to theF090W PSF.  
+{\it Top Left:} The input image of the PSF (oversampled by a factor of 8 from the detector pixels) 
+{\it Top Right:} The fitted model PSF.  
+{\it Bottom Left:} The residual, showing the model PSF subtracted from the input PSF 
+{\it Bottom Right:} Ellipses showing the location, sizes, and position angle of the 6 fitted Gaussians, color coded by the total fractional flux of each Gaussian.
+\label{fig:psf_mixture}}
+\end{figure}
 
-\item at the pixel level ($n$)
+\begin{figure}
+\label{fig:sersic}
+\includegraphics[width=\textwidth]{figures/gm_sersic.pdf}
+\caption{A mixture of Gaussians fit to a smoothed Sersic model.  
+{\it Top:} Radial surface brightness profiles of the unsmoothed Sersic profile for $n=2, r_h=1$ pixel ({\it blue}), the Sersic profile smoothed with Gaussian of 0.25 pixels dispersion ({\it orange}), and the Gaussian mixture approximation ({\it green}).  
+   The vertical dashed lines show the fixed dispersion of each of the zero mean Gaussians used in the approximation, and the dashed curves show the contribution of each Gaussian to the approximated profile.  
+{\it Middle:} The fractional profile residual.  
+{\it Bottom:} The cumulative flux as a function of radiaus for each profile.
+\label{fig:sersic}}
+\end{figure}
 
-\item at the source level ($m$) (this is probably a bad idea, since number of sources may not be well matched to the number of processors, and may be variable.)
 
-\item at the image level
-\end{itemize}
+\begin{figure}
+\includegraphics[width=\textwidth]{figures/demo_gaussgal.pdf}
+\caption{For a single gaussian PSF and a simple single Gaussian model (with axis ratio $q=0.5$ and position angle $\varphi=30^{\deg}$), this figure shows the model and the image gradients with respect to flux, $x$, $y$, $q$, and $\varphi$.
+\label{fig:mock_gal}}
+\end{figure}
 
-\section{Translation into code}
-I see two kinds of classes, one for approximation of $\prf$ and one for the $\scene$.
-Then one can either draw samples from the scene object or give it a grid on which it will compute the scene (which for a point source will be a single point) and gradients thereof.
-Then supply the PRF objects (each image block or maybe even each pixel will have one) with sample points or grid point(s). 
-Then either multiply the PRF output by the gridded scene, or sum the output over the scene samples to produce $\countrate_n$
+
+\begin{figure}
+\includegraphics[width=\textwidth]{figures/demo_f090w_pointsource.pdf}
+\caption{{\it Top left: } Simulated F090W point source data from CW.  
+{\it Top Right:} Initial model guess.  
+{\it Succeeding Panels:} Gradient images of the initial model with respect to the 3 point source model parameters.
+\label{fig:f090w}}
+\end{figure}
+
+
+
+\begin{thebibliography}{}\raggedright
+
+\bibitem[Hogg \& Lang(2013)]{hogg_mog}
+Hogg, D.~W. \& Lang, D. 2013, PASP 127, 719
+
+\bibitem[Trujillo et al.(2001)]{trujillo01}
+Trujillo, I. et al. 2001, MNRAS 321, 269
+
+\bibitem[Greisen et al.(2002)]{greisen02}
+Greisen et al. 2002, A\&A 395, 1061
+
+\end{thebibliography}
 
 
 \end{document}
