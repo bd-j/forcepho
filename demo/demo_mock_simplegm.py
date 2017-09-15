@@ -127,7 +127,9 @@ if __name__ == "__main__":
             c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
             fig.colorbar(c, ax=axes[i, 2])
             
-
+        axes[0, 0].set_title('Numerical')
+        axes[0, 1].set_title('Analytic')
+        axes[0, 2].set_title('N - A')
     
     # --- Optimization -----
     if True:
