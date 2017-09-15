@@ -20,6 +20,8 @@
 \newcommand{\scene}{\mathcal{S}}
 \newcommand{\like}{\mathcal{L}}
 \newcommand{\normal}{\mathcal{N}}
+\newcommand{\dx}{\Delta_x}
+\newcommand{\dy}{\Delta_y}
 
 
 \begin{document}
@@ -154,6 +156,21 @@ Another option is to account for the undersampling by using a second order appro
 In Figure \ref{fig:undersample} there is a demonstration of the accuracy of this apprximation compared to a highly oversampled and rebinned calculation, for a particular subpixel shift and a gaussian PSF with FWHM of 1 pixel.
 If this proves insufficiently accurate, it would not be that difficult (except in compute time) to implement a mild oversampling scheme to improve the accuracy.
 
+Here is the math for the 2nd-order approximation to a gaussian centered at $(x_s, y_s)$ with amplitude $A_s$ and covariance matrix $\Sigma_s$
+\begin{eqnarray}
+I(x_p, y_p)   & = & A_s \, h \, e^{g } \\
+\dx, \dy & = & x_p - x_s, y_p - y_s  \nonumber\\
+g     & = & -\frac{1}{2} \, (\dx \, V_{x} + \dy \, V_y) \nonumber \\
+h     & = & 1 + \frac{1}{24} \, (V_x^2 + V_y^2 - F_{xx} - F_{yy}) \nonumber \\
+V_x  & = & F_{xx} \, \dx + F_{xy} \, \dy  \nonumber \\
+V_y  & = & F_{yy} \, \dy + F_{xy} \, \dx \nonumber \\
+F & = & \Sigma^{-1}  \nonumber
+\end{eqnarray}
+where
+\begin{eqnarray}
+F  & = & \begin{pmatrix} F_{xx} & F_{xy} \\ F_{xy} & F_{yy} \end{pmatrix}%\nonumber
+\end{eqnarray}
+
 
 \subsection{Method for Approximating PSF with Gaussians}
 We've been using an EM algorithm that is fast for gaussian mixtures, implemented by Jerry Anunrojwong (Harvard). 
@@ -189,7 +206,7 @@ An example of the Sersic, smoothed Sersic, and Gaussian approximation thereof is
 
 
 \subsection{Astrometric Distortions}
-Multiple images will be used to constrain a single source.
+Multiple images (with different astrometry) will be used to constrain a single source.
 Therefore need to be able to convert between celestial coordinates and on-sky parameters (e.g. the half-light radius in arcseconds, the position angle on the sky) to image or pixel coordinates.
 We will make the approximation that for any region of interest the astrometric distortion can  be approximated by an affine transformation.
 Indeed this will be part of the definition of of coherent region of interest.
@@ -270,7 +287,18 @@ In this case the size of the of the galaxy can come in through the amplitudes on
 \subsection{Gradients}
 Gradients of the likelihood with respect to the source parameters are useful for optimization and certain efficient kinds of MCMC sampling.
 The gradient in the likelihood is simply related to the gradient in in the pixel counts.
- We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
+We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
+\begin{eqnarray}
+\frac{\partial I}{\partial A_s} & = & h \, e^g \\
+\frac{\partial I}{\partial x_s} & = & I \, V_x - \frac{A_s \, e^g}{12} \, (F_{xx} \, V_x + F_{xy} \, V_y) \\
+\frac{\partial I}{\partial y_s} & = & I \, V_y - \frac{A_s \, e^g}{12} \,  (F_{yy} \, V_y + F_{xy} \, V_y) \\
+\frac{\partial I}{\partial F_{xx}} & = & - \frac{I \, \dx^2}{2} - \frac{A_s \, e^g}{24} \,  (1 + 2\, \dx \, V_x) \\
+%     dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 24.
+%    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
+%    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
+\end{eqnarray}
+
+
 But we will also need the Jacobian to go from the image plane Gaussian parameters to the galaxy parameters.
 
 \begin{center}
