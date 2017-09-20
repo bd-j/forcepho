@@ -70,7 +70,7 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(30, 30), ad
 if __name__ == "__main__":
 
     # Get a scene and a stamp at some parameters
-    scene, stamp, ptrue, label = setup_scene(galaxy=True, fwhm=2.0, fudge=1.25)
+    scene, stamp, ptrue, label = setup_scene(galaxy=False, fwhm=2.0, fudge=1.25)
     true_image, partials = make_image(ptrue, scene, stamp)
     
     # Set up likelihoods

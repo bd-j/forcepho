@@ -352,6 +352,7 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     dy = ypix - g.ycen
     vx = g.fxx * dx + g.fxy * dy
     vy = g.fyy * dy + g.fxy * dx
+    root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
     #G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
     Gp = np.exp(-0.5 * (dx*vx + dy*vy))
  
@@ -360,18 +361,18 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     else:
         H = 1.0
 
-    c_h = g.amp * Gp  # A * G_p
+    c_h = g.amp * Gp * root_det  # A * G_p
     C = c_h * H # A * Gp * C
 
     if not compute_deriv:
         return np.array(C)
 
-    dC_dA = Gp * H
+    dC_dA = Gp * H * root_det
     dC_dx = C*vx - second_order * c_h * (g.fxx*vx + g.fxy*vy) / 12.
     dC_dy = C*vy - second_order * c_h * (g.fyy*vy + g.fxy*vx) / 12.
-    dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. - 2.*dx*vx) / 24.
-    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. - 2.*dy*vy) / 24.
-    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (dy*vx + dx*vy) / 12.
+    dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. - 2.*dx*vx) / 24. + (C / root_det) * (g.fyy / root_det) * 0.5
+    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. - 2.*dy*vy) / 24. + 0.5 * C / (root_det * root_det) * g.fxx
+    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (dy*vx + dx*vy) / 12. -  C / (root_det * root_det) * g.fxy
 
     return np.array(C), np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy])
 

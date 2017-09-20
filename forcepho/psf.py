@@ -20,7 +20,7 @@ def make_psf(answer, **kwargs):
     # Build the covariance matrices
     cov = [np.array([[xv, xyv],[xyv, yv]]) for xv, yv, xyv in zip(vx, vy, vxy)]
     psf.ngauss = len(x)
-    psf.means = np.array([x, y]).T
+    psf.means = np.array([x, y])
     psf.amplitudes = amps
     psf.covariances = np.array(cov)
 

@@ -1,19 +1,15 @@
 import sys
 from copy import deepcopy
-from functools import partial
+from functools import partial as argfix
 
 import numpy as np
 import matplotlib.pyplot as pl
 import astropy.io.fits as fits
 from astropy import wcs
 
-from forcepho.gaussmodel import PostageStamp, Star
 from forcepho import psf as pointspread
-from forcepho.likelihood import model_image
-
-from forcepho.gaussmodel import Star
+from forcepho.gaussmodel import PostageStamp, Star
 from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, make_image
-
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -73,7 +69,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
 
-            oversample, center = 8, 504 - 400
+        oversample, center = 8, 504 - 400
         answer = pdat[6][2]
         stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
     else:
@@ -81,10 +77,8 @@ def make_stamp(imname, center=(None, None), size=(None, None),
         stamp.psf.covaraniaces *= fwhm/2.355
     
     # --- Add extra information ---
-    stamp.full_header = dict(hdr)
-    
+    stamp.full_header = dict(hdr)    
     return stamp
-
 
 
 if __name__ == "__main__":
@@ -107,7 +101,11 @@ if __name__ == "__main__":
     stamp.crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
     stamp.crpix = np.zeros([2])
-    
+
+    # override the psf to reflect in both directions
+    T = -1.0 * np.eye(2)
+    stamp.psf.covariances = np.matmul(T, np.matmul(stamp.psf.covariances, T.T))
+    stamp.psf.means = np.matmul(stamp.psf.means, T)
 
     # --- get the Scene ---
     scene = Scene()
@@ -115,16 +113,17 @@ if __name__ == "__main__":
     scene.sources = sources
     label = ['flux', 'x', 'y']
 
-    nll = partial(negative_lnlike_stamp, scene=scene, stamp=stamp)
+    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
+    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
     #chisq_init = nll(theta_init)
 
     # --- Initialize ---
     #theta_init = np.array([stamp.pixel_values.sum() * 0.5, stamp.nx/2, stamp.ny/2])
     theta_init = np.array([stamp.pixel_values.sum() * 1.0, 48.1, 51.5])
-    image_init, partials = make_image(theta_init, sources, stamp)
+    image_init, partials = make_image(theta_init, scene, stamp)
 
     # --- Plot initial value ---
-    if False:
+    if True:
         fig, axes = pl.subplots(3, 2, sharex=True, sharey=True)
         ax = axes.flat[0]
         i = ax.imshow(stamp.pixel_values.T, origin='lower')
@@ -162,7 +161,7 @@ if __name__ == "__main__":
             print(x, nll(x))
 
         p0 = theta_init.copy()
-        p0[0] = 45.6 #34.44
+        p0[0] = 4500. #34.44
         p0[1] = 50. #48.1
         p0[2] = 50. #51.5
         bounds = [(0, 1e4), (0., 100), (0, 100)]
@@ -170,17 +169,19 @@ if __name__ == "__main__":
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                         options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})
 
-        stamp.residual = stamp.pixel_values.flatten()
-        scene.set_params(result.x)
-        resid, partials = model_image(scene.params, scene.sources, stamp)
+        result_nograd = minimize(nll_nograd, p0, jac=False, bounds=None, callback=callback,
+                                 options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
+                                 )
+
+        
+        resid, partials = make_image(result.x, scene, stamp)
         dim = stamp.pixel_values
-        rim = resid.reshape(stamp.nx, stamp.ny)
+        mim = resid
         
         fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
-        images = [dim, dim-rim, rim]
+        images = [dim, mim, dim-mim]
         labels = ['Data', 'Model', 'Data-Model']
         for k, ax in enumerate(axes):
             c = ax.imshow(images[k].T, origin='lower')
             pl.colorbar(c, ax=ax)
             ax.set_title(labels[k])
-        

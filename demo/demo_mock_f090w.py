@@ -14,11 +14,22 @@ from astropy import wcs
 from forcepho.gaussmodel import Star
 from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
+def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
+
+    dI_dp = []
+    for i, (p, dp) in enumerate(zip(theta0, delta)):
+        theta = theta0.copy()
+        imlo, _ = make_image(theta, scene, stamp)
+        theta[i] += dp
+        imhi, _ = make_image(theta, scene, stamp)
+        dI_dp.append((imhi - imlo) / (dp))
+
+    return np.array(dI_dp)
 
 def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 
     # --- Get a postage stamp ----
-    stamp = make_stamp(size, psfname=psfname)    
+    stamp = make_stamp(size, psfname=psfname)
 
     # --- get the Scene ---
     scene = Scene()
