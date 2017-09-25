@@ -143,10 +143,11 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
         resid, partials = make_image(result.x, scene, stamp)
         dim = stamp.pixel_values
         mim = resid
+        chi = (dim - mim) * stamp.ierr.reshape(stamp.nx, stamp.ny)
         
-        fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
-        images = [dim, mim, dim-mim]
-        labels = ['Data', 'Model', 'Data-Model']
+        fig, axes = pl.subplots(1, 4, sharex=True, sharey=True, figsize=(14.75, 3.25))
+        images = [dim, mim, dim-mim, chi]
+        labels = ['Data', 'Model', 'Data-Model', '$\chi$']
         for k, ax in enumerate(axes):
             c = ax.imshow(images[k].T, origin='lower')
             pl.colorbar(c, ax=ax)
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     # ---- Read the input catalog -----
     dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
     cat = np.genfromtxt(catname, usecols=np.arange(1, 9), dtype=dt)
-    cat = cat[:100]
+    #cat = cat[:100]
 
     # --- setup output ---
     out = open('output_pointsource.dat', 'w')

@@ -287,19 +287,19 @@ In this case the size of the of the galaxy can come in through the amplitudes on
 \subsection{Gradients}
 Gradients of the likelihood with respect to the source parameters are useful for optimization and certain efficient kinds of MCMC sampling.
 The gradient in the likelihood is simply related to the gradient in in the pixel counts.
-We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters fairly easily.
+We can calculate gradients of the pixel counts with respect to the  image plane Gaussian parameters $\partial I/\partial \phi$ fairly easily.
 \begin{eqnarray}
 \frac{\partial I}{\partial A_s} & = & h \, e^g \\
 \frac{\partial I}{\partial x_s} & = & I \, V_x - \frac{A_s \, e^g}{12} \, (F_{xx} \, V_x + F_{xy} \, V_y) \\
 \frac{\partial I}{\partial y_s} & = & I \, V_y - \frac{A_s \, e^g}{12} \,  (F_{yy} \, V_y + F_{xy} \, V_y) \\
 \frac{\partial I}{\partial F_{xx}} & = & - \frac{I \, \dx^2}{2} - \frac{A_s \, e^g}{24} \,  (1 + 2\, \dx \, V_x) \\
-%     dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. + 2.*dx*vx) / 24.
-%    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
-%    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (1. + 2.*dy*vy) / 24.
+\frac{\partial I}{\partial F_{yy}} & = & - \frac{I \, \dy^2}{2} - \frac{A_s \, e^g}{24} \,  (1 + 2\, \dy \, V_y) \\
+\frac{\partial I}{\partial F_{xy}} & = & - {I \, \dx\, \dy} - \frac{A_s \, e^g}{24} \,  (\dy \, V_x + \dx \, V_y)
 \end{eqnarray}
 
 
-But we will also need the Jacobian to go from the image plane Gaussian parameters to the galaxy parameters.
+But we will also need the Jacobian to go from the image plane Gaussian parameters $\phi$ to the galaxy parameters $\theta$.
+The table below gives $\partial \phi_i / \partial \theta_j$ which can be matrix multiplied with the $\partial I / \partial \phi_i$ vector:
 
 \begin{center}
 $

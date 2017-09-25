@@ -98,6 +98,41 @@ def test_image_gaussian_gradients(dp=1e-5):
 
     return fig, axes, grad, grad_num
 
+
+def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
+
+    dI_dp = []
+    for i, (p, dp) in enumerate(zip(theta0, delta)):
+        theta = theta0.copy()
+        imlo, _ = make_image(theta, scene, stamp)
+        theta[i] += dp
+        imhi, _ = make_image(theta, scene, stamp)
+        dI_dp.append((imhi - imlo) / (dp))
+
+    return np.array(dI_dp)
+
+
+def test_image_gradients(ptrue, delta, scene=None, stamp=None):
+    delta = np.ones_like(ptrue) * 1e-6
+    #numerical
+    grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
+    image, grad = make_image(ptrue, scene, stamp)
+    fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
+    for i in range(len(ptrue)):
+        g = grad[i,:].reshape(stamp.nx, stamp.ny)
+        c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+        fig.colorbar(c, ax=axes[i, 0])
+        c = axes[i, 1].imshow(g.T, origin='lower')
+        fig.colorbar(c, ax=axes[i, 1])
+        c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+        fig.colorbar(c, ax=axes[i, 2])
+
+    axes[0, 0].set_title('Numerical')
+    axes[0, 1].set_title('Analytic')
+    axes[0, 2].set_title('N - A')
+
+
+
 if __name__ == "__main__":
 
     fig, ax, grad, grad_num = test_image_gaussian_gradients(1e-7)

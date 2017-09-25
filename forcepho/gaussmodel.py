@@ -306,11 +306,13 @@ def get_gaussian_gradients(galaxy, stamp, gig):
                        dF_dq.flat[inds].tolist() +
                        dF_dpa.flat[inds].tolist())
             # as the 7 x 6 jacobian matrix
+            # each row is a different theta and has
+            # dA/dtheta, dx/dtheta, dy/dtheta, dFxx/dtheta, dFyy/dtheta, dFxy/dtheta
             jac = [[dA_dflux, 0, 0, 0, 0, 0],  # d/dFlux
                    [0, D[0, 0], D[1, 0], 0, 0, 0],  # d/dAlpha
                    [0, D[0, 1], D[1, 1], 0, 0, 0],  # d/dDelta
-                   [dA_dq, 0, 0, dF_dq[0,0], dF_dq[1,0], dF_dq[1,1]],  # d/dQ
-                   [dA_dpa, 0, 0, dF_dpa[0,0], dF_dpa[1,0], dF_dpa[1,1]],  # d/dPA
+                   [dA_dq, 0, 0, dF_dq[0,0], dF_dq[1,1], dF_dq[1,0]],  # d/dQ
+                   [dA_dpa, 0, 0, dF_dpa[0,0], dF_dpa[1,1], dF_dpa[1,0]],  # d/dPA
                    [dA_dsersic, 0, 0, 0, 0, 0],  # d/dSersic
                    [dA_drh, 0, 0, 0, 0, 0]]  # d/dRh
             derivs = np.array(jac)
@@ -378,8 +380,8 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
 
 
 def scale_matrix(q):
-        return np.array([[1/q, 0],
-                        [0, q]])
+        return np.array([[q**(-0.5), 0],
+                        [0, q**(0.5)]])
 
 
 def rotation_matrix(theta):
@@ -388,8 +390,8 @@ def rotation_matrix(theta):
 
 
 def scale_matrix_deriv(q):
-        return np.array([[-1/q**2, 0],
-                        [0, 1]])
+        return np.array([[-0.5 * q**(-1.5), 0],
+                        [0, 0.5 * q**(-0.5)]])
 
 
 def rotation_matrix_deriv(theta):
