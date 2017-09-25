@@ -22,11 +22,11 @@ def get_stamp(n, dx=1):
     return stamp
 
 
-def get_image(x, y, source, stamp):
+def get_image(x, y, source, stamp, **extras):
     stamp.residual = np.zeros(stamp.npix)
     theta = np.array([1, x, y, 1, 0, 0, 0])
     residual, partials = model_image([theta], [source], stamp,
-                                     use_gradients=use)
+                                     use_gradients=use, **extras)
 
     return -residual.reshape(stamp.nx, stamp.ny)
 

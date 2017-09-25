@@ -32,7 +32,7 @@ def lnlike(thetas, sources, stamps):
     return -0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials, axis=-1)
 
 
-def model_image(thetas, sources, stamp, use_gradients=slice(None)):
+def model_image(thetas, sources, stamp, use_gradients=slice(None), **extras):
     """Loop over all sources in a scene, subtracting each from the image and
     building up a gradient cube.  Eventually everything interior to this should
     be moved to C++, since the loop is very slow.
@@ -57,12 +57,12 @@ def model_image(thetas, sources, stamp, use_gradients=slice(None)):
         gig.ntheta = ntheta
 
         sel = slice(i * ntheta, (i+1) * ntheta)
-        gradients[sel, :] = evaluate_gig(gig, stamp, use_gradients=use_gradients)
+        gradients[sel, :] = evaluate_gig(gig, stamp, use_gradients=use_gradients, **extras)
 
     return stamp.residual, gradients
 
 
-def evaluate_gig(gig, stamp, use_gradients=slice(None)):
+def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
     """Evaluate one GaussianImageGalaxy, subtract it from the residual, and
     compute and return dResidual_dtheta
     """
@@ -72,7 +72,7 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None)):
     dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
 
     for g in gig.gaussians.flat:
-        I, dI_dphi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat)
+        I, dI_dphi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat, **extras)
         # Accumulate the derivatives w.r.t. theta from each gaussian
         # This matrix multiply can be optimized (many zeros in g.derivs)
         dR_dtheta += np.matmul(g.derivs, dI_dphi)[use_gradients, :]

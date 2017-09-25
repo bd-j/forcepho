@@ -4,7 +4,7 @@
 import numpy as np
 
 __all__ = ["ImageGaussian", "Star", "Galaxy", "GaussianImageGalaxy",
-           "PostageStamp", "PointSpreadFunction",
+           "PostageStamp",
            "convert_to_gaussians", "get_gaussian_gradients", "compute_gaussian"]
 
 
@@ -44,7 +44,7 @@ class Star(object):
     flux = 0.     # flux
     ra = 0.
     dec = 0.
-    q = 1.        # axis ratio
+    q = 1.        # axis ratio squared, i.e.  (b/a)^2
     pa = 0.       # postion angle (N of E)
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
@@ -151,17 +151,6 @@ class GaussianImageGalaxy(object):
     def __init__(self, ngalaxy, npsf, id=None):
         self.id = id
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
-
-
-class PointSpreadFunction(object):
-    """Gaussian Mixture approximation to a PSF.
-    """
-
-    def __init__(self):
-        self.ngauss = 1
-        self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
-        self.means = np.zeros([self.ngauss, 2])
-        self.amplitudes = np.ones(self.ngauss)
 
     
 class PostageStamp(object):
@@ -321,23 +310,47 @@ def get_gaussian_gradients(galaxy, stamp, gig):
     return gig
 
 
-def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
+def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
+                     use_det=False, oversample=False):
     """Calculate the counts and gradient for one pixel, one gaussian.  This
     basically amounts to evalutating the gaussian (plus second order term) and
     the gradients with respect to the 6 input terms.  Like `computeGaussian`
     and `computeGaussianDeriv` in the C++ code.
 
     :param g: 
-        A Gaussian() instance
+        An ImageGaussian() instance, or an object that has the attributes
+        `xcen`, `ycen`, `amp`, `fxx`, `fyy` and `fxy`.
 
     :param xpix:
         The x coordinate of the pixel(s) at which counts and gradient are desired.
+        Scalar or ndarray of shape npix.
 
     :param ypix:
         The y coordinate of the pixel(s) at which counts and gradient are desired.
+        Same shape as `xpix`.
+
+    :param second_order: (optional, default: True)
+        Whether to use the 2nd order correction to the integral of the gaussian
+        within a pixel.
+
+    :param compute_deriv: (optional, default: True)
+        Whether to compute the derivatives of the counts with respect to the
+        gaussian parameters.
+
+    :param use_det: (otional, default: False)
+        Whether to include the determinant of the covariance matrix when
+        normalizing the counts and calculating derivatives.
+
+    :param oversample: (optional, default: False)
+        If this flag is set, the counts (and derivatives) will be calculated on
+        a grid oversampled by a factor of two in each dimension (assuming the
+        input xpix and ypix are integers), and then summed at the end to
+        produce a more precise measure of the counts in a pixel.
+        Not actually working yet.
 
     :returns counts:
-        The counts in this pixel due to this gaussian
+        The counts in each pixel due to this gaussian, same shape as `xpix` and
+        `ypix`.
 
     :returns grad:
         The gradient of the counts with respect to the 6 parameters of the
@@ -350,33 +363,68 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     # inv_det = fxx*fyy + 2*fxy
     # norm = np.sqrt((inv_det / 2*np.pi))
 
-    dx = xpix - g.xcen
-    dy = ypix - g.ycen
+    if oversample:
+        xoff = np.array([0.25, -0.25, -0.25, 0.25])
+        yoff = np.array([0.25, 0.25, -0.25, -0.25])
+        xp = xpix[..., None] + xoff[..., :]
+        yp = ypix[..., None] + yoff[..., :]
+    else:
+        xp = xpix
+        yp = ypix
+
+    # --- Calculate useful variables ---
+    dx = xp - g.xcen
+    dy = yp - g.ycen
     vx = g.fxx * dx + g.fxy * dy
     vy = g.fyy * dy + g.fxy * dx
-    #root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
-    #G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
     Gp = np.exp(-0.5 * (dx*vx + dy*vy))
- 
+    # G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
+    H = 1.0
+    root_det = 1.0
+
+    # --- Calculate counts ---
     if second_order:
         H = 1 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.
+    if use_det:
+        root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
+    C = g.amp * Gp * H * root_det
+
+    # --- Calculate derivatives ---
+    if compute_deriv:
+        dC_dA = C / g.amp
+        dC_dx = C*vx
+        dC_dy = C*vy
+        dC_dfx = -0.5*C*dx*dx
+        dC_dfy = -0.5*C*dy*dy
+        dC_dfxy = -1.0*C*dx*dy
+
+    if compute_deriv and second_order:
+        c_h = C / H
+        dC_dx -= c_h * (g.fxx*vx + g.fxy*vy) / 12.
+        dC_dy -= c_h * (g.fyy*vy + g.fxy*vx) / 12.
+        dC_dfx -= c_h * (1. - 2.*dx*vx) / 24.
+        dC_dfy -= c_h * (1. - 2.*dy*vy) / 24.
+        dC_dfxy += c_h * (dy*vx + dx*vy) / 12.
+
+    if compute_deriv and use_det:
+        c_d = C / (root_det * root_det)
+        dC_dfx += 0.5 * c_d * g.fyy
+        dC_dfy += 0.5 * c_d * g.fxx
+        dC_dfxy -= c_d * g.fxy
+
+    C = np.array(C)
+    gradients = np.zeros(1)
+    if compute_deriv:
+        gradients = np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy])
+
+    if oversample:
+        C = C.sum(axis=-1) / 4.0
+        gradients = gradients.sum(axis=-1) / 4.0
+
+    if compute_deriv:
+        return C, gradients
     else:
-        H = 1.0
-
-    c_h = g.amp * Gp #* root_det  # A * G_p
-    C = c_h * H # A * Gp * C
-
-    if not compute_deriv:
-        return np.array(C)
-
-    dC_dA = Gp * H #* root_det
-    dC_dx = C*vx - second_order * c_h * (g.fxx*vx + g.fxy*vy) / 12.
-    dC_dy = C*vy - second_order * c_h * (g.fyy*vy + g.fxy*vx) / 12.
-    dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. - 2.*dx*vx) / 24.# + (C / root_det) * (g.fyy / root_det) * 0.5
-    dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. - 2.*dy*vy) / 24.# + 0.5 * C / (root_det * root_det) * g.fxx
-    dC_dfxy = -1.0*C*dx*dy + second_order * c_h * (dy*vx + dx*vy) / 12.# -  C / (root_det * root_det) * g.fxy
-
-    return np.array(C), np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy])
+        return C
 
 
 def scale_matrix(q):
