@@ -6,7 +6,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import cPickle as pickle
 from astropy.io import fits as pyfits
 
-from gaussian_psf import fit_mvn_mix
+from .gaussian_psf import fit_mvn_mix
+from ..psf import params_to_gauss
 
 
 def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
@@ -36,43 +37,9 @@ def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
     return ax, params[:, 0]
 
 
-def params_to_gauss(answer, oversample=8, start=0, center=504):
-    """Convert the fitted parameters to the parameters used in the PSF gaussian mixture.
-
-    :returns mux:
-        The center x of each gaussian, in detector coordinates (i.e. not PSF
-        image pixels, but actual detector pixels)
-
-    :returns muy:
-        The center y of each gaussian, in detector coordinates (i.e. not PSF
-        image pixels, but actual detector pixels)
-
-    :returns vx:
-        The 0,0 entry of the covariance matrix (sigma_x^2) in (detector pixels)^2
-
-    :returns vy:
-        The 1,1 entry of the covariance matrix (sigma_y^2) in (detector pixels)^2
-
-    :returns vxy:
-        The 1,0 or 0,1 entry of the covariance matrix (rho * sigma_x * sigma_y)
-        in (detector pixels)^2
-
-    :returns amp:
+def radial_profile(answer, ax, center):
+    pass
     
-    """
-    params = answer['fitted_params'].copy()
-    ngauss = len(params) / 6
-    params = params.reshape(ngauss, 6)
-    # is this right?
-    #TODO: work out zero index vs 0.5 index issues
-    # need to flip x and y here
-    mu = (params[:,1:3][::-1] + start - center) / oversample
-    sy = params[:, 3] / oversample
-    sx = params[:, 4] / oversample
-    vxy = params[:, 5] * sx * sy
-    amp = params[:, 0]
-
-    return mu[:, 0], mu[:, 1], sx**2, sy**2, vxy, amp
 
 
 if __name__ == "__main__":

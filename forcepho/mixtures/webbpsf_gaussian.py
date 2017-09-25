@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+# Script from Jerry for gaussian mixtures.  This has been rewritten and
+# incorporated into gaussian_psf.py
+
 """
 Spyder Editor
 

@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
 
-from proto import PostageStamp, Star, PointSpreadFunction
-from likelihood import model_image
+from forcepho.gaussmodel import PostageStamp, Star
+from forcepho.psf import PointSpreadFunction
+from forcepho.likelihood import model_image
 
 
 def get_stamp(n, dx=1):
