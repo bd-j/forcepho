@@ -132,7 +132,7 @@ if __name__ == "__main__":
         axes[0, 2].set_title('N - A')
     
     # --- Optimization -----
-    if False:
+    if True:
         p0 = ptrue.copy()
         from scipy.optimize import minimize
         def callback(x):

@@ -354,7 +354,7 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     dy = ypix - g.ycen
     vx = g.fxx * dx + g.fxy * dy
     vy = g.fyy * dy + g.fxy * dx
-    root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
+    #root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
     #G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
     Gp = np.exp(-0.5 * (dx*vx + dy*vy))
  
@@ -374,26 +374,30 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True):
     dC_dy = C*vy - second_order * c_h * (g.fyy*vy + g.fxy*vx) / 12.
     dC_dfx = -0.5*C*dx*dx - second_order * c_h * (1. - 2.*dx*vx) / 24.# + (C / root_det) * (g.fyy / root_det) * 0.5
     dC_dfy = -0.5*C*dy*dy - second_order * c_h * (1. - 2.*dy*vy) / 24.# + 0.5 * C / (root_det * root_det) * g.fxx
-    dC_dfxy = -1.0*C*dx*dy - second_order * c_h * (dy*vx + dx*vy) / 12.# -  C / (root_det * root_det) * g.fxy
+    dC_dfxy = -1.0*C*dx*dy + second_order * c_h * (dy*vx + dx*vy) / 12.# -  C / (root_det * root_det) * g.fxy
 
     return np.array(C), np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy])
 
 
 def scale_matrix(q):
-        return np.array([[q**(-0.5), 0],
-                        [0, q**(0.5)]])
+    #return np.array([[q**(-0.5), 0],
+    #                [0, q**(0.5)]])
+    return np.array([[1./q, 0],  #use q=(b/a)**2
+                    [0, q]])
 
 
 def rotation_matrix(theta):
-        return np.array([[np.cos(theta), -np.sin(theta)],
-                         [np.sin(theta), np.cos(theta)]])
+    return np.array([[np.cos(theta), -np.sin(theta)],
+                     [np.sin(theta), np.cos(theta)]])
 
 
 def scale_matrix_deriv(q):
-        return np.array([[-0.5 * q**(-1.5), 0],
-                        [0, 0.5 * q**(-0.5)]])
+    #return np.array([[-0.5 * q**(-1.5), 0],
+    #                [0, 0.5 * q**(-0.5)]])
+    return np.array([[-1./q**2, 0], # use q=(b/a)**2
+                    [0, 1]])
 
 
 def rotation_matrix_deriv(theta):
-        return np.array([[-np.sin(theta), -np.cos(theta)],
-                         [np.cos(theta), -np.sin(theta)]])
+    return np.array([[-np.sin(theta), -np.cos(theta)],
+                     [np.cos(theta), -np.sin(theta)]])
