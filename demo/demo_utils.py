@@ -39,6 +39,15 @@ def negative_lnlike_nograd(theta, scene=None, stamp=None):
     return 0.5 * np.sum(chi**2)
 
 
+def chi_vector(theta, scene=None, stamp=None):
+    stamp.residual = stamp.pixel_values.flatten()
+    scene.set_params(theta)
+    sources, thetas = scene.sources, scene.params
+    residual, partials = model_image(thetas, sources, stamp)
+    chi = residual * stamp.ierr
+    return chi
+
+
 def make_image(theta, scene=None, stamp=None):
     stamp.residual = np.zeros(stamp.npix)
     scene.set_params(theta)

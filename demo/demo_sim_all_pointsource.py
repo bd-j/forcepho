@@ -15,9 +15,7 @@ from astropy import wcs
 
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import PostageStamp, Star
-from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, make_image
-
-       
+from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, chivector, make_image
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -90,7 +88,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
 
 def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
-               stamp_size=(100, 100), err_expand=1.0):
+               stamp_size=(100, 100), err_expand=1.0, jitter=0.0, use_grad=True):
     """
     """
     # --- Build the postage stamp ----
@@ -99,6 +97,7 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
     stamp.snr = stamp.pixel_values * stamp.ierr
     #err_expand = stamp.snr.max() / 0.3
     stamp.ierr = stamp.ierr.flatten() / err_expand
+    stamp.ierr = 1.0 / np.sqrt(1/stamp.ierr**2 + jitter**2)
     
     # override the WCS so coordinates are in pixels
     # The distortion matrix D
@@ -119,8 +118,11 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
     scene.sources = sources
 
     # ---- Optimization ------
-    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
-
+    if use_grad:
+        nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
+    else:
+        nll = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
+        
     if True:
         def callback(x):
             #nf += 1
@@ -136,7 +138,7 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
         # Optimize
         from scipy.optimize import minimize
         lbfgsb_opt = {'ftol': 1e-20, 'gtol': 1e-12, 'disp':True, 'iprint': -1, 'maxcor': 20}
-        result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
+        result = minimize(nll, p0, jac=use_grad, bounds=None, callback=callback,
                           options=lbfgsb_opt)
 
         # plot results
@@ -165,28 +167,35 @@ if __name__ == "__main__":
     # ---- Read the input catalog -----
     dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
     cat = np.genfromtxt(catname, usecols=np.arange(1, 9), dtype=dt)
-    #cat = cat[:100]
+    cat = cat[:100]
 
     # --- setup output ---
-    out = open('output_pointsource.dat', 'w')
+    use_grad = True
+    fn = 'output_pointsource.dat'
+    pn = 'pointsource_resid.pdf'
+    out = open(fn, 'w')
     strfmt = "{}  {:11.5f}   {:11.5f}  {:10.2f}  {:10.2f}  {:14.6f}   {} \n"
+    dt2 = np.dtype([(n, np.float) for n in ['id', 'x', 'y', 'counts', 'halfchisq', 'sum', 'nfev']])
     out.write("# i    x    y   flux    counts    chi2/2   nfev\n")
-    pdf = PdfPages('pointsource_resid.pdf')
+    pdf = PdfPages(pn)
 
     # ---- loop over things -----
-    size = np.array([100, 100])
+    size = np.array([20, 20])
     all_results, all_pos = [], []
     for i, c in enumerate(cat):
         blob = fit_source(ra=c['ra'], dec=c['dec'],
                           imname=imname, psfname=psfname,
-                          stamp_size=size)
+                          stamp_size=size, err_expand=1, jitter=1.0,
+                          use_grad=use_grad)
 
         result, (fig, axes), vals, stamp, scene = blob
         all_results.append(result)
 
-        fig.suptitle('obj={}, counts={} x={}, y={}'.format(i, c['counts'], c['x'], c['y']))
-        [ax.set_xlim(35, 65) for ax in axes.flat]
-        [ax.set_ylim(35, 65) for ax in axes.flat]
+        axes[0].text(0.05, 0.82,
+                     'obj={}\ncounts={:5.1f}\nx={:4.2f}, y={:4.2f}'.format(i+1, c['counts'], c['x'], c['y']),
+                     transform=axes[0].transAxes, size=10)
+        #[ax.set_xlim(35, 65) for ax in axes.flat]
+        #[ax.set_ylim(35, 65) for ax in axes.flat]
         pdf.savefig(fig)
         pl.close(fig)
         
@@ -198,7 +207,6 @@ if __name__ == "__main__":
         
         print(result.x)
         print(c['counts'])
-        
         out.write(strfmt.format(i, x, y, counts, result.fun, stamp.pixel_values.sum(), result.nfev))
 
     
@@ -210,3 +218,44 @@ if __name__ == "__main__":
     xx = np.array([r.x for r in all_results])
     chi2 = np.array([a.fun for a in all_results])
     pos = np.array(all_pos)
+
+    ocat = np.genfromtxt(fn, dtype=dt2)
+    icat = cat
+    ratio = (ocat['counts'] / icat['counts'])
+    
+    fig, ax = pl.subplots()
+    ax.plot(icat['counts'], ratio, 'o')
+    ax.set_xscale('log')
+    ax.set_xlabel('Input counts')
+    ax.set_ylabel('Output/Input')
+    ax.axhline(ratio.mean(), label='$\mu={:4.2f}$'.format(ratio.mean()), color='k', linestyle='--')
+    ax.axhline(ratio.mean() + ratio.std(), label='$\mu+/-\sigma, \sigma={:3.3f}$'.format(ratio.std()), color='k', linestyle=':')
+    ax.axhline(ratio.mean() - ratio.std(), color='k', linestyle=':')
+    ax.legend()
+
+
+    fig, ax = pl.subplots()
+    dx = ocat['x'] - icat['x'] + 1.0
+    dy = ocat['y'] - icat['y'] + 1.0
+    ax.plot(dx, dy, 'o')
+    ax.set_xlabel('$\Delta x$')
+    ax.set_ylabel('$\Delta y$')
+    txt = '$\mu_x, \sigma_x=${:3.2f}, {:3.2f}\n$\mu_y, \sigma_y=${:3.2f}, {:3.2f}'
+    ax.text(0.1, 0.9, txt.format(dx.mean(), dx.std(), dy.mean(), dy.std()),
+            transform=ax.transAxes)
+
+    vals = icat['mag'], ratio - ratio.mean(), dy - dy.mean(), dx - dx.mean()
+    labs = ['mag', 'fout/fin', '$\Delta y$', '$\Delta x$']
+    fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
+    xoff, yoff = icat['x'] % 1, icat['y'] % 1
+    for ax, v, l in zip(axes.flatten(), vals, labs):
+        c = ax.scatter(xoff, yoff, c=v, cmap='RdBu')
+        cbar = fig.colorbar(c, ax=ax)
+        cbar.ax.set_title(l)
+    #ax.scatter(dx, dy, c=ratio)
+        ax.set_xlabel('$\delta x$')
+        ax.set_ylabel('$\delta y$')
+
+    c = ax.scatter(dx, dy, c=ratio-ratio.mean(), cmap='RdBu')
+        
+    pl.show()
