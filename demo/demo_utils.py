@@ -1,6 +1,6 @@
 import numpy as np
 from forcepho.likelihood import model_image
-from forcepho.gaussmodel import PostageStamp
+from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
 
 

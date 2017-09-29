@@ -4,9 +4,8 @@
 import numpy as np
 
 __all__ = ["ImageGaussian", "Star", "Galaxy", "GaussianImageGalaxy",
-           "PostageStamp",
-           "convert_to_gaussians", "get_gaussian_gradients", "compute_gaussian"]
-
+           "convert_to_gaussians", "get_gaussian_gradients",
+           "compute_gaussian"]
 
 
 class ImageGaussian(object):
@@ -34,6 +33,9 @@ class ImageGaussian(object):
     
 
 class Star(object):
+    """This is a represenation of a point source in terms of Scene (on-sky)
+    parameters
+    """
 
     id = 0
     fixed = False
@@ -84,15 +86,18 @@ class Star(object):
 
     
 class Galaxy(object):
-    """Parameters describing a galaxy in the celestial plane (i.e. the Scene parameters)
-    For each galaxy there are 7 parameters.
-    * flux: total flux
-    * ra: right ascension (degrees)
-    * dec: declination (degrees)
-    * q, pa: axis ratio and position angle (might be parameterized differently)
-    * n: sersic index
-    * r: half-light radius (arcsec)
-    
+    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
+    For each galaxy there are 7 parameters:
+      * flux: total flux
+      * ra: right ascension (degrees)
+      * dec: declination (degrees)
+      * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
+      * n: sersic index
+      * r: half-light radius (arcsec)
+
+    Methods are provided to return the amplitudes and covariance matrices of
+    the constituent gaussians, as well as derivatives of the amplitudes with
+    respect to sersic index and half light radius.
     """
     id = 0
     fixed = False
@@ -111,7 +116,8 @@ class Galaxy(object):
     @property
     def amplitudes(self):
         """Code here for getting amplitudes from a splined look-up table
-        (dependent on self.n and self.r)
+        (dependent on self.n and self.r).  Placeholder code gives them all
+        equal amplitudes.
         """
         return np.ones(self.ngauss) / (self.ngauss * 1.0)
 
@@ -134,7 +140,8 @@ class Galaxy(object):
     
     @property
     def covariances(self):
-        """This just constructs a set of covariance matrices based on the radii
+        """This just constructs a set of covariance matrices based on the fixed
+        radii used in approximating the galaxies.
         """
         # ngauss x 2 x 2
         # this has no derivatives, since the radii are fixed.
@@ -142,7 +149,7 @@ class Galaxy(object):
 
 
 class GaussianImageGalaxy(object):
-    """ A list of gaussians corresponding to one galaxy, after image
+    """ A list of ImageGaussians corresponding to one galaxy, after image
     distortions, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++
     code.
     """
@@ -152,51 +159,21 @@ class GaussianImageGalaxy(object):
         self.id = id
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
 
-    
-class PostageStamp(object):
-    """A list of pixel values and locations, along with the distortion matrix,
-    astrometry, and PSF.
-
-    The astrometry is such that 
-    :math:`x = D \, (c - c_0) + x_0`
-    where x_0 are the reference pixel coordinates, c_0 are the reference pixel
-    *celestial* coordinates (in degrees of RA and Dec), and D is the
-    distortion_matrix.
-    """
-
-    id = 1
-
-    # Size of the stamp
-    nx = 100
-    ny = 100
-    npix = 100 * 100
-
-    # The distortion matrix D
-    distortion = np.eye(2)
-    # The sky coordinates of the reference pixel
-    crval = np.zeros([2])
-    # The pixel coordinates of the reference pixel
-    crpix = np.zeros([2])
-
-    # The point spread function
-    #psf = PointSpreadFunction()
-
-    # The pixel values and residuals
-    pixel_value = np.zeros([nx, ny])
-    residual = np.zeros([nx, ny])
-    ierr = np.zeros([nx, ny])
-
-    def sky_to_pix(self, sky):
-        pix = np.dot(self.distortion, sky - self.crval) + self.crpix
-        return pix
-
-    def pix_to_sky(self, pix):
-        pass
-
 
 def convert_to_gaussians(galaxy, stamp):
-    """Takes the galaxy parameters into a set of ImagePlaneGaussians,
-    including PSF, and keeping track of the dGaussian_dScene
+    """Takes a set of source parameters into a set of ImagePlaneGaussians,
+    including PSF, and keeping track of the dGaussian_dScene.
+
+    :param galaxy:
+        A Galaxy() or Star() instance, with the proper parameters.
+
+    :param stamp:
+        A PostageStamp() instance, with a valid PointSpreadFunction and
+        distortion matrix.
+
+    :returns gig:
+       An instance of GaussianImageGalaxy, containing an array of
+       ImageGaussians.
     """
     # Get the transformation matrix
     D = stamp.distortion
@@ -244,6 +221,26 @@ def convert_to_gaussians(galaxy, stamp):
 
 
 def get_gaussian_gradients(galaxy, stamp, gig):
+    """Compute the Jacobian for dphi_i/dtheta_j where phi are the parameters of
+    the Image Gaussian and theta are the parameters of the Source in the Scene.
+
+    :param galaxy:
+        A source like a Galaxy() or a Star()
+
+    :param stamp:
+        An instance of PostageStamp with distortion matrix and valid
+        PointSpreadFunction.
+
+    :param gig:
+        The `GaussianImageGalaxy` instance that resulted from
+        `convert_to_gaussian(galaxy, stamp)`.  This is necessary only because
+        the computed Jacobians will be assigned to the `deriv` attribute of
+        each `ImageGaussian` in the `GaussianImageGalaxy`.
+
+    :returns gig:
+        The same as the input `gig`, but with the computed Jacobians assigned
+        to the `deriv` attribute of each of the consitituent `ImageGaussian`s
+    """
     # Get the transformation matrix
     D = stamp.distortion
     R = rotation_matrix(galaxy.pa)
@@ -366,8 +363,8 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
     if oversample:
         xoff = np.array([0.25, -0.25, -0.25, 0.25])
         yoff = np.array([0.25, 0.25, -0.25, -0.25])
-        xp = xpix[..., None] + xoff[..., :]
-        yp = ypix[..., None] + yoff[..., :]
+        xp = np.array(xpix)[..., None] + xoff[..., :]
+        yp = np.array(ypix)[..., None] + yoff[..., :]
     else:
         xp = xpix
         yp = ypix

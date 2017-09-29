@@ -8,7 +8,8 @@ import astropy.io.fits as fits
 from astropy import wcs
 
 from forcepho import psf as pointspread
-from forcepho.gaussmodel import PostageStamp, Star
+from forcepho.gaussmodel import Star
+from forcepho.data import PostageStamp
 from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
 

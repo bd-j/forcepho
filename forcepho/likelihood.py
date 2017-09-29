@@ -7,6 +7,7 @@ __all__ = ["lnlike", "model_image", "evaluate_gig",
 
 
 def set_star_params(source, theta):
+    "Unused"
     flux, ra, dec = theta
     source.ra = ra
     source.dec = dec
@@ -36,6 +37,23 @@ def model_image(thetas, sources, stamp, use_gradients=slice(None), **extras):
     """Loop over all sources in a scene, subtracting each from the image and
     building up a gradient cube.  Eventually everything interior to this should
     be moved to C++, since the loop is very slow.
+
+    :param thetas:
+        The parameter vectors for the sources.  Iterable of length `nsource`.
+        Each parameter vector must be of length 7.
+
+    :param sources:
+        The source objects.  Iterable of length `nsource`
+
+    :param stamp:
+        The PostageStamp containing the image data and from which sources will
+        be subtracted to build up the residual.
+
+    :param use_gradients:
+        This is a set of indices (or slice object) that index the gradients you
+        actually want to use.  All 7 gradients are always calculated for every
+        source, but e.g. for stars you only care about 3 of them, or if some
+        parameters are fixed you don't care about their gradients.
 
     :returns residual:
         ndarray of shape (npix,).  This is the result of *subtracting* all the

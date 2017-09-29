@@ -1,3 +1,7 @@
+# --------
+# Script to fit the F090W PSF with a mixture of gaussians using EM
+# --------
+
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.cm import get_cmap

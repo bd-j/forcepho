@@ -4,6 +4,9 @@ from astropy.io import fits
 from astropy import wcs
 
 
+__all__ = ["PostageStamp", "TanWCS"]
+
+
 class TanWCS(object):
     """Class to make various (non-linear) transformations between coordinate systems as
     defined in FITS Paper I and Paper II for TAN (gnomic) projections.
@@ -36,6 +39,7 @@ class TanWCS(object):
         r32 = np.sin(alpha_p) * np.cos(alpha_p)
         r33 = np.sin(delta_p)
 
+        # This has the property that R^{-1} = R^T
         self.sphere_rot = np.array([[r11, r12, r13],
                                     [r21, r22, r23],
                                     [r31, r32, r33]])
