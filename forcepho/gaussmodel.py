@@ -3,6 +3,7 @@
 
 import numpy as np
 
+
 __all__ = ["ImageGaussian", "Star", "Galaxy", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
            "compute_gaussian"]
@@ -30,7 +31,7 @@ class ImageGaussian(object):
     # derivs = [dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh, D.flatten(), dF_dq.flat[inds], dF_dpa.flat[inds]]
     derivs = None  # this is the dGaussian_dScene Jacobian matrix, possibly in a sparse format
     #float dGaussian_dScene[NDERIV];
-    
+
 
 class Star(object):
     """This is a represenation of a point source in terms of Scene (on-sky)
@@ -53,7 +54,7 @@ class Star(object):
 
     def __init__(self):
         pass
-    
+
     @property
     def covariances(self):
         """This just constructs a set of covariance matrices based on the radii
@@ -84,7 +85,7 @@ class Star(object):
         # ngauss array of da/dr
         return np.zeros(1)
 
-    
+
 class Galaxy(object):
     """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
     For each galaxy there are 7 parameters:
@@ -137,7 +138,6 @@ class Galaxy(object):
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
 
-    
     @property
     def covariances(self):
         """This just constructs a set of covariance matrices based on the fixed
@@ -198,7 +198,7 @@ def convert_to_gaussians(galaxy, stamp):
         for j in range(stamp.psf.ngauss):
             gauss = ImageGaussian()
             gauss.id = (galaxy.id, stamp.id, i, j)
-            
+
             # Convolve the jth Galaxy component with the ith PSF component
 
             # Covariance matrix
@@ -265,7 +265,7 @@ def get_gaussian_gradients(galaxy, stamp, gig):
             detF = np.linalg.det(F)
             am, al = galaxy.amplitudes[i], stamp.psf.amplitudes[j]
             K = galaxy.flux * am * al * detF**(0.5) / (2 * np.pi)
-            
+
             # Now get derivatives
             # Of F
             dSigma_dq = (np.matmul(T, np.matmul(gcovar, dT_dq.T)) +
@@ -287,10 +287,10 @@ def get_gaussian_gradients(galaxy, stamp, gig):
             # Add derivatives to gaussians
             # As a list of just nonzero
             inds = [0, 1, 3] # slice into a flattened symmetric matrix to get unique components
-            derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] + 
-                       D.flatten().tolist() +
-                       dF_dq.flat[inds].tolist() +
-                       dF_dpa.flat[inds].tolist())
+            derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] +
+                      D.flatten().tolist() +
+                      dF_dq.flat[inds].tolist() +
+                      dF_dpa.flat[inds].tolist())
             # as the 7 x 6 jacobian matrix
             # each row is a different theta and has
             # dA/dtheta, dx/dtheta, dy/dtheta, dFxx/dtheta, dFyy/dtheta, dFxy/dtheta
@@ -314,7 +314,7 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
     the gradients with respect to the 6 input terms.  Like `computeGaussian`
     and `computeGaussianDeriv` in the C++ code.
 
-    :param g: 
+    :param g:
         An ImageGaussian() instance, or an object that has the attributes
         `xcen`, `ycen`, `amp`, `fxx`, `fyy` and `fxy`.
 

@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF.
     """
@@ -25,7 +24,7 @@ def make_psf(answer, **kwargs):
     psf.covariances = np.array(cov)
 
     return psf
-    
+
 
 def params_to_gauss(answer, oversample=8, start=0, center=504):
     """Convert the fitted parameters to the parameters used in the PSF gaussian mixture.
@@ -49,7 +48,7 @@ def params_to_gauss(answer, oversample=8, start=0, center=504):
         in (detector pixels)^2
 
     :returns amp:
-    
+        The amplitude of the gaussians
     """
     params = answer['fitted_params'].copy()
     ngauss = len(params) / 6
@@ -75,7 +74,7 @@ def mvn_pdf(pos_x, pos_y, params):
     return A * np.exp(exparg)
 
 
-def mvn_pdf_2d(params, x_max, y_max): # 0,1,...,x_max-1
+def mvn_pdf_2d(params, x_max, y_max):  # 0,1,...,x_max-1
     pos_x_range = np.arange(x_max)
     pos_y_range = np.arange(y_max)
     result = mvn_pdf(pos_x_range[:, None], pos_y_range[None, :], params)

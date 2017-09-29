@@ -24,7 +24,7 @@ def set_galaxy_params(source, theta):
     source.sersic = sersic
     source.rh = rh
 
-    
+
 def lnlike(thetas, sources, stamps):
 #def lnlike(pvec, scene, stamp):
     #sources, thetas = scene.sources, scene.thetas(pvec)
@@ -84,7 +84,7 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
     """Evaluate one GaussianImageGalaxy, subtract it from the residual, and
     compute and return dResidual_dtheta
     """
-    
+
     # R is the residual
     R = stamp.residual
     dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
@@ -104,4 +104,4 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
 def work_plan(active_gigs, fixed_gigs, stamp):
     """Not actually written...
     """
-    return chisq, dchisq_dtheta, residual 
+    return chisq, dchisq_dtheta, residual

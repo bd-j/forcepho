@@ -1,7 +1,7 @@
 import numpy as np
 
 from astropy.io import fits
-from astropy import wcs
+#from astropy import wcs
 
 
 __all__ = ["PostageStamp", "TanWCS"]
