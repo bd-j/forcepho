@@ -213,24 +213,42 @@ Indeed this will be part of the definition of of coherent region of interest.
 
 The standard FITS style astrometry for such a situation \citep{greisen02} is something like
 \begin{eqnarray}
-c & = & T \, (\mu_p - \mu_0) + c_0
+z & = & T \, (\mu_p - \mu_0)
 \end{eqnarray}
-where $c$ are the celestial coordinates ($\alpha$, $\delta$),
+where $z$ are intermediate world coordinates,
 $\mu_p$ are the pixel coordinates ($x$, $y$),
-$\mu_0$ gives an image or region dependent reference pixel,
-$c_0$ are the celestial coordinates of that reference pixel,
+$\mu_0$ gives an image or region dependent reference pixel
 and $T$ is the region dependent transformation matrix (often represented in FITS headers by \texttt{CD\_ij} entries).
 $T$ need not have a determinant of 1, but it must be non-singular. 
 
 We will define
 \begin{eqnarray}
 D & = & T^{-1} \\
-\mu_p & = & D \, (c - c_0) + \mu_0 \nonumber \\
+ & = & \begin{pmatrix} \frac{\partial p_1}{\partial z_1} & \frac{\partial p_1}{\partial z_2} \\ \frac{\partial p_2}{\partial z_1} & \frac{\partial p_2}{\partial z_2 }\end{pmatrix} \\
+\mu_p & = & D \, z + \mu_0 \nonumber \\
 d & = &\sqrt{\det{D}} \nonumber
 \end{eqnarray}
 and use the matrix $D$ going forward.
 The scalar $d$ is a dilation factor, which would be important if we defined our fixed radii (or rather fixed dispersion) galaxy Gaussians  in the pixel space.
 Note that for a given subregion of a particular exposure the matrix $D$ and the reference coordinates $\mu_0$, $c_0$ are fixed.
+
+Now, we also need the transformation form celestial coordinates $c = (\alpha, delta)$ to intermediate world coordinates.
+In general this is non-linear, as the transformation itself depends on the value of $c$.
+We will write
+\begin{eqnarray}
+W & = & \begin{pmatrix} \frac{\partial z_1}{\partial \alpha} & \frac{\partial z_1}{\partial \delta} \\ \frac{\partial z_2}{\partial \alpha} & \frac{\partial z_2}{\partial \delta }\end{pmatrix}
+\end{eqnarray}
+and $W_0$ the value of this matrix at some reference position $c_0$, typically the center of a postage stamp.
+A good approximation is 
+\begin{eqnarray}
+W & = & \begin{pmatrix}  \cos(\delta_0) & 0 \\ 0& 1 \end{pmatrix} \\
+\end{eqnarray}
+Then the transformation that we need is something like
+\begin{eqnarray}
+\mu_p & = & \mu_0 + D \, W_0 \, (c-c_0) 
+\end{eqnarray}
+
+
 
 
 \subsection{Analytic convolutions and transformations to pixel space}

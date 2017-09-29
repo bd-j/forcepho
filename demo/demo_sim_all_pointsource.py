@@ -15,7 +15,7 @@ from astropy import wcs
 
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import PostageStamp, Star
-from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, chivector, make_image
+from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, chi_vector, make_image
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -66,7 +66,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     # --- Add WCS info to Stamp ---
     stamp.crpix = crpix_stamp
     stamp.crval = crval
-    stamp.distortion = distortion
+    stamp.distortion = np.linalg.inv(distortion)
     stamp.pixcenter_in_full = center
 
     # --- Add the PSF ---
@@ -88,17 +88,18 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
 
 def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
-               stamp_size=(100, 100), err_expand=1.0, jitter=0.0, use_grad=True):
+               stamp_size=(100, 100), use_grad=True,
+               err_expand=1.0, jitter=0.0, gain=np.inf):
     """
     """
     # --- Build the postage stamp ----
     stamp = make_stamp(imname, (ra, dec), stamp_size,
                        psfname=psfname, center_type='celestial')
     stamp.snr = stamp.pixel_values * stamp.ierr
-    #err_expand = stamp.snr.max() / 0.3
     stamp.ierr = stamp.ierr.flatten() / err_expand
-    stamp.ierr = 1.0 / np.sqrt(1/stamp.ierr**2 + jitter**2)
-    
+    counts = stamp.pixel_values.flatten() - stamp.pixel_values.min()
+    stamp.ierr = 1.0 / np.sqrt(1/stamp.ierr**2 + jitter**2 + counts/gain)
+
     # override the WCS so coordinates are in pixels
     # The distortion matrix D
     stamp.distortion = np.eye(2)
@@ -122,6 +123,10 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
         nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
     else:
         nll = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
+    if False:
+        nll = argfix(chi_vector, scene=scene, stamp=stamp)
+        method = 'lm'
+        use_grad = False
         
     if True:
         def callback(x):
@@ -131,7 +136,7 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
 
         # Initial and bounds
         p0 = np.array([stamp.pixel_values.sum(), stamp.nx/2, stamp.ny/2])
-        init = p0.copy()
+        p0 += np.random.normal(0., [0.1 * p0[0], 0.5, 0.5])
         bounds = [(1, 1e4), (0., stamp_size[0]), (0, stamp_size[1])]
         bounds = None
         
@@ -180,12 +185,13 @@ if __name__ == "__main__":
     pdf = PdfPages(pn)
 
     # ---- loop over things -----
-    size = np.array([20, 20])
+    size = np.array([30, 30])
     all_results, all_pos = [], []
     for i, c in enumerate(cat):
         blob = fit_source(ra=c['ra'], dec=c['dec'],
                           imname=imname, psfname=psfname,
-                          stamp_size=size, err_expand=1, jitter=1.0,
+                          stamp_size=size,
+                          err_expand=1, jitter=0.5, gain=2.0,
                           use_grad=use_grad)
 
         result, (fig, axes), vals, stamp, scene = blob
@@ -256,6 +262,11 @@ if __name__ == "__main__":
         ax.set_xlabel('$\delta x$')
         ax.set_ylabel('$\delta y$')
 
+    fig, ax = pl.subplots()
     c = ax.scatter(dx, dy, c=ratio-ratio.mean(), cmap='RdBu')
-        
+    cbar = fig.colorbar(c, ax=ax)
+    cbar.ax.set_title('fout/fin')
+
+    #ax.imshow((stamp.ierr.reshape(stamp.nx, stamp.ny) * stamp.pixel_values).T, origin='lower')
+    
     pl.show()
