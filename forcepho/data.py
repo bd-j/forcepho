@@ -7,8 +7,13 @@ __all__ = ["PostageStamp", "TanWCS"]
 
 
 class PostageStamp(object):
-    """A list of pixel values and locations, along with the scale matrix,
-    astrometry, and PSF.
+    """A list of pixel values and locations, along with the PSF, scale matrix,
+    and astrometry
+
+      * The PSF is an instance of PointSpreadFunction()
+      * The scale matrix D is defined such that :math:`p = D\, (c - c_0) + p_0`
+        where :math:`p` is the pixel position, :math:`c` are the celestial coordinates, and
+        :math:`c_0, p_0` indicate the CRVAL and CRPIX values.
     """
 
     id = 1
@@ -18,8 +23,8 @@ class PostageStamp(object):
     ny = 100
     npix = 100 * 100
 
-    # The distortion matrix D
-    distortion = np.eye(2)
+    # The scale matrix D
+    scale = np.eye(2)
     # The sky coordinates of the reference pixel
     crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
@@ -34,7 +39,7 @@ class PostageStamp(object):
     ierr = np.zeros_like(residuals)
 
     def sky_to_pix(self, sky):
-        pix = np.dot(self.distortion, sky - self.crval) + self.crpix
+        pix = np.dot(self.scale, sky - self.crval) + self.crpix
         return pix
 
     def pix_to_sky(self, pix):

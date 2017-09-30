@@ -96,8 +96,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None, offset=0.):
 
     # --- Add WCS info to Stamp ---
     # override the WCS so coordinates are in pixels
-    # The distortion matrix D
-    stamp.distortion = np.eye(2)
+    # The scale matrix D
+    stamp.scale = np.eye(2)
     # The sky coordinates of the reference pixel
     stamp.crval = np.zeros([2]) + offset
     # The pixel coordinates of the reference pixel

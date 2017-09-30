@@ -27,8 +27,8 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     hdr = fits.getheader(imname)
     crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
     crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
-    distortion = np.array([[hdr['CD1_1'], hdr['CD1_2']],
-                           [hdr['CD2_1'], hdr['CD2_2']]])
+    CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
+                   [hdr['CD2_1'], hdr['CD2_2']]])
 
     # Pull slices and transpose to get to an axis order that makes sense to me
     # and corresponds with the wcs keyword ordering
@@ -67,7 +67,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     # --- Add WCS info to Stamp ---
     stamp.crpix = crpix_stamp
     stamp.crval = crval
-    stamp.distortion = np.linalg.inv(distortion)
+    stamp.scale = np.linalg.inv(CD)
     stamp.pixcenter_in_full = center
 
     # --- Add the PSF ---
@@ -102,8 +102,8 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
     stamp.ierr = 1.0 / np.sqrt(1/stamp.ierr**2 + jitter**2 + counts/gain)
 
     # override the WCS so coordinates are in pixels
-    # The distortion matrix D
-    stamp.distortion = np.eye(2)
+    # The scale matrix D
+    stamp.scale = np.eye(2)
     # The sky coordinates of the reference pixel
     stamp.crval = np.zeros([2])
     # The pixel coordinates of the reference pixel

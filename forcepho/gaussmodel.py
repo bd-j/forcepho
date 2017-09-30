@@ -150,7 +150,7 @@ class Galaxy(object):
 
 class GaussianImageGalaxy(object):
     """ A list of ImageGaussians corresponding to one galaxy, after image
-    distortions, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++
+    scalings, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++
     code.
     """
     id = 0
@@ -169,14 +169,14 @@ def convert_to_gaussians(galaxy, stamp):
 
     :param stamp:
         A PostageStamp() instance, with a valid PointSpreadFunction and
-        distortion matrix.
+        scale matrix.
 
     :returns gig:
        An instance of GaussianImageGalaxy, containing an array of
        ImageGaussians.
     """
     # Get the transformation matrix
-    D = stamp.distortion
+    D = stamp.scale
     R = rotation_matrix(galaxy.pa)
     S = scale_matrix(galaxy.q)
     T = np.dot(D, np.dot(R, S))
@@ -228,7 +228,7 @@ def get_gaussian_gradients(galaxy, stamp, gig):
         A source like a Galaxy() or a Star()
 
     :param stamp:
-        An instance of PostageStamp with distortion matrix and valid
+        An instance of PostageStamp with scale matrix and valid
         PointSpreadFunction.
 
     :param gig:
@@ -242,7 +242,7 @@ def get_gaussian_gradients(galaxy, stamp, gig):
         to the `deriv` attribute of each of the consitituent `ImageGaussian`s
     """
     # Get the transformation matrix
-    D = stamp.distortion
+    D = stamp.scale
     R = rotation_matrix(galaxy.pa)
     S = scale_matrix(galaxy.q)
     T = np.dot(D, np.dot(R, S))
