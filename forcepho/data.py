@@ -43,7 +43,8 @@ class PostageStamp(object):
         return pix
 
     def pix_to_sky(self, pix):
-        pass
+        sky = np.dot(np.linalg.inv(self.scale), pix - self.crpix) + self.crval
+        return sky
 
 
 class SimpleWCS(object):
@@ -69,37 +70,34 @@ class SimpleWCS(object):
         self.CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
                             [hdr['CD2_1'], hdr['CD2_2']]])
         self.CDinv = np.linalg.inv(self.CD)
+        self.cosdelt0 = np.cos(np.deg2rad(self.crval[-1]))
+        self.W = np.array([[self.cosdelt0, 0],
+                           [0., 1.]])
 
     def sky_to_intermediate(self, sky):
         """This does cos(dec) correction before anything else, using the dec of
-        the input sky coordinate (possible that it's better to use the dec of
-        crval?)
+        CRVAL.  Is this right enough?
         """
-        W = np.array([[np.cos(np.deg2rad(sky[-1])), 0],
-                      [0., 1.]])
-        return np.matmul(W, sky - self.crval)
+        return np.matmul(self.W, sky - self.crval)
 
     def intermediate_to_pix(self, intermediate):
         return np.matmul(self.CDinv, intermediate)
 
     def sky_to_pix(self, sky):
-        return self.intermediate_to_pix(self.sky_to_intermediate)) + self.crpix
+        return self.intermediate_to_pix(self.sky_to_intermediate(sky)) + self.crpix
 
     def pix_to_intermediate(self, pix):
         return np.matmul(self.CD, pix - self.crpix)
 
     def intermediate_to_sky(self, intermediate):
-        Winv = np.array([[1./np.cos(np.deg2rad(sky[-1])), 0],
-                        [0., 1.]])
+        Winv = np.linalg.inv(self.W)
         return np.matmul(Winv, intermediate) + self.crval
 
     def pix_to_sky(self, pix):
         return self.intermediate_to_sky(self.pix_to_intermediate(pix))
 
     def grad_sky_to_pix(self, sky):
-        W = np.array([[np.cos(np.deg2rad(sky[-1])), 0],
-                      [0., 1.]])
-        return np.matmul(seld.CDinv, W)
+        return np.matmul(self.CDinv, self.W)
 
 
 class TanWCS(object):
@@ -224,26 +222,81 @@ class TanWCS(object):
         return np.array(W)
 
 
+def scale_at_sky(sky, wcs):
+    """Get the local linear approximation of the scale matrix at the celestial position given by sky
+    """
+    pass
+
+
+def extract_stamp(imname, center=(None, None), size=(None, None),
+                  center_type='pixels'):
+    """Make a postage stamp around the given position using the given image name
+    """
+    im = fits.getdata(imname)
+    hdr = fits.getheader(imname)
+    crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
+    crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
+    CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
+                   [hdr['CD2_1'], hdr['CD2_2']]])
+
+    # ---- Extract subarray -----
+    center = np.array(center)
+    # here we get the center coordinates in pixels (accounting for the transpose above)
+    if center_type == 'celestial':
+        world = np.append(center, 0)
+        #hdr.update(NAXIS=2)
+        ast = apy_wcs.WCS(hdr)
+        center = ast.wcs_world2pix(world[None, :], 0)[0, :2]
+    # --- here is much mystery ---
+    size = np.array(size)
+    lo, hi = (center - 0.5 * size).astype(int), (center + 0.5 * size).astype(int)
+    xinds = slice(int(lo[0]), int(hi[0]))
+    yinds = slice(int(lo[1]), int(hi[1]))
+    crpix_stamp = np.floor(0.5 * size)
+    crval_stamp = crpix_stamp + lo
+    W = np.eye(2)
+    if center_type == 'celestial':
+        crval_stamp = ast.wcs_pix2world(crval_stamp.append(0.)[None,:], 0)[0, :2]
+        W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
+
+    # --- Add image and uncertainty data to Stamp ----
+    stamp = PostageStamp()
+    stamp.pixel_values = im[xinds, yinds]
+    stamp.ierr = 1./err[xinds, yinds]
+
+    bad = ~np.isfinite(stamp.ierr)
+    stamp.pixel_values[bad] = 0.0
+    stamp.ierr[bad] = 0.0
+
+    stamp.nx, stamp.ny = stamp.pixel_values.shape
+    stamp.npix = stamp.nx * stamp.ny
+    # note the inversion of x and y order in the meshgrid call here
+    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
+
+    # --- Add WCS info to Stamp ---
+    stamp.crpix = crpix_stamp
+    stamp.crval = crval_stamp
+    stamp.scale = np.matmul(np.linalg.inv(CD), W)
+    stamp.pixcenter_in_full = center
+
+
 def test_astrometry():
+    from astropy import wcs as apy_wcs
     from astropy.io import fits
     imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
     hdr = fits.getheader(imname)
-    wcs = TanWCS(hdr)
-    px, py = 100., 200.
-    pix = array([px, py])
-    sky = np.array(wcs.pix_to_sky(pix))
-    print(pix, wcs.sky_to_pix(sky))
+    wcs = data.SimpleWCS(hdr)
+    awcs = apy_wcs.WCS(hdr)
+    pix = np.array([924., 924.])
 
-    test_sky = np.array(wcs.pix_to_sky(pix + 1.))
+    sky = wcs.pix_to_sky(pix)
+    asky = awcs.wcs_pix2world(np.append(pix, 0.)[None, :], 1)[0][:2]
+    asky0 = awcs.wcs_pix2world(np.append(pix, 0.)[None, :], 0)[0][:2]
 
-    # Do it with the full non-linear
-    true_pix = wcs.sky_to_pix(test_sky)
-    
-    # Do it with the local distortion matrix
-    W = wcs.sky_to_intermediate_gradient(sky)
-    test_pix = np.dot(wcs.CDinv, np.dot(W, test_sky - wcs.crval)) + wcs.crpix
+    rpix = wcs.sky_to_pix(sky)
+    rapix = awcs.wcs_world2pix(np.append(sky, 0.)[None, :], 1)[0][:2]
 
-    # Do it with cos(dec) approx
-    pW = np.eye(2)
-    pW[0, 0] = np.cos(np.deg2rad(sky[-1]))
-    test_pix2 = np.dot(wcs.CDinv, np.dot(pW, test_sky - wcs.crval)) + wcs.crpix
+    assert np.all(np.abs(rpix - rapix) < 0.1)
+
+    print(pix, rpix, rapix)
+    print(sky - asky)

@@ -5,7 +5,7 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 import astropy.io.fits as fits
-from astropy import wcs
+from astropy import wcs as apy_wcs
 
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import Star
@@ -35,14 +35,19 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     if center_type == 'celestial':
         world = np.append(center, 0)
         #hdr.update(NAXIS=2)
-        ast = wcs.WCS(hdr)
-        center = ast.wcs_world2pix(center[0], center[1], 0, 0)[:2]
+        ast = apy_wcs.WCS(hdr)
+        center = ast.wcs_world2pix(world[None, :], 0)[0, :2]
+    # --- here is much mystery ---
     size = np.array(size)
     lo, hi = (center - 0.5 * size).astype(int), (center + 0.5 * size).astype(int)
     xinds = slice(int(lo[0]), int(hi[0]))
     yinds = slice(int(lo[1]), int(hi[1]))
-    # only valid for simple tan plane projetcions (i.e. no distortions)
-    crpix_stamp = crpix - lo
+    crpix_stamp = np.floor(0.5 * size)
+    crval_stamp = crpix_stamp + lo
+    W = np.eye(2)
+    if center_type == 'celestial':
+        crval_stamp = ast.wcs_pix2world(crval_stamp.append(0.)[None,:], 0)[0, :2]
+        W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
     # --- Add image and uncertainty data to Stamp ----
     stamp = PostageStamp()
@@ -60,8 +65,8 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
     # --- Add WCS info to Stamp ---
     stamp.crpix = crpix_stamp
-    stamp.crval = crval
-    stamp.scale = np.linalg.inv(CD)
+    stamp.crval = crval_stamp
+    stamp.scale = np.matmul(np.linalg.inv(CD), W)
     stamp.pixcenter_in_full = center
 
     # --- Add the PSF ---
