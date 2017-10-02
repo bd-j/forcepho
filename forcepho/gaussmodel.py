@@ -47,7 +47,7 @@ class Star(object):
     flux = 0.     # flux
     ra = 0.
     dec = 0.
-    q = 1.        # axis ratio squared, i.e.  (b/a)^2
+    q = 1.        # sqrt of the axis ratio, i.e.  (b/a)^0.5
     pa = 0.       # postion angle (N of E)
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
@@ -427,7 +427,7 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
 def scale_matrix(q):
     #return np.array([[q**(-0.5), 0],
     #                [0, q**(0.5)]])
-    return np.array([[1./q, 0],  #use q=(b/a)**2
+    return np.array([[1./q, 0],  #use q=(b/a)^0.5
                     [0, q]])
 
 

@@ -40,13 +40,14 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     # --- here is much mystery ---
     size = np.array(size)
     lo, hi = (center - 0.5 * size).astype(int), (center + 0.5 * size).astype(int)
+
     xinds = slice(int(lo[0]), int(hi[0]))
     yinds = slice(int(lo[1]), int(hi[1]))
     crpix_stamp = np.floor(0.5 * size)
     crval_stamp = crpix_stamp + lo
     W = np.eye(2)
     if center_type == 'celestial':
-        crval_stamp = ast.wcs_pix2world(crval_stamp.append(0.)[None,:], 0)[0, :2]
+        crval_stamp = ast.wcs_pix2world(np.append(crval_stamp, 0.)[None,:], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
     # --- Add image and uncertainty data to Stamp ----
@@ -68,6 +69,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     stamp.crval = crval_stamp
     stamp.scale = np.matmul(np.linalg.inv(CD), W)
     stamp.pixcenter_in_full = center
+    stamp.lo = lo
 
     # --- Add the PSF ---
     if psfname is not None:
@@ -89,24 +91,27 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
 if __name__ == "__main__":
 
+    inpixels = False
     imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
     psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
 
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
     ra_init, dec_init = 53.115325, -27.803518
+    ra_init, dec_init = 53.115299, -27.803508
     # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
     stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), psfname=psfname,
                        center_type='celestial')
     stamp.ierr = stamp.ierr.flatten() / 10
 
-    # override the WCS so coordinates are in pixels
-    # The scale matrix D
-    stamp.scale = np.eye(2)
-    # The sky coordinates of the reference pixel
-    stamp.crval = np.zeros([2])
-    # The pixel coordinates of the reference pixel
-    stamp.crpix = np.zeros([2])
+    if inpixels:
+        # override the WCS so coordinates are in pixels
+        # The scale matrix D
+        stamp.scale = np.eye(2)
+        # The sky coordinates of the reference pixel
+        stamp.crval = np.zeros([2])
+        # The pixel coordinates of the reference pixel
+        stamp.crpix = np.zeros([2])
 
     # override the psf to reflect in both directions
     T = -1.0 * np.eye(2)
@@ -124,8 +129,13 @@ if __name__ == "__main__":
     #chisq_init = nll(theta_init)
 
     # --- Initialize ---
-    #theta_init = np.array([stamp.pixel_values.sum() * 0.5, stamp.nx/2, stamp.ny/2])
-    theta_init = np.array([stamp.pixel_values.sum() * 1.0, 48.1, 51.5])
+    theta_init = np.array([stamp.pixel_values.sum() * 1.0, ra_init, dec_init])
+    if inpixels:
+        world = np.array([ra_init, dec_init, 0])
+        hdr = fits.getheader(imname)
+        ast = apy_wcs.WCS(hdr)
+        center = ast.wcs_world2pix(world[None, :], 0)[0, :2] - stamp.lo
+        theta_init = np.array([stamp.pixel_values.sum() * 0.5, center[0], center[1]])
     image_init, partials = make_image(theta_init, scene, stamp)
 
     # --- Plot initial value ---
@@ -168,8 +178,9 @@ if __name__ == "__main__":
 
         p0 = theta_init.copy()
         p0[0] = 4500. #34.44
-        p0[1] = 50. #48.1
-        p0[2] = 50. #51.5
+        if inpixels:
+            p0[1] = 50. #48.1
+            p0[2] = 50. #51.5
         bounds = [(0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
@@ -191,3 +202,5 @@ if __name__ == "__main__":
             c = ax.imshow(images[k].T, origin='lower')
             pl.colorbar(c, ax=ax)
             ax.set_title(labels[k])
+
+        pl.show()

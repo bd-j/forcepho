@@ -3,7 +3,7 @@ import numpy as np
 #from astropy import wcs
 
 
-__all__ = ["PostageStamp", "TanWCS"]
+__all__ = ["PostageStamp", "SimpleWCS", "TanWCS"]
 
 
 class PostageStamp(object):

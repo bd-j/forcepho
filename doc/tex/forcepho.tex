@@ -249,6 +249,34 @@ Then the transformation that we need is something like
 \end{eqnarray}
 
 
+\subsection{Shapes}
+There's a question about how best to parameterize galaxy shapes.
+We have already addressed the overall scale by including $r_h$ as a parameter controlling the amplitudes in our Gaussian mixture Sersic approximation.
+Now we consider the two other common parameters, axis ratio $q=\frac{b}{a}$ (or inclination angle $\theta$) and position angle $\varphi$.
+These can be described by rotation and scaling matrices
+\begin{eqnarray}
+R & = & \begin{pmatrix} \cos (\varphi) & -\sin(\varphi)\\ \sin(\varphi) & \cos(\varphi)\end{pmatrix} \\
+S & = & \begin{pmatrix} \frac{1}{\sqrt{q}} & 0 \\ 0 & \sqrt{q}\end{pmatrix}
+\end{eqnarray}
+where we have used $\sqrt{q}$ so that$\det{S}=1$.
+These transformations have the problem that the position angle becomes unconstrained as $q$ goes to 1 (or $\theta$ goes to zero).
+It is possible to reparameterize in terms of Cartesian coordinates of a normal vector in 3D space.
+Since we are not concerned in these transformations with the radius we can fix it at 1, yielding the following useful conversions.
+\begin{eqnarray}
+\hat{n} & = & n_x\, \hat{x} + n_y\, \hat{y} + n_z \, \hat{z} \\
+n_x & = & \sin\theta \, \cos\phi \\
+n_y & = & \sin\theta \, \sin\phi \\
+n_z & = & \cos\theta \\
+      & = & q \\
+n_y & = & \sqrt{1 - n_x^2 - n_z^2} \\
+r_{xy} & = & \sqrt{n_x^2 + n_y^2} \\
+       & = & \sin \theta \\
+\end{eqnarray}
+The transformation matrix $R\, S$ then becomes
+\begin{eqnarray}
+T & = & \frac{1}{r_{xy}}\begin{pmatrix} {n_x/\sqrt{n_z}} &  -n_y \, \sqrt{n_z}\\
+                                       {n_y/\sqrt{n_z}} & n_x \, \sqrt{n_z} \end{pmatrix} \\
+\end{eqnarray}
 
 
 \subsection{Analytic convolutions and transformations to pixel space}
@@ -314,7 +342,6 @@ We can calculate gradients of the pixel counts with respect to the  image plane 
 \frac{\partial I}{\partial F_{yy}} & = & - \frac{I \, \dy^2}{2} - \frac{A_s \, e^g}{24} \,  (1 + 2\, \dy \, V_y) \\
 \frac{\partial I}{\partial F_{xy}} & = & - {I \, \dx\, \dy} - \frac{A_s \, e^g}{24} \,  (\dy \, V_x + \dx \, V_y)
 \end{eqnarray}
-
 
 But we will also need the Jacobian to go from the image plane Gaussian parameters $\phi$ to the galaxy parameters $\theta$.
 The table below gives $\partial \phi_i / \partial \theta_j$ which can be matrix multiplied with the $\partial I / \partial \phi_i$ vector:

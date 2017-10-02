@@ -1,5 +1,7 @@
 import numpy as np
 
+__all__ = ["PoinstSpreadFunction", "make_psf"]
+
 
 class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF.
