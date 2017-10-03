@@ -92,17 +92,17 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 if __name__ == "__main__":
 
     inpixels = False
-    imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
-    psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
+    imname = os.path.join(paths.starsims, 'sim_cube_F090W_487_001.slp.fits')
+    psfname = ospath.join(paths.psfmixture, 'f090_ng6_em_random.p')
 
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
+    # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
     ra_init, dec_init = 53.115325, -27.803518
     ra_init, dec_init = 53.115299, -27.803508
-    # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
-    stamp = make_stamp(imname, (ra_init, dec_init), (100, 100), psfname=psfname,
-                       center_type='celestial')
-    stamp.ierr = stamp.ierr.flatten() / 10
+    stamp = make_stamp(imname, (ra_init, dec_init), center_type='celestial',
+                       size=(100, 100), psfname=psfname)
+    #stamp.ierr = stamp.ierr.flatten() / 10
 
     if inpixels:
         # override the WCS so coordinates are in pixels
@@ -126,7 +126,6 @@ if __name__ == "__main__":
 
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
     nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
-    #chisq_init = nll(theta_init)
 
     # --- Initialize ---
     theta_init = np.array([stamp.pixel_values.sum() * 1.0, ra_init, dec_init])
@@ -190,11 +189,9 @@ if __name__ == "__main__":
                                  options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                                  )
 
-        
-        resid, partials = make_image(result.x, scene, stamp)
+        mim, partials = make_image(result.x, scene, stamp)
         dim = stamp.pixel_values
-        mim = resid
-        
+
         fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
         images = [dim, mim, dim-mim]
         labels = ['Data', 'Model', 'Data-Model']

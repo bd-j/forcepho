@@ -2,17 +2,17 @@
 # Script to mock up an F090W pointsource and fit it.
 # ------------
 
-import sys
+import sys, os
 from copy import deepcopy
 from functools import partial as argfix
 
 import numpy as np
 import matplotlib.pyplot as pl
-import astropy.io.fits as fits
-from astropy import wcs
 
 from forcepho.gaussmodel import Star
+from forcepho import paths
 from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
+
 
 def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
 
@@ -25,6 +25,7 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
         dI_dp.append((imhi - imlo) / (dp))
 
     return np.array(dI_dp)
+
 
 def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 
@@ -55,13 +56,11 @@ def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 if __name__ == "__main__":
 
     # --- Get a postage stamp ----
-    psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
+    psfname = ospath.join(paths.psfmixture, 'f090_ng6_em_random.p')
     scene, stamp, ptrue, label = setup_scene(size=(50, 50), psfname=psfname, add_noise=True)    
 
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
-    #chisq_init = nll(theta_init)
-    
+    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)    
 
     # --- Plot a model and gradients thereof ---
     if False:
@@ -102,6 +101,7 @@ if __name__ == "__main__":
         
     # --- Chi2 on a grid -----
     if False:
+        # Needs to be debugged
         mux = np.linspace(47, 53., 100)
         muy = np.linspace(47, 53., 100)
         flux = np.linspace(3000, 5000., 10)
@@ -124,8 +124,6 @@ if __name__ == "__main__":
             print(x, nll(x))
 
         p0 = ptrue.copy() #* 1.04
-        #p0[0] *= 1.0
-        #p0[1] += 3
         p0 *= 1.1
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
@@ -146,4 +144,3 @@ if __name__ == "__main__":
             c = ax.imshow(images[k].T, origin='lower')
             pl.colorbar(c, ax=ax)
             ax.set_title(labels[k])
-        

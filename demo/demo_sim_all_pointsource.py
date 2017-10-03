@@ -2,17 +2,16 @@
 # Script to fit many point sources in a single image using multiple postage stamps
 #-----------
 
-import sys
-
-from copy import deepcopy
+import sys, os
 from functools import partial as argfix
+
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
-
 import astropy.io.fits as fits
 from astropy import wcs
 
+from forcepho import paths
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import Star
 from forcepho.data import PostageStamp
@@ -166,9 +165,9 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
 
 if __name__ == "__main__":
 
-    imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
-    psfname = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/f090_ng6_em_random.p'
-    catname = '/Users/bjohnson/Projects/nircam/mocks/image/star/stars_f090w.cat'
+    imname = os.path.join(paths.starsims, 'sim_cube_F090W_487_001.slp.fits')
+    psfname = os.path.join(paths.psfmixtures, 'f090_ng6_em_random.p')
+    catname = os.path.join(paths.starsims, 'stars_f090w.cat'
 
     # ---- Read the input catalog -----
     dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])

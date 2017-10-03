@@ -3,7 +3,7 @@
 # PSFs
 # ---------
 
-import sys
+import sys, os
 from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
@@ -76,8 +76,6 @@ if __name__ == "__main__":
     # Set up likelihoods
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
     nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
-
-    #sys.exit()
 
     # --- Chi2 on a grid ------
     # needs to be debugged
