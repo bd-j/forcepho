@@ -12,7 +12,7 @@ from astropy.io import fits as pyfits
 
 from .gaussian_psf import fit_mvn_mix
 from ..psf import params_to_gauss
-
+from ..paths import psfims
 
 def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
     from matplotlib.patches import Ellipse
@@ -48,7 +48,7 @@ def radial_profile(answer, ax, center):
 
 if __name__ == "__main__":
 
-    psfname = "/Users/bjohnson/Projects/nircam/mocks/image/psfs/PSF_NIRCam_F090W.fits"
+    psfname = "{}/psfs/PSF_NIRCam_F090W.fits".format(psfims)
     band = 'f090w'
     # read in the psf and normalize it
     data = np.array(pyfits.getdata(psfname))

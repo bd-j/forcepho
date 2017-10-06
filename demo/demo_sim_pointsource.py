@@ -1,3 +1,7 @@
+# ----------
+# Script to fit a single point source in a single Guitarra simulated image.
+#-----------
+
 import sys
 from copy import deepcopy
 from functools import partial as argfix
@@ -7,6 +11,7 @@ import matplotlib.pyplot as pl
 import astropy.io.fits as fits
 from astropy import wcs as apy_wcs
 
+from forcepho import paths
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import Star
 from forcepho.data import PostageStamp
@@ -34,13 +39,11 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     # here we get the center coordinates in pixels (accounting for the transpose above)
     if center_type == 'celestial':
         world = np.append(center, 0)
-        #hdr.update(NAXIS=2)
         ast = apy_wcs.WCS(hdr)
         center = ast.wcs_world2pix(world[None, :], 0)[0, :2]
-    # --- here is much mystery ---
+    # here is much mystery ---
     size = np.array(size)
     lo, hi = (center - 0.5 * size).astype(int), (center + 0.5 * size).astype(int)
-
     xinds = slice(int(lo[0]), int(hi[0]))
     yinds = slice(int(lo[1]), int(hi[1]))
     crpix_stamp = np.floor(0.5 * size)
@@ -165,7 +168,6 @@ if __name__ == "__main__":
                 for k, f in enumerate(flux):
                     theta = np.array([f, x, y])
                     chi2[i,j,k] = nll(theta)[0]
-
         sys.exit()
 
 

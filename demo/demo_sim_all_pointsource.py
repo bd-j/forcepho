@@ -1,5 +1,6 @@
 # ----------
-# Script to fit many point sources in a single image using multiple postage stamps
+# Script to fit many point sources in a single Guitarra simulated image using
+# multiple postage stamps
 #-----------
 
 import sys, os

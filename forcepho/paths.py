@@ -8,9 +8,9 @@ psfmixture = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/'
 
 # --------
 # Directory continaing the simulated point source images from Guitarra
-starsims = '/Users/bjohnson/Projects/nircam/mocks/image/star/'
+starsims = '/Users/bjohnson/Codes/image/forcepho/data/simage/star/'
 
 # ----------
 # Directory continaing the oversampled PSFs used in generating the
 # simulated images and fitting the gaussian mixture PSF
-psfims = '/Users/bjohnson/Projects/nircam/mocks/image/psfs/'
+psfims = '/Users/bjohnson/Codes/image/forcepho/data/simage/psfs/'
