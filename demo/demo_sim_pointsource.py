@@ -61,6 +61,7 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     bad = ~np.isfinite(stamp.ierr)
     stamp.pixel_values[bad] = 0.0
     stamp.ierr[bad] = 0.0
+    stamp.ierr = stamp.ierr.flatten()
 
     stamp.nx, stamp.ny = stamp.pixel_values.shape
     stamp.npix = stamp.nx * stamp.ny
@@ -94,15 +95,16 @@ def make_stamp(imname, center=(None, None), size=(None, None),
 
 if __name__ == "__main__":
 
-    inpixels = False
+    inpixels = False  # whether to fit in pixel coordinates or celestial coordinates
     imname = os.path.join(paths.starsims, 'sim_cube_F090W_487_001.slp.fits')
     psfname = os.path.join(paths.psfmixture, 'f090_ng6_em_random.p')
 
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole
     # add_stars     53.115299   -27.803508  1407.933314  1194.203114  18.000       4562.19      48983.13       49426
-    ra_init, dec_init = 53.115325, -27.803518
-    ra_init, dec_init = 53.115299, -27.803508
+    #ra_init, dec_init = 53.115325, -27.803518
+    # keep in mind 1pixel ~ 1e-5 degrees
+    ra_init, dec_init = 53.115295, -27.803501
     stamp = make_stamp(imname, (ra_init, dec_init), center_type='celestial',
                        size=(100, 100), psfname=psfname)
     #stamp.ierr = stamp.ierr.flatten() / 10
