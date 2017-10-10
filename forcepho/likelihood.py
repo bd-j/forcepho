@@ -104,20 +104,23 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
 
 class WorkPlan(object):
 
-    """This is a stand-in for a C++ WorkPlan.  It takes a PostageStamp and lists of active and fixed GaussianImageGalaxies
+    """This is a stand-in for a C++ WorkPlan.  It takes a PostageStamp and
+    lists of active and fixed GaussianImageGalaxies
     """
     
     # options for gaussmodel.compute_gaussians
     compute_keywords = {}
+    nparam = 7 # number of parameters per source
 
     def __init__(self, stamp, active, fixed=None):
         self.stamp = stamp
         self.active = active
         self.fixed = fixed
+        self.nactive = len(self.active)
 
     def reset(self):
-        self.residual = np.zeros([self.nsource, self.stamp.npix])
-        self.gradients = np.zeros([self.nsource, nparam, self.stamp.npix])
+        self.residual = np.zeros([self.nactive, self.stamp.npix])
+        self.gradients = np.zeros([self.nactive, self.nparam, self.stamp.npix])
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
@@ -146,16 +149,16 @@ class WorkPlan(object):
         self.fixed = fixed
         self.process_pixels()
         # Do all the sums over pixels (and sources) here.  This is super inefficient.
-        chi = (self.stamp.pixel_values.flatten() - self.residual.sum(axis=0)) * self.stamp.ierr
+        chi = (self.stamp.pixel_values.flatten() + self.residual.sum(axis=0)) * self.stamp.ierr
 
-        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.stamp.ierr * self.gradients, axis=-1).flatten()
+        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.stamp.ierr * self.gradients, axis=-1)
 
 
 class FastWorkPlan(WorkPlan):
 
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
-        self.gradients = np.zeros([self.nsource, nparam])
+        self.gradients = np.zeros([self.nsource, self.nparam])
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
