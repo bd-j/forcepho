@@ -2,7 +2,7 @@
 # Script to fit a single point source in a single Guitarra simulated image.
 #-----------
 
-import sys
+import sys, os
 from copy import deepcopy
 from functools import partial as argfix
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     inpixels = False
     imname = os.path.join(paths.starsims, 'sim_cube_F090W_487_001.slp.fits')
-    psfname = ospath.join(paths.psfmixture, 'f090_ng6_em_random.p')
+    psfname = os.path.join(paths.psfmixture, 'f090_ng6_em_random.p')
 
     # --- Build the postage stamp ----
     # ra_init, dec_init = 53.116342, -27.80352 # has a hole

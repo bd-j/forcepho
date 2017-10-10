@@ -33,6 +33,10 @@ class PostageStamp(object):
     # The point spread function
     #psf = PointSpreadFunction()
 
+    # The band number
+    filter = 0
+    bandname = "F090W"
+    
     # The pixel values and residuals
     pixel_value = np.zeros([nx, ny])
     residuals = np.zeros([nx * ny])

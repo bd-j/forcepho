@@ -1,5 +1,5 @@
 import numpy as np
-from . import gaussmodel as gm
+from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gaussian
 
 
 __all__ = ["lnlike", "model_image", "evaluate_gig",
@@ -70,8 +70,8 @@ def model_image(thetas, sources, stamp, use_gradients=slice(None), **extras):
 
     for i, (theta, source) in enumerate(zip(thetas, sources)):
         set_galaxy_params(source, theta)
-        gig = gm.convert_to_gaussians(source, stamp)
-        gig = gm.get_gaussian_gradients(source, stamp, gig)
+        gig = convert_to_gaussians(source, stamp)
+        gig = get_gaussian_gradients(source, stamp, gig)
         gig.ntheta = ntheta
 
         sel = slice(i * ntheta, (i+1) * ntheta)
@@ -90,7 +90,7 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
     dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
 
     for g in gig.gaussians.flat:
-        I, dI_dphi = gm.compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat, **extras)
+        I, dI_dphi = compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat, **extras)
         # Accumulate the derivatives w.r.t. theta from each gaussian
         # This matrix multiply can be optimized (many zeros in g.derivs)
         dR_dtheta += np.matmul(g.derivs, dI_dphi)[use_gradients, :]
@@ -101,7 +101,86 @@ def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
     return dR_dtheta
 
 
-def work_plan(active_gigs, fixed_gigs, stamp):
-    """Not actually written...
+
+class WorkPlan(object):
+
+    """This is a stand-in for a C++ WorkPlan.  It takes a PostageStamp and lists of active and fixed GaussianImageGalaxies
     """
-    return chisq, dchisq_dtheta, residual
+    
+    # options for gaussmodel.compute_gaussians
+    compute_keywords = {}
+
+    def __init__(self, stamp, active, fixed=None):
+        self.stamp = stamp
+        self.active = active
+        self.fixed = fixed
+
+    def reset(self):
+        self.residual = np.zeros([self.nsource, self.stamp.npix])
+        self.gradients = np.zeros([self.nsource, nparam, self.stamp.npix])
+        
+    def process_pixels(self, blockID=None, threadID=None):
+        """Here we are doing all pixels at once instead of one superpixel at a
+        time (like on a GPU)
+        """
+        for i, gig in enumerate(self.active):
+            for j, g in enumerate(gig.gaussians.flat):
+                # get the image counts and gradients for each Gaussian in a GaussianGalaxy
+                I, dI_dphi = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
+                                              **self.compute_keywords)
+                # Store the residual.  In reality we will want to sum over
+                # sources here (and divide by error) to compute chi directly
+                # and avoid huge storage.
+                self.residual[i, ...] -= I
+                # Accumulate the derivatives w.r.t. theta from each gaussian
+                # This matrix multiply can be optimized (many zeros in g.derivs)
+                # In reality we will want to multiply by chi and sum over pixels *HERE* to avoid storage
+                self.gradients[i, :, :] += np.matmul(g.derivs, dI_dphi)
+
+    def lnlike(self, active=None, fixed=None):
+        """Returns a ch^2 value and a chi^2 gradient array of shape (nsource, nparams)
+        """
+        self.reset()
+        if active is not None:
+            self.active = active
+        self.fixed = fixed
+        self.process_pixels()
+        # Do all the sums over pixels (and sources) here.  This is super inefficient.
+        chi = (self.stamp.pixel_values.flatten() - self.residual.sum(axis=0)) * self.stamp.ierr
+
+        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.stamp.ierr * self.gradients, axis=-1).flatten()
+
+
+class FastWorkPlan(WorkPlan):
+
+    def reset(self):
+        self.residual = self.stamp.pixel_values.flatten()
+        self.gradients = np.zeros([self.nsource, nparam])
+        
+    def process_pixels(self, blockID=None, threadID=None):
+        """Here we are doing all pixels at once instead of one superpixel at a
+        time (like on a GPU)
+        """
+        for i, gig in enumerate(self.active):
+            for j, g in enumerate(gig.gaussians.flat):
+                # get the image counts for each Gaussian in a GaussianGalaxy
+                self.compute_keywords['compute_deriv'] = True
+                I = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
+                                    **self.compute_keywords)
+                # Store the residual.
+                self.residual -= I
+        for i, gig in enumerate(self.active):
+            for j, g in enumerate(gig.gaussians.flat):
+
+                # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
+                # This matrix multiply can be optimized (many zeros in g.derivs)
+                 self.gradients[i, :] += (self.residual * self.ivar * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
+
+    def lnlike(self, active, fixed=None):
+        self.reset()
+        self.active = active
+        self.fixed = fixed
+        self.process_pixels()
+        chi = self.residual * self.stamp.ierr
+
+        return -0.5 * np.sum(chi*chi, axis=-1), self.gradients

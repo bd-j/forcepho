@@ -286,7 +286,7 @@ def get_gaussian_gradients(galaxy, stamp, gig):
 
             # Add derivatives to gaussians
             # As a list of just nonzero
-            inds = [0, 1, 3] # slice into a flattened symmetric matrix to get unique components
+            inds = [0, 3, 1] # slice into a flattened symmetric matrix to get unique components
             derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] +
                       D.flatten().tolist() +
                       dF_dq.flat[inds].tolist() +

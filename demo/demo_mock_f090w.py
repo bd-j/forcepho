@@ -56,7 +56,7 @@ def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 if __name__ == "__main__":
 
     # --- Get a postage stamp ----
-    psfname = ospath.join(paths.psfmixture, 'f090_ng6_em_random.p')
+    psfname = os.path.join(paths.psfmixture, 'f090_ng6_em_random.p')
     scene, stamp, ptrue, label = setup_scene(size=(50, 50), psfname=psfname, add_noise=True)    
 
     nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
@@ -124,7 +124,7 @@ if __name__ == "__main__":
             print(x, nll(x))
 
         p0 = ptrue.copy() #* 1.04
-        p0 *= 1.1
+        p0 *= 1.05
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                           options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})

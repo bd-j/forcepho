@@ -8,7 +8,7 @@ psfmixture = '/Users/bjohnson/Codes/image/forcepho/data/psf_mixtures/'
 
 # --------
 # Directory continaing the simulated point source images from Guitarra
-starsims = '/Users/bjohnson/Codes/image/forcepho/data/simage/star/'
+starsims = '/Users/bjohnson/Codes/image/forcepho/data/simage/stars/'
 
 # ----------
 # Directory continaing the oversampled PSFs used in generating the
