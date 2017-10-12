@@ -108,7 +108,7 @@ def negative_lnlike_multistamp(Theta, scene=None, stamps=None):
         print(k, inds, lnp_stamp, lnp_stamp_grad)
         lnp += lnp_stamp
         # TODO: test that flatten does the right thing here
-        lnp_grad[inds] += lnp_stamp_grad[:, scene.use_gradients].flatten() # I think flatten works correctly here
+        lnp_grad[inds] += lnp_stamp_grad[:, scene.use_gradients].flatten()
 
     return -lnp, -lnp_grad
 
