@@ -5,26 +5,15 @@
 import sys, os
 from copy import deepcopy
 from functools import partial as argfix
-
 import numpy as np
 import matplotlib.pyplot as pl
 
 from forcepho.gaussmodel import Star
 from forcepho import paths
-from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
 
-
-def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
-
-    dI_dp = []
-    for i, (p, dp) in enumerate(zip(theta0, delta)):
-        theta = theta0.copy()
-        imlo, _ = make_image(theta, scene, stamp)
-        theta[i] += dp
-        imhi, _ = make_image(theta, scene, stamp)
-        dI_dp.append((imhi - imlo) / (dp))
-
-    return np.array(dI_dp)
+from demo_utils import Scene, make_stamp, make_image
+from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
+from demo_utils import numerical_image_gradients
 
 
 def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
@@ -33,7 +22,7 @@ def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
     stamp = make_stamp(size, psfname=psfname)
 
     # --- get the Scene ---
-    scene = Scene()
+    scene = Scene(galaxy=False)
     sources = [Star()]
     scene.sources = sources
 
@@ -89,7 +78,7 @@ if __name__ == "__main__":
         image, grad = make_image(ptrue, scene, stamp)
         fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
         for i in range(3):
-            g = grad[i,:].reshape(stamp.nx, stamp.ny)
+            g = grad[i, :].reshape(stamp.nx, stamp.ny)
             c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
             fig.colorbar(c, ax=axes[i, 0])
             c = axes[i, 1].imshow(g.T, origin='lower')
@@ -144,3 +133,5 @@ if __name__ == "__main__":
             c = ax.imshow(images[k].T, origin='lower')
             pl.colorbar(c, ax=ax)
             ax.set_title(labels[k])
+
+        pl.show()

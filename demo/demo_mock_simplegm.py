@@ -8,8 +8,10 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
-from forcepho import gaussmodel as gm
-from demo_utils import Scene, make_stamp, negative_lnlike_stamp, negative_lnlike_nograd, make_image
+from forcepho.gaussmodel import Star, Galaxy
+from demo_utils import Scene, make_stamp, make_image
+from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
+from demo_utils import numerical_image_gradients
 
 
 def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
@@ -25,14 +27,15 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
     return np.array(dI_dp)
 
 
-def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(30, 30), add_noise=False):
+def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0,
+                size=(30, 30), add_noise=False):
 
 
     stamp = make_stamp(size, fwhm, offset=offset)
     
     # --- Get a Source and Scene -----
     if galaxy:
-        source = gm.Galaxy()
+        source = Galaxy()
         source.ngauss = 1
         source.radii = np.arange(source.ngauss) * 0.5 + 1.0
         source.q = 0.5
@@ -41,15 +44,13 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(30, 30), ad
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
         bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
     else:
-        source = gm.Star()
+        source = Star()
         theta = [100., 10., 10.]
         label = ['$\psi$', '$x$', '$y$']
         bounds = [(-1e6, 1e6), (-1e5, 1e5), (-1e5, 1e5)]
 
-    scene = Scene()
+    scene = Scene(galaxy=galaxy)
     scene.sources = [source]
-    scene.set_params(theta)
-
 
     # --- Generate mock  and add to stamp ---
     ptrue = np.array(theta) * fudge
@@ -70,7 +71,8 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0, size=(30, 30), ad
 if __name__ == "__main__":
 
     # Get a scene and a stamp at some parameters
-    scene, stamp, ptrue, label = setup_scene(galaxy=True, fwhm=2.0, fudge=1.25)
+    scene, stamp, ptrue, label = setup_scene(galaxy=True, fwhm=2.0, fudge=1.25,
+                                             add_noise=True)
     true_image, partials = make_image(ptrue, scene, stamp)
     
     # Set up likelihoods

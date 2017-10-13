@@ -3,7 +3,7 @@ Forcepho demos
 
 Mock data
 ---
-These demo's run on _mock_ data, where the data is generated from the same model used to fit them.
+These demos run on _mock_ data, where the data is generated from the same model used to fit them.
 
 * `demo_mock_simplegm.py` Single Gaussian source and PSF, single stamp, mock generated from model, noise optionally added.  Useful for checking gradients, basic functionality.
 
@@ -11,7 +11,7 @@ These demo's run on _mock_ data, where the data is generated from the same model
 
 Simulated data
 ----
-These demos run on _simulated_ data, which were generated using a detailed NIRCAM image simulator, Guitarra.  Thus it includes dead pixels, cosmic rays, etc.
+These demos run on _simulated_ data, which were generated using a detailed NIRCAM image simulator, Guitarra.  Thus it includes dead pixels, cosmic rays, Poisson noise etc.
 
 * `demo_sim_pointsource.py` Single point source with multi-Gaussian PSF, fit to single-exposure simulated F090W data.  Useful for checking model performance on "real" data with known inputs.
 

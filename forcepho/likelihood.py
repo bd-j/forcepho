@@ -2,104 +2,68 @@ import numpy as np
 from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gaussian
 
 
-__all__ = ["lnlike", "model_image", "evaluate_gig",
-           "set_star_params", "set_galaxy_params"]
+__all__ = ["WorkPlan", "make_workplans", "make_image",
+           "negative_lnlike_multistamp"]
 
 
-def set_star_params(source, theta):
-    "Unused"
-    flux, ra, dec = theta
-    source.ra = ra
-    source.dec = dec
-    source.flux = flux
+def negative_lnlike_multistamp(Theta, scene=None, stamps=None):
+
+    lnp = 0.0
+    lnp_grad = np.zeros(len(Theta))
+    plans, indices = make_workplans(Theta, scene, stamps)
+    for wp, inds in zip(plans, indices):
+        lnp_stamp, lnp_stamp_grad = wp.lnlike()
+        lnp += lnp_stamp
+        # TODO: test that flatten does the right thing here
+        lnp_grad[inds] += lnp_stamp_grad[:, scene.use_gradients].flatten()
+
+    return -lnp, -lnp_grad
 
 
-def set_galaxy_params(source, theta):
-    flux, ra, dec, q, pa, sersic, rh = theta
-    source.flux = flux
-    source.ra = ra
-    source.dec = dec
-    source.q = q
-    source.pa = pa
-    source.sersic = sersic
-    source.rh = rh
-
-
-def lnlike(thetas, sources, stamps):
-#def lnlike(pvec, scene, stamp):
-    #sources, thetas = scene.sources, scene.thetas(pvec)
-    residual, partials = model_image(thetas, sources, stamp)
-    chi = residual * stamp.ierr
-    return -0.5 * np.sum(chi**2), -np.sum(chi * stamp.ierr * partials, axis=-1)
-
-
-def model_image(thetas, sources, stamp, use_gradients=slice(None), **extras):
-    """Loop over all sources in a scene, subtracting each from the image and
-    building up a gradient cube.  Eventually everything interior to this should
-    be moved to C++, since the loop is very slow.
-
-    :param thetas:
-        The parameter vectors for the sources.  Iterable of length `nsource`.
-        Each parameter vector must be of length 7.
-
-    :param sources:
-        The source objects.  Iterable of length `nsource`
-
-    :param stamp:
-        The PostageStamp containing the image data and from which sources will
-        be subtracted to build up the residual.
-
-    :param use_gradients:
-        This is a set of indices (or slice object) that index the gradients you
-        actually want to use.  All 7 gradients are always calculated for every
-        source, but e.g. for stars you only care about 3 of them, or if some
-        parameters are fixed you don't care about their gradients.
-
-    :returns residual:
-        ndarray of shape (npix,).  This is the result of *subtracting* all the
-        gaussians of all the sources from the initial (input) value of
-        stamp.residual.  Thus the initial value of stamp.residual should be the
-        measured pixel values.  Note that stamp.residual will be modified.
-
-    :returns partials:
-        ndarray of shape (nsource * ntheta, npix)
+def make_workplans(Theta, scene, stamps):
     """
-    ntheta = len(thetas[0][use_gradients])
-    ngrad = len(sources) * ntheta
-    gradients = np.empty([ngrad, stamp.npix])
+    :param Theta:
+        The global theta vector
 
-    for i, (theta, source) in enumerate(zip(thetas, sources)):
-        set_galaxy_params(source, theta)
-        gig = convert_to_gaussians(source, stamp)
-        gig = get_gaussian_gradients(source, stamp, gig)
-        gig.ntheta = ntheta
+    :param scene:
+        A scene object that converts between sourceids and filters and indices in the giant Theta vector
 
-        sel = slice(i * ntheta, (i+1) * ntheta)
-        gradients[sel, :] = evaluate_gig(gig, stamp, use_gradients=use_gradients, **extras)
+    :param stamps:
+        A list of stamp objects
 
-    return stamp.residual, gradients
-
-
-def evaluate_gig(gig, stamp, use_gradients=slice(None), **extras):
-    """Evaluate one GaussianImageGalaxy, subtract it from the residual, and
-    compute and return dResidual_dtheta
+    Assumption: No two sources in a single stamp contribute to the same Theta parameter
     """
+    plans = []
+    param_indices = []
+    for k, stamp in enumerate(stamps):
+        # Create the workplan
+        active = []
+        inds = []
+        for source in scene.sources:
+            sourceinds = scene.param_indices(source.id, stamp.filter)
+            scene.set_source_params(Theta[sourceinds], source, stamp.filter)
+            gig = convert_to_gaussians(source, stamp)
+            gig = get_gaussian_gradients(source, stamp, gig)
+            active.append(gig)
+            inds += sourceinds
+        assert len(np.unique(inds)) == len(inds)
+        # TODO: don't reintialize the workplan every call
+        plans.append(WorkPlan(stamp, active))
+        param_indices.append(inds)
+        
+    return plans, param_indices
 
-    # R is the residual
-    R = stamp.residual
-    dR_dtheta = np.zeros([gig.ntheta, stamp.npix])
 
-    for g in gig.gaussians.flat:
-        I, dI_dphi = compute_gaussian(g, stamp.xpix.flat, stamp.ypix.flat, **extras)
-        # Accumulate the derivatives w.r.t. theta from each gaussian
-        # This matrix multiply can be optimized (many zeros in g.derivs)
-        dR_dtheta += np.matmul(g.derivs, dI_dphi)[use_gradients, :]
-        R -= I
+def make_image(Theta, scene, stamp, use_sources=slice(None)):
+    """This only works with WorkPlan object, not FastWorkPlan
+    """
+    plans, indices = make_workplans(Theta, scene, [stamp])
+    wp, inds = plans[0], indices[0]
+    wp.process_pixels()
+    im = -wp.residual[use_sources].sum(axis=0).reshape(stamp.nx, stamp.ny)
+    grad = wp.gradients[use_sources].sum(axis=0)[inds, :]
 
-    # since R is stored in the stamp.residuals, we need only return the
-    # derivatives for this gig
-    return dR_dtheta
-
+    return im, grad
 
 
 class WorkPlan(object):
@@ -117,6 +81,7 @@ class WorkPlan(object):
         self.active = active
         self.fixed = fixed
         self.nactive = len(self.active)
+        self.reset()
 
     def reset(self):
         self.residual = np.zeros([self.nactive, self.stamp.npix])
@@ -135,7 +100,7 @@ class WorkPlan(object):
                 # sources here (and divide by error) to compute chi directly
                 # and avoid huge storage.
                 self.residual[i, ...] -= I
-                # Accumulate the derivatives w.r.t. theta from each gaussian
+                # Accumulate the *image* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
                 # In reality we will want to multiply by chi and sum over pixels *HERE* to avoid storage
                 self.gradients[i, :, :] += np.matmul(g.derivs, dI_dphi)
@@ -154,30 +119,40 @@ class WorkPlan(object):
         return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.stamp.ierr * self.gradients, axis=-1)
 
 
-class FastWorkPlan(WorkPlan):
+    def make_image(self, use_sources=slice(None)):
+        self.process_pixels()
+        return self.residual[use_source, ...].sum(axis=0).reshape(self.stamp.nx, self.stamp.ny)
 
+
+class FastWorkPlan(WorkPlan):
+    """Like WorkPlan, but we cumulate the residuals over sources once, and cumulate chisq gradients
+    """
+    
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
         self.gradients = np.zeros([self.nsource, self.nparam])
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
-        time (like on a GPU)
+        time (like on a GPU).
         """
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians.flat):
                 # get the image counts for each Gaussian in a GaussianGalaxy
-                self.compute_keywords['compute_deriv'] = True
-                I = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
-                                    **self.compute_keywords)
+                self.compute_keywords['compute_deriv'] = False
+                self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
+                                                  **self.compute_keywords)
                 # Store the residual.
                 self.residual -= I
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians.flat):
-
+                self.compute_keywords['compute_deriv'] = True
+                # get the image gradients for each Gaussian in a GaussianGalaxy
+                I, dI_dphi = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
+                                              **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                 self.gradients[i, :] += (self.residual * self.ivar * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
+                self.gradients[i, :] += (self.residual * self.ivar * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
 
     def lnlike(self, active, fixed=None):
         self.reset()

@@ -124,7 +124,7 @@ if __name__ == "__main__":
     stamp.psf.means = np.matmul(stamp.psf.means, T)
 
     # --- get the Scene ---
-    scene = Scene()
+    scene = Scene(galaxy=False)
     sources = [Star()]
     scene.sources = sources
     label = ['flux', 'x', 'y']
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         ax = axes.flat[1]
         i = ax.imshow(image_init.T, origin='lower')
         ax.text(0.1, 0.9, 'Initial Model', transform=ax.transAxes)
-        for i, ddtheta in enumerate(partials[scene.free_inds, :]):
+        for i, ddtheta in enumerate(partials):
             ax = axes.flat[i+2]
             ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
             ax.text(0.1, 0.9, '$\partial I/\partial {}$'.format(label[i]), transform=ax.transAxes)
@@ -184,7 +184,7 @@ if __name__ == "__main__":
         if inpixels:
             p0[1] = 50. #48.1
             p0[2] = 50. #51.5
-        bounds = [(0, 1e4), (0., 100), (0, 100)]
+        bounds = [(0., 100), (0, 100), (0, 1e4)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                         options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})
