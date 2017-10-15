@@ -15,7 +15,9 @@ from forcepho import paths
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import Star
 from forcepho.data import PostageStamp
-from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, make_image
+
+from demo_utils import Scene, make_image
+from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -184,7 +186,7 @@ if __name__ == "__main__":
         if inpixels:
             p0[1] = 50. #48.1
             p0[2] = 50. #51.5
-        bounds = [(0., 100), (0, 100), (0, 1e4)]
+        bounds = [ (0, 1e4), (0., 100), (0, 100)]
         from scipy.optimize import minimize
         result = minimize(nll, p0, jac=True, bounds=None, callback=callback,
                         options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20})

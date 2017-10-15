@@ -16,7 +16,9 @@ from forcepho import paths
 from forcepho import psf as pointspread
 from forcepho.gaussmodel import Star
 from forcepho.data import PostageStamp
-from demo_utils import Scene, negative_lnlike_stamp, negative_lnlike_nograd, chi_vector, make_image
+
+from demo_utils import Scene, make_image
+from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -115,7 +117,7 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
     stamp.psf.means = np.matmul(stamp.psf.means, T)
 
     # --- get the Scene ---
-    scene = Scene()
+    scene = Scene(galaxy=False)
     sources = [Star()]
     scene.sources = sources
 
