@@ -21,7 +21,8 @@ setup(
     author="Ben Johnson",
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",
-              "forcepho.boneyard"],
+              "forcepho.boneyard",
+              "forcepho.mixtures"],
 
     license="LICENSE",
     description="Image Forward Modeling",

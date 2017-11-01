@@ -14,6 +14,7 @@ from .gaussian_psf import fit_mvn_mix
 from ..psf import params_to_gauss
 from ..paths import psfims
 
+
 def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
     from matplotlib.patches import Ellipse
 
@@ -46,18 +47,48 @@ def radial_profile(answer, ax, center):
     
 
 
-if __name__ == "__main__":
+def fit_jwst_psf(psfname, band, nmix, start=0, stop=None, nrepeat=5):
+    """Fit a JWST PSF with a gaussian mixture using EM and make pretty plots of
+    the results.  Using `start` and `stop` the fit can be made to subsections
+    of the psfimage, which will be extracted as:
+    psfdata[start:stop, start:stop]
 
-    psfname = "{}/psfs/PSF_NIRCam_F090W.fits".format(psfims)
-    band = 'f090w'
+    :param psfname:
+        Path to the FITS file containing the PSF
+
+    :param band:
+        Name of the band (e.g. 'f090w') used for writin output.
+
+    :param nmix:
+        Number of gaussian mixtures
+
+    :param start: (optional, default 0.)
+        index of the first pixel to use for a subsection of the full psf
+
+    :param stop: (optional, default None)
+       index of the last pixel to use for a subsection.  If None, then go to
+       the end of the image.
+
+    :param nrepeat:
+        The number of initial conditions, a separate fit will be run and saved
+        for each set of initial values.
+
+    :returns ans_ell_random:
+       A dictionary keyed by `nmix` containing the fitted parameters as well as
+       model and actual images.
+    """
+
+    #psfname = "{}/psfs/PSF_NIRCam_F090W.fits".format(psfims)
+    #band = 'f090w'
+
     # read in the psf and normalize it
     data = np.array(pyfits.getdata(psfname))
-    start, stop = 400, 600  # this contains about 88.5% of total flux
+    if stop is None:
+        stop = data.shape[0]
     data = data[start:stop, start:stop]
     data /= data.sum()
 
     # --- Do the fit ---
-    nmix = 6
     nrepeat = 5
     ans_all_em_random = {}
     ans_all_em_random[nmix] = fit_mvn_mix(data, nmix, method_opt='em', method_init='random',
@@ -109,3 +140,5 @@ if __name__ == "__main__":
         pl.close(fig)
 
     pdf.close()
+
+    return ans_ell_random
