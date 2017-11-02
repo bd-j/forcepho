@@ -42,8 +42,20 @@ def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
     return ax, params[:, 0]
 
 
-def radial_profile(answer, ax, center):
-    pass
+def radial_profile(data, center):
+    '''
+    Code taken from
+    https://stackoverflow.com/questions/21242011/most-efficient-way-to-calculate-radial-profile
+    already checked that it worked.
+    '''
+    y, x = np.indices((data.shape))
+    r = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+    r = r.astype(np.int)
+
+    tbin = np.bincount(r.ravel(), data.ravel())
+    nr = np.bincount(r.ravel())
+    radialprofile = tbin / nr
+    return radialprofile
     
 
 
