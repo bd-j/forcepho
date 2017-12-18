@@ -202,6 +202,7 @@ def convert_to_gaussians(galaxy, stamp):
             # Convolve the jth Galaxy component with the ith PSF component
 
             # Covariance matrix
+            # FIXME: Make sure stamp.psf.covariances are in pixel units, perhaps via multiplication by stamp.scale
             covar = gcovar[i] + stamp.psf.covariances[j]
             f = np.linalg.inv(covar)
             gauss.fxx = f[0, 0]

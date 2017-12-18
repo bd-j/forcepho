@@ -1,3 +1,8 @@
+# Classes and methods for dealing with image data as postage stamps
+
+# TODO: Make the scale matrix have units of pix/arcsec, while some other matrix is used to get dRA/dpix, dDEC/dpix
+
+
 import numpy as np
 
 #from astropy import wcs
