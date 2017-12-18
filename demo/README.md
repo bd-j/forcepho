@@ -18,3 +18,5 @@ These demos run on _simulated_ data, which were generated using a detailed NIRCA
 * `demo_sim_all_pointsource.py`  Similar to above, but loop over all point-sources in the F090W simulated image.  Each point-source gets its own stamp, and so they are still fit in a single-source, single-stamp mode.  This is useful for investigating systematics, overall performance.
 
 * `demo_sim_ps_twostamps.py`  Fit a single point-source to multiple simulated exposures in the same band.
+
+* `demo_sim_ps_twostamps_sample.py`  Same as above, but nested sampling of the posterior instead of optimization.

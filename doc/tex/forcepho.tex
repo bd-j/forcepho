@@ -480,6 +480,34 @@ In this case, instead of re-transforming the CFD draws into $R$ draws,
 we can simply reweight the draws based on the ratio of the desired p(R) to the fiducial p(R) at that $R$.
 
 
+\section{Other Codes}
+Other codes that do all or some of generative modeling of exposure level images plus inference of joint or marginalized posteriors for source parameters include
+\begin{itemize}
+% Galaxy parameteric model fitting
+\item Photo (SDSS/HSC/LSST).  Optimization of parametric models.
+\item The Tractor (DECaLs, MzLS).  Optimization (and posterior sampling) of multiband parameteric models.
+\item Celeste (SDSS)
+\item GALFIT/Gim2D
+
+% Point source fitting
+\item PCAT
+\item DAOPHOT
+\item Dolphot
+\item MOPEX
+
+% matched aperture with high-resolution galaxy template
+\item Mofongo (CANDELS, 3DHST)
+\item TPHOT (CANDELS, DEEP) 
+\item XID+ (Herschel)
+
+% Image simulation
+\item GalSim (Euclid) photon shooting
+\item UFIG photon shooting
+\item PhoSim (LSST) photon shooting
+\item Guitarra (NIRCAM) photon shooting
+
+\end{itemize}
+
 \begin{figure}
 \includegraphics[width=\textwidth]{figures/undersample.pdf}
 \caption{A demonstration of the effect of undersampling using a symmetric gaussian PSF with FWHM=1.0 native detector pixels (similar to the undersampling of the F090W PSF). The PSF is shifted 0.25 pixels in both x and y. 

@@ -166,11 +166,64 @@ def fit_source(ra=53.115325, dec=-27.803518, imname='', psfname=None,
         return result, (fig, axes), nll(result.x), stamp, scene
 
 
+def plot_residuals(fn='output_pointsource.dat',
+                   catname=os.path.join(paths.starsims, 'stars_f090w.cat')):
+    
+    dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
+    dt2 = np.dtype([(n, np.float) for n in ['id', 'x', 'y', 'counts', 'halfchisq', 'sum', 'nfev']])
+    icat = np.genfromtxt(catname, usecols=np.arange(1, 9), dtype=dt)
+    icat = icat[:100]
+    ocat = np.genfromtxt(fn, dtype=dt2)
+    ratio = (ocat['counts'] / icat['counts'])
+    
+    fig, ax = pl.subplots()
+    ax.plot(icat['counts'], ratio, 'o')
+    ax.set_xscale('log')
+    ax.set_xlabel('Input counts')
+    ax.set_ylabel('Output/Input')
+    ax.axhline(ratio.mean(), label='$\mu={:4.2f}$'.format(ratio.mean()), color='k', linestyle='--')
+    ax.axhline(ratio.mean() + ratio.std(), label='$\mu+/-\sigma, \sigma={:3.3f}$'.format(ratio.std()), color='k', linestyle=':')
+    ax.axhline(ratio.mean() - ratio.std(), color='k', linestyle=':')
+    ax.legend()
+
+
+    fig, ax = pl.subplots()
+    dx = ocat['x'] - icat['x'] + 1.0
+    dy = ocat['y'] - icat['y'] + 1.0
+    ax.plot(dx, dy, 'o')
+    ax.set_xlabel('$\Delta x$')
+    ax.set_ylabel('$\Delta y$')
+    txt = '$\mu_x, \sigma_x=${:3.2f}, {:3.2f}\n$\mu_y, \sigma_y=${:3.2f}, {:3.2f}'
+    ax.text(0.1, 0.9, txt.format(dx.mean(), dx.std(), dy.mean(), dy.std()),
+            transform=ax.transAxes)
+
+    vals = icat['mag'], ratio - ratio.mean(), dy - dy.mean(), dx - dx.mean()
+    labs = ['mag', 'fout/fin', '$\Delta y$', '$\Delta x$']
+    fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
+    xoff, yoff = icat['x'] % 1, icat['y'] % 1
+    for ax, v, l in zip(axes.flatten(), vals, labs):
+        c = ax.scatter(xoff, yoff, c=v, cmap='RdBu')
+        cbar = fig.colorbar(c, ax=ax)
+        cbar.ax.set_title(l)
+    #ax.scatter(dx, dy, c=ratio)
+        ax.set_xlabel('$\delta x$')
+        ax.set_ylabel('$\delta y$')
+
+    fig, ax = pl.subplots()
+    c = ax.scatter(dx, dy, c=ratio-ratio.mean(), cmap='RdBu')
+    cbar = fig.colorbar(c, ax=ax)
+    cbar.ax.set_title('fout/fin')
+
+    #ax.imshow((stamp.ierr.reshape(stamp.nx, stamp.ny) * stamp.pixel_values).T, origin='lower')
+    
+    pl.show()
+
+
 if __name__ == "__main__":
 
     imname = os.path.join(paths.starsims, 'sim_cube_F090W_487_001.slp.fits')
     psfname = os.path.join(paths.psfmixtures, 'f090_ng6_em_random.p')
-    catname = os.path.join(paths.starsims, 'stars_f090w.cat'
+    catname = os.path.join(paths.starsims, 'stars_f090w.cat')
 
     # ---- Read the input catalog -----
     dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
@@ -228,48 +281,4 @@ if __name__ == "__main__":
     chi2 = np.array([a.fun for a in all_results])
     pos = np.array(all_pos)
 
-    ocat = np.genfromtxt(fn, dtype=dt2)
-    icat = cat
-    ratio = (ocat['counts'] / icat['counts'])
-    
-    fig, ax = pl.subplots()
-    ax.plot(icat['counts'], ratio, 'o')
-    ax.set_xscale('log')
-    ax.set_xlabel('Input counts')
-    ax.set_ylabel('Output/Input')
-    ax.axhline(ratio.mean(), label='$\mu={:4.2f}$'.format(ratio.mean()), color='k', linestyle='--')
-    ax.axhline(ratio.mean() + ratio.std(), label='$\mu+/-\sigma, \sigma={:3.3f}$'.format(ratio.std()), color='k', linestyle=':')
-    ax.axhline(ratio.mean() - ratio.std(), color='k', linestyle=':')
-    ax.legend()
 
-
-    fig, ax = pl.subplots()
-    dx = ocat['x'] - icat['x'] + 1.0
-    dy = ocat['y'] - icat['y'] + 1.0
-    ax.plot(dx, dy, 'o')
-    ax.set_xlabel('$\Delta x$')
-    ax.set_ylabel('$\Delta y$')
-    txt = '$\mu_x, \sigma_x=${:3.2f}, {:3.2f}\n$\mu_y, \sigma_y=${:3.2f}, {:3.2f}'
-    ax.text(0.1, 0.9, txt.format(dx.mean(), dx.std(), dy.mean(), dy.std()),
-            transform=ax.transAxes)
-
-    vals = icat['mag'], ratio - ratio.mean(), dy - dy.mean(), dx - dx.mean()
-    labs = ['mag', 'fout/fin', '$\Delta y$', '$\Delta x$']
-    fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
-    xoff, yoff = icat['x'] % 1, icat['y'] % 1
-    for ax, v, l in zip(axes.flatten(), vals, labs):
-        c = ax.scatter(xoff, yoff, c=v, cmap='RdBu')
-        cbar = fig.colorbar(c, ax=ax)
-        cbar.ax.set_title(l)
-    #ax.scatter(dx, dy, c=ratio)
-        ax.set_xlabel('$\delta x$')
-        ax.set_ylabel('$\delta y$')
-
-    fig, ax = pl.subplots()
-    c = ax.scatter(dx, dy, c=ratio-ratio.mean(), cmap='RdBu')
-    cbar = fig.colorbar(c, ax=ax)
-    cbar.ax.set_title('fout/fin')
-
-    #ax.imshow((stamp.ierr.reshape(stamp.nx, stamp.ny) * stamp.pixel_values).T, origin='lower')
-    
-    pl.show()
