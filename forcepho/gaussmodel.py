@@ -85,7 +85,7 @@ def convert_to_gaussians(source, stamp):
         pmean = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
-    elif stamp.psf.units == 'pixels'
+    elif stamp.psf.units == 'pixels':
         pcovar = stamp.psf.covariances
         pmeans = stamp.psf.means
         pamps = stamp.psf.amplitudes
@@ -171,7 +171,7 @@ def get_gaussian_gradients(source, stamp, gig):
         pmean = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
-    elif stamp.psf.units == 'pixels'
+    elif stamp.psf.units == 'pixels':
         pcovar = stamp.psf.covariances
         pmeans = stamp.psf.means
         pamps = stamp.psf.amplitudes

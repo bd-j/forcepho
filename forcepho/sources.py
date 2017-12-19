@@ -195,7 +195,10 @@ class Source(object):
 
 class Star(Source):
     """This is a represenation of a point source in terms of Scene (on-sky)
-    parameters
+    parameters.  Only 3 of the 7 full Source parameters are relevant:
+      * flux: total flux
+      * ra: right ascension (degrees)
+      * dec: declination (degrees)
     """
 
     radii = np.zeros(1)
@@ -214,7 +217,7 @@ class Star(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) = nflux + 2
+        assert len(theta) == nflux + 2, "The length of the parameter vector is not appropriate for this source"
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
@@ -230,18 +233,12 @@ class Star(Source):
 
 
 class SimpleGalaxy(Source):
-    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
-    For each galaxy there are 7 parameters:
+    """Parameters describing a simple gaussian galaxy in the celestial plane (i.e. the Scene parameters)
+    Only 5 of the possible 7 Source parameters are relevant:
       * flux: total flux
       * ra: right ascension (degrees)
       * dec: declination (degrees)
       * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
-      * n: sersic index
-      * r: half-light radius (arcsec)
-
-    Methods are provided to return the amplitudes and covariance matrices of
-    the constituent gaussians, as well as derivatives of the amplitudes with
-    respect to sersic index and half light radius.
     """
 
     radii = np.ones(1)
@@ -259,7 +256,7 @@ class SimpleGalaxy(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) = nflux + 4
+        assert len(theta) == nflux + 4, "The length of the parameter vector is not appropriate for this source"
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
@@ -278,7 +275,7 @@ class SimpleGalaxy(Source):
 
 class Galaxy(Source):
     """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
-    For each galaxy there are 7 parameters:
+    All 7 Source parameters are relevant:
       * flux: total flux
       * ra: right ascension (degrees)
       * dec: declination (degrees)
@@ -311,7 +308,7 @@ class Galaxy(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) = nflux + 6
+        assert len(theta) == nflux + 6, "The length of the parameter vector is not appropriate for this source"
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]

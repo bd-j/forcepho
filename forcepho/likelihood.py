@@ -69,21 +69,22 @@ def make_image(Theta, scene, stamp, use_sources=slice(None)):
 class WorkPlan(object):
 
     """This is a stand-in for a C++ WorkPlan.  It takes a PostageStamp and
-    lists of active and fixed GaussianImageGalaxies
+    lists of active and fixed GaussianImageGalaxies.  It could probably be
+    formulated as a wrapper on a stamp.
     """
     
     # options for gaussmodel.compute_gaussians
     compute_keywords = {}
     nparam = 7 # number of parameters per source
 
-    def __init__(self, stamp, active, fixed=None):
+    def __init__(self, stamp, active=[], fixed=[]):
         self.stamp = stamp
         self.active = active
         self.fixed = fixed
         self.reset()
 
     def reset(self):
-        self.residual = np.zeros([self.nactive, self.stamp.npix])
+        self.residual = np.zeros([self.nactive + self.nfixed, self.stamp.npix])
         self.gradients = np.zeros([self.nactive, self.nparam, self.stamp.npix])
         
     def process_pixels(self, blockID=None, threadID=None):
@@ -107,15 +108,16 @@ class WorkPlan(object):
     def lnlike(self, active=None, fixed=None):
         """Returns a ch^2 value and a chi^2 gradient array of shape (nsource, nparams)
         """
-        self.reset()
         if active is not None:
             self.active = active
-        self.fixed = fixed
+        if fixed is not None:
+            self.fixed = fixed
+        self.reset()
         self.process_pixels()
         # Do all the sums over pixels (and sources) here.  This is super inefficient.
-        chi = (self.stamp.pixel_values.flatten() + self.residual.sum(axis=0)) * self.stamp.ierr
+        chi = (self.stamp.pixel_values.flatten() + self.residual.sum(axis=0)) * self.ierr
 
-        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.stamp.ierr * self.gradients, axis=-1)
+        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.ierr * self.gradients, axis=-1)
 
 
     def make_image(self, use_sources=slice(None)):
@@ -127,6 +129,14 @@ class WorkPlan(object):
     def nactive(self):
         return len(self.active)
     
+    @property
+    def nfixed(self):
+        return len(self.fixed)
+
+    @property
+    def ierr(self):
+        return self.stamp.ierr
+
 
 class FastWorkPlan(WorkPlan):
     """Like WorkPlan, but we cumulate the residuals over sources once, and cumulate chisq gradients
@@ -134,20 +144,18 @@ class FastWorkPlan(WorkPlan):
 
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
-        self.gradients = np.zeros([self.nsource, self.nparam])
+        self.gradients = np.zeros([self.nactive, self.nparam])
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
         time (like on a GPU).
         """
-        for i, gig in enumerate(self.active):
+        for i, gig in enumerate(self.active + self.fixed):
             for j, g in enumerate(gig.gaussians.flat):
                 # get the image counts for each Gaussian in a GaussianGalaxy
                 self.compute_keywords['compute_deriv'] = False
                 self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
                                                   **self.compute_keywords)
-                # Store the residual.
-                self.residual -= I
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians.flat):
                 self.compute_keywords['compute_deriv'] = True
@@ -156,13 +164,15 @@ class FastWorkPlan(WorkPlan):
                                               **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                self.gradients[i, :] += (self.residual * self.ivar * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
+                self.gradients[i, :] += (self.residual * self.ierr * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
 
     def lnlike(self, active=None, fixed=None):
+        if active is not None:
+            self.active = active
+        if fixed is not None:
+            self.fixed = fixed
         self.reset()
-        self.active = active
-        self.fixed = fixed
         self.process_pixels()
-        chi = self.residual * self.stamp.ierr
+        chi = self.residual * self.ierr
 
         return -0.5 * np.sum(chi*chi, axis=-1), self.gradients
