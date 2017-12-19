@@ -13,11 +13,11 @@ from astropy import wcs as apy_wcs
 
 from forcepho import paths
 from forcepho import psf as pointspread
-from forcepho.gaussmodel import Star
+from forcepho.sources import Star, Scene
 from forcepho.data import PostageStamp
+from forcepho.likelihood import WorkPlan, make_image
 
-from demo_utils import Scene, make_image
-from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
+from demo_utils import negative_lnlike_multi
 
 
 def make_stamp(imname, center=(None, None), size=(None, None),
@@ -55,6 +55,9 @@ def make_stamp(imname, center=(None, None), size=(None, None),
         crval_stamp = ast.wcs_pix2world(np.append(crval_stamp, 0.)[None,:], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
+
+    # --- MAKE STAMP -------
+
     # --- Add image and uncertainty data to Stamp ----
     stamp = PostageStamp()
     stamp.pixel_values = im[xinds, yinds]
@@ -73,12 +76,14 @@ def make_stamp(imname, center=(None, None), size=(None, None),
     # --- Add WCS info to Stamp ---
     stamp.crpix = crpix_stamp
     stamp.crval = crval_stamp
-    stamp.scale = np.matmul(np.linalg.inv(CD), W)
+    stamp.dpix_dsky = np.matmul(np.linalg.inv(CD), W)
+    stamp.scale = np.linalg.inv(CD * 3600.0)
     stamp.pixcenter_in_full = center
     stamp.lo = lo
 
     # --- Add the PSF ---
     if psfname is not None:
+        stamp.psfname = psfname
         import pickle
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
@@ -88,10 +93,12 @@ def make_stamp(imname, center=(None, None), size=(None, None),
         stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
     else:
         stamp.psf = pointspread.PointSpreadFunction()
-        stamp.psf.covaraniaces *= fwhm/2.355
-    
+        stamp.psf.covariances *= fwhm/2.355
+
     # --- Add extra information ---
-    stamp.full_header = dict(hdr)    
+    stamp.full_header = dict(hdr)
+    stamp.filtername = stamp.full_header["FILTER"]
+
     return stamp
 
 
@@ -115,6 +122,7 @@ if __name__ == "__main__":
         # override the WCS so coordinates are in pixels
         # The scale matrix D
         stamp.scale = np.eye(2)
+        stamp.dpix_dsky = np.eye(2)
         # The sky coordinates of the reference pixel
         stamp.crval = np.zeros([2])
         # The pixel coordinates of the reference pixel
@@ -126,13 +134,13 @@ if __name__ == "__main__":
     stamp.psf.means = np.matmul(stamp.psf.means, T)
 
     # --- get the Scene ---
-    scene = Scene(galaxy=False)
     sources = [Star()]
-    scene.sources = sources
     label = ['flux', 'x', 'y']
+    scene = Scene(sources)
+    plans = [WorkPlan(stamp)]
 
-    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
+    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
+    nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
 
     # --- Initialize ---
     theta_init = np.array([stamp.pixel_values.sum() * 1.0, ra_init, dec_init])
@@ -142,7 +150,7 @@ if __name__ == "__main__":
         ast = apy_wcs.WCS(hdr)
         center = ast.wcs_world2pix(world[None, :], 0)[0, :2] - stamp.lo
         theta_init = np.array([stamp.pixel_values.sum() * 0.5, center[0], center[1]])
-    image_init, partials = make_image(theta_init, scene, stamp)
+    image_init, partials = make_image(scene, stamp, Theta=theta_init)
 
     # --- Plot initial value ---
     if True:
@@ -195,7 +203,7 @@ if __name__ == "__main__":
                                  options={'ftol': 1e-20, 'gtol': 1e-12, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                                  )
 
-        mim, partials = make_image(result.x, scene, stamp)
+        mim, partials = make_image(scene, stamp, Theta=result.x)
         dim = stamp.pixel_values
 
         fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))

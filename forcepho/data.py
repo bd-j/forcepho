@@ -16,9 +16,10 @@ class PostageStamp(object):
     and astrometry
 
       * The PSF is an instance of PointSpreadFunction()
-      * The scale matrix D is defined such that :math:`p = D\, (c - c_0) + p_0`
+      * The `dpix_dsky` matrix D is defined such that :math:`p = D\, (c - c_0) + p_0`
         where :math:`p` is the pixel position, :math:`c` are the celestial coordinates, and
         :math:`c_0, p_0` indicate the CRVAL and CRPIX values.
+      * The `scale` matrix gives pixels per arcsec
     """
 
     id = 1

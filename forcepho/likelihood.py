@@ -61,7 +61,7 @@ def plan_sources(plan, scene):
     for j, source in enumerate(scene.sources):
         coverage = plan.stamp.coverage(source)
         if coverage <= 0:
-            # FAR AWAY
+            # OFF IMAGE
             continue
         gig = convert_to_gaussians(source, plan.stamp)
         if coverage == 1:
