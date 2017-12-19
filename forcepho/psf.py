@@ -7,12 +7,13 @@ class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF.
     """
 
-    def __init__(self):
+    def __init__(self, units='pixels'):
         self.ngauss = 1
         self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
         self.means = np.zeros([self.ngauss, 2])
         self.amplitudes = np.ones(self.ngauss)
 
+        self.units = units
 
 def make_psf(answer, **kwargs):
 

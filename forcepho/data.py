@@ -30,6 +30,8 @@ class PostageStamp(object):
 
     # The scale matrix D
     scale = np.eye(2)
+    # The matrix [dpix/dRA, dpix/dDec]
+    sky_to_pix = np.eye(2)
     # The sky coordinates of the reference pixel
     crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
@@ -38,22 +40,31 @@ class PostageStamp(object):
     # The point spread function
     #psf = PointSpreadFunction()
 
-    # The band number
-    filter = 0
-    bandname = "F090W"
-    
+    # The band name
+    filtername = "F090W"
+
+    # photometric conversion, physical to counts
+    photocounts = 1.0
+
     # The pixel values and residuals
     pixel_value = np.zeros([nx, ny])
     residuals = np.zeros([nx * ny])
     ierr = np.zeros_like(residuals)
 
     def sky_to_pix(self, sky):
-        pix = np.dot(self.scale, sky - self.crval) + self.crpix
+        pix = np.dot(self.sky_to_pix, sky - self.crval) + self.crpix
         return pix
 
     def pix_to_sky(self, pix):
-        sky = np.dot(np.linalg.inv(self.scale), pix - self.crpix) + self.crval
+        sky = np.dot(np.linalg.inv(self.sky_to_pix), pix - self.crpix) + self.crval
         return sky
+
+    def coverage(self, source):
+        """Placeholder method for determining whether a source qualifies as a
+        fittable source in the stamp (>1), a fixed source (1), or need not be
+        considered (<=0).
+        """
+        return 2
 
 
 class SimpleWCS(object):

@@ -4,7 +4,7 @@
 import numpy as np
 
 
-__all__ = ["ImageGaussian", "Star", "Galaxy", "GaussianImageGalaxy",
+__all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
            "compute_gaussian"]
 
@@ -33,121 +33,6 @@ class ImageGaussian(object):
     #float dGaussian_dScene[NDERIV];
 
 
-class Star(object):
-    """This is a represenation of a point source in terms of Scene (on-sky)
-    parameters
-    """
-
-    id = 0
-    fixed = False
-    ngauss = 1
-    radii = np.zeros(0)
-
-    # Parameters
-    flux = 0.     # flux
-    ra = 0.
-    dec = 0.
-    q = 1.        # sqrt of the axis ratio, i.e.  (b/a)^0.5
-    pa = 0.       # postion angle (N of E)
-    sersic = 0.   # sersic index
-    rh = 0.       # half light radius
-
-    def __init__(self):
-        pass
-
-    @property
-    def covariances(self):
-        """This just constructs a set of covariance matrices based on the radii
-        """
-        # ngauss x 2 x 2
-        # this has no derivatives, since the radii are fixed.
-        return np.zeros([1, 2, 2])
-
-    @property
-    def amplitudes(self):
-        """
-        """
-        return np.ones(1)
-
-    @property
-    def damplitude_dsersic(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # ngauss array of da/dn
-        return np.zeros(1)
-
-    @property
-    def damplitude_drh(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # ngauss array of da/dr
-        return np.zeros(1)
-
-
-class Galaxy(object):
-    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
-    For each galaxy there are 7 parameters:
-      * flux: total flux
-      * ra: right ascension (degrees)
-      * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
-      * n: sersic index
-      * r: half-light radius (arcsec)
-
-    Methods are provided to return the amplitudes and covariance matrices of
-    the constituent gaussians, as well as derivatives of the amplitudes with
-    respect to sersic index and half light radius.
-    """
-    id = 0
-    fixed = False
-    ngauss = 10
-    radii = np.arange(ngauss)
-
-    # Parameters
-    flux = 0.     # flux
-    ra = 0.
-    dec = 0.
-    q = 1.        # axis ratio
-    pa = 0.       # postion angle (N of E), in radians
-    sersic = 0.   # sersic index
-    rh = 0.       # half light radius
-
-    @property
-    def amplitudes(self):
-        """Code here for getting amplitudes from a splined look-up table
-        (dependent on self.n and self.r).  Placeholder code gives them all
-        equal amplitudes.
-        """
-        return np.ones(self.ngauss) / (self.ngauss * 1.0)
-
-    @property
-    def damplitude_dsersic(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # ngauss array of da/dsersic
-        return np.zeros(self.ngauss)
-
-    @property
-    def damplitude_drh(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # ngauss array of da/drh
-        return np.zeros(self.ngauss)
-
-    @property
-    def covariances(self):
-        """This just constructs a set of covariance matrices based on the fixed
-        radii used in approximating the galaxies.
-        """
-        # ngauss x 2 x 2
-        # this has no derivatives, since the radii are fixed.
-        return (self.radii**2)[:, None, None] * np.eye(2)
-
-
 class GaussianImageGalaxy(object):
     """ A list of ImageGaussians corresponding to one galaxy, after image
     scalings, PSF, and in the pixel space.  Like `GaussianGalaxy` in the c++
@@ -160,7 +45,7 @@ class GaussianImageGalaxy(object):
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
 
 
-def convert_to_gaussians(galaxy, stamp):
+def convert_to_gaussians(source, stamp):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
     including PSF, and keeping track of the dGaussian_dScene.
 
@@ -176,44 +61,61 @@ def convert_to_gaussians(galaxy, stamp):
        ImageGaussians.
     """
     # Get the transformation matrix
-    D = stamp.scale
-    R = rotation_matrix(galaxy.pa)
-    S = scale_matrix(galaxy.q)
+    D = stamp.scale  # pix/arcsec
+    R = rotation_matrix(source.pa)
+    S = scale_matrix(source.q)
     T = np.dot(D, np.dot(R, S))
 
-    # get galaxy component means, covariances, and amplitudes in the pixel space
-    gcovar = np.matmul(T, np.matmul(galaxy.covariances, T.T))
-    gamps = galaxy.amplitudes
-    gmean = stamp.sky_to_pix([galaxy.ra, galaxy.dec])
+    # get source component means, covariances, and amplitudes in the pixel space
+    scovar = np.matmul(T, np.matmul(source.covariances, T.T))
+    samps = source.amplitudes
+    smean = stamp.sky_to_pix([source.ra, source.dec])
+    flux = np.atleast_1d(source.flux)
+    if len(flux) == 1:
+        flux = flux[0]
+    else:
+        flux = flux[source.filter_index(stamp.filtername)]
+
+    # Convert flux to counts
+    flux *= stamp.photocounts
+
+    # get PSF component means and covariances in the pixel space
+    if stamp.psf.units == 'arcsec':
+        pcovar = np.matmul(D, np.matmul(stamp.psf.covariances, D.T))
+        pmean = np.matmul(D, stamp.psf.means)
+        # FIXME need to adjust amplitudes to still sum to one?
+        pamps = stamp.psf.amplitudes
+    elif stamp.psf.units == 'pixels'
+        pcovar = stamp.psf.covariances
+        pmeans = stamp.psf.means
+        pamps = stamp.psf.amplitudes
 
     # convolve with the PSF for this stamp, yield Ns x Np sets of means, covariances, and amplitudes.
-    #covar = gcovar[:, None, :, :] + stamp.psf_covar[None, :, :, :]
-    #amps = gamps[:, None] * stamp.psf_amplitudes[None, :]
-    #means = gmeans[:, None, :] + stamp.psf_means[None, :, :]
+    #covar = gcovar[:, None, :, :] + pcovar[None, :, :, :]
+    #amps = gamps[:, None] * pamps[None, :]
+    #means = gmean[None, :] + pmeans[None, :, :]
 
-    gig = GaussianImageGalaxy(galaxy.ngauss, stamp.psf.ngauss,
-                              id=(galaxy.id, stamp.id))
-    for i in range(galaxy.ngauss):
-        # gcovar = np.matmul(T, np.matmul(galaxy.covariances[i], T.T))
+    gig = GaussianImageGalaxy(source.ngauss, stamp.psf.ngauss,
+                              id=(source.id, stamp.id))
+    for i in range(source.ngauss):
+        # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
         for j in range(stamp.psf.ngauss):
             gauss = ImageGaussian()
-            gauss.id = (galaxy.id, stamp.id, i, j)
+            gauss.id = (source.id, stamp.id, i, j)
 
-            # Convolve the jth Galaxy component with the ith PSF component
+            # Convolve the jth Source component with the ith PSF component
 
             # Covariance matrix
-            # FIXME: Make sure stamp.psf.covariances are in pixel units, perhaps via multiplication by stamp.scale
-            covar = gcovar[i] + stamp.psf.covariances[j]
+            covar = scovar[i] + pcovar[j]
             f = np.linalg.inv(covar)
             gauss.fxx = f[0, 0]
             gauss.fxy = f[1, 0]
             gauss.fyy = f[1, 1]
 
             # Now get centers and amplitudes
-            # TODO: Add gain/conversion from stamp to go from physical flux to counts.
-            gauss.xcen, gauss.ycen = gmean + stamp.psf.means[j]
-            am, al = galaxy.amplitudes[i], stamp.psf.amplitudes[j]
-            gauss.amp = galaxy.flux * am * al * np.linalg.det(f)**(0.5) / (2 * np.pi)
+            gauss.xcen, gauss.ycen = smean + pmeans[j]
+            am, al = samps[i], pamps[j]
+            gauss.amp = flux * am * al * np.linalg.det(f)**(0.5) / (2 * np.pi)
 
             # And add to list of gaussians
             gig.gaussians[i, j] = gauss
@@ -221,11 +123,11 @@ def convert_to_gaussians(galaxy, stamp):
     return gig
 
 
-def get_gaussian_gradients(galaxy, stamp, gig):
+def get_gaussian_gradients(source, stamp, gig):
     """Compute the Jacobian for dphi_i/dtheta_j where phi are the parameters of
     the Image Gaussian and theta are the parameters of the Source in the Scene.
 
-    :param galaxy:
+    :param source:
         A source like a Galaxy() or a Star()
 
     :param stamp:
@@ -234,7 +136,7 @@ def get_gaussian_gradients(galaxy, stamp, gig):
 
     :param gig:
         The `GaussianImageGalaxy` instance that resulted from
-        `convert_to_gaussian(galaxy, stamp)`.  This is necessary only because
+        `convert_to_gaussian(source, stamp)`.  This is necessary only because
         the computed Jacobians will be assigned to the `deriv` attribute of
         each `ImageGaussian` in the `GaussianImageGalaxy`.
 
@@ -242,62 +144,81 @@ def get_gaussian_gradients(galaxy, stamp, gig):
         The same as the input `gig`, but with the computed Jacobians assigned
         to the `deriv` attribute of each of the consitituent `ImageGaussian`s
     """
-    # Get the transformation matrix
-    D = stamp.scale
-    R = rotation_matrix(galaxy.pa)
-    S = scale_matrix(galaxy.q)
+    # Get the transformation matrix and other conversions
+    D = stamp.scale  # pix/arcsec
+    R = rotation_matrix(source.pa)
+    S = scale_matrix(source.q)
     T = np.dot(D, np.dot(R, S))
+    CW = stamp.sky_to_pix  #dpix/dra, dpix/ddec
+    G = stamp.photocal  # physical to counts
 
-    # And its deriatives with respect to scene parameters
-    dS_dq = scale_matrix_deriv(galaxy.q)
-    dR_dpa = rotation_matrix_deriv(galaxy.pa)
+    # And its derivatives with respect to scene parameters
+    dS_dq = scale_matrix_deriv(source.q)
+    dR_dpa = rotation_matrix_deriv(source.pa)
     dT_dq = np.dot(D, np.dot(R, dS_dq))
     dT_dpa = np.dot(D, np.dot(dR_dpa, S))
 
-    for i in range(galaxy.ngauss):
-        gcovar = galaxy.covariances[i]
-        gcovar_im = np.matmul(T, np.matmul(gcovar, T.T))
-        for j in range(stamp.psf.ngauss):
-            #gaussid = (galaxy.id, stamp.id, i, j)
+    # pull the correct flux from the multiband array
+    flux = np.atleast_1d(source.flux)
+    if len(flux) == 1:
+        flux = flux[0]
+    else:
+        flux = flux[source.filter_index(stamp.filtername)]
 
-            # convolve the jth Galaxy component with the ith PSF component
-            Sigma = gcovar_im + stamp.psf.covariances[j]
+    # get PSF component means and covariances in the pixel space
+    if stamp.psf.units == 'arcsec':
+        pcovar = np.matmul(D, np.matmul(stamp.psf.covariances, D.T))
+        pmean = np.matmul(D, stamp.psf.means)
+        # FIXME need to adjust amplitudes to still sum to one?
+        pamps = stamp.psf.amplitudes
+    elif stamp.psf.units == 'pixels'
+        pcovar = stamp.psf.covariances
+        pmeans = stamp.psf.means
+        pamps = stamp.psf.amplitudes
+    
+    for i in range(source.ngauss):
+        scovar = source.covariances[i]
+        scovar_im = np.matmul(T, np.matmul(scovar, T.T))
+        for j in range(stamp.psf.ngauss):
+            #gaussid = (source.id, stamp.id, i, j)
+
+            # convolve the jth Source component with the ith PSF component
+            Sigma = scovar_im + pcovar[j]
             F = np.linalg.inv(Sigma)
             detF = np.linalg.det(F)
-            am, al = galaxy.amplitudes[i], stamp.psf.amplitudes[j]
-            K = galaxy.flux * am * al * detF**(0.5) / (2 * np.pi)
+            am, al = source.amplitudes[i], pamps[j]
+            K = flux * G * am * al * detF**(0.5) / (2 * np.pi)
 
             # Now get derivatives
             # Of F
-            dSigma_dq = (np.matmul(T, np.matmul(gcovar, dT_dq.T)) +
-                         np.matmul(dT_dq, np.matmul(gcovar, T.T)))
-            dSigma_dpa = (np.matmul(T, np.matmul(gcovar, dT_dpa.T)) +
-                          np.matmul(dT_dpa, np.matmul(gcovar, T.T)))
+            dSigma_dq = (np.matmul(T, np.matmul(scovar, dT_dq.T)) +
+                         np.matmul(dT_dq, np.matmul(scovar, T.T)))
+            dSigma_dpa = (np.matmul(T, np.matmul(scovar, dT_dpa.T)) +
+                          np.matmul(dT_dpa, np.matmul(scovar, T.T)))
             dF_dq = -np.matmul(F, np.matmul(dSigma_dq, F))  # 3
             dF_dpa = -np.matmul(F, np.matmul(dSigma_dpa, F))  # 3
             ddetF_dq = detF * np.trace(np.matmul(Sigma, dF_dq))
             ddetF_dpa = detF * np.trace(np.matmul(Sigma, dF_dpa))
             # of Amplitude
-            # TODO: Add gain/conversion from stamp to go from physical flux to counts
             dA_dq = K / (2 * detF) * ddetF_dq  # 1
             dA_dpa = K / (2 * detF) * ddetF_dpa  # 1
-            dA_dflux = K / galaxy.flux # 1
-            dA_dsersic = K / am * galaxy.damplitude_dsersic[i] # 1
-            dA_drh = K / am * galaxy.damplitude_drh[i] # 1
+            dA_dflux = K / flux # 1
+            dA_dsersic = K / am * source.damplitude_dsersic[i] # 1
+            dA_drh = K / am * source.damplitude_drh[i] # 1
 
             # Add derivatives to gaussians
             # As a list of just nonzero
             inds = [0, 3, 1] # slice into a flattened symmetric matrix to get unique components
             derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] +
-                      D.flatten().tolist() +
+                      CW.flatten().tolist() +
                       dF_dq.flat[inds].tolist() +
                       dF_dpa.flat[inds].tolist())
             # as the 7 x 6 jacobian matrix
             # each row is a different theta and has
             # dA/dtheta, dx/dtheta, dy/dtheta, dFxx/dtheta, dFyy/dtheta, dFxy/dtheta
             jac = [[dA_dflux, 0, 0, 0, 0, 0],  # d/dFlux
-                   [0, D[0, 0], D[1, 0], 0, 0, 0],  # d/dAlpha
-                   [0, D[0, 1], D[1, 1], 0, 0, 0],  # d/dDelta
+                   [0, CW[0, 0], CW[1, 0], 0, 0, 0],  # d/dAlpha
+                   [0, CW[0, 1], CW[1, 1], 0, 0, 0],  # d/dDelta
                    [dA_dq, 0, 0, dF_dq[0,0], dF_dq[1,1], dF_dq[1,0]],  # d/dQ
                    [dA_dpa, 0, 0, dF_dpa[0,0], dF_dpa[1,1], dF_dpa[1,0]],  # d/dPA
                    [dA_dsersic, 0, 0, 0, 0, 0],  # d/dSersic

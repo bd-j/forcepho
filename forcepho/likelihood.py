@@ -80,7 +80,6 @@ class WorkPlan(object):
         self.stamp = stamp
         self.active = active
         self.fixed = fixed
-        self.nactive = len(self.active)
         self.reset()
 
     def reset(self):
@@ -120,14 +119,19 @@ class WorkPlan(object):
 
 
     def make_image(self, use_sources=slice(None)):
+        self.reset()
         self.process_pixels()
-        return self.residual[use_source, ...].sum(axis=0).reshape(self.stamp.nx, self.stamp.ny)
+        return self.residual[use_sources, ...].sum(axis=0).reshape(self.stamp.nx, self.stamp.ny)
 
+    @property
+    def nactive(self):
+        return len(self.active)
+    
 
 class FastWorkPlan(WorkPlan):
     """Like WorkPlan, but we cumulate the residuals over sources once, and cumulate chisq gradients
     """
-    
+
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
         self.gradients = np.zeros([self.nsource, self.nparam])
@@ -154,7 +158,7 @@ class FastWorkPlan(WorkPlan):
                 # This matrix multiply can be optimized (many zeros in g.derivs)
                 self.gradients[i, :] += (self.residual * self.ivar * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
 
-    def lnlike(self, active, fixed=None):
+    def lnlike(self, active=None, fixed=None):
         self.reset()
         self.active = active
         self.fixed = fixed
