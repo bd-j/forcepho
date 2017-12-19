@@ -4,83 +4,12 @@ from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
 
 
-class Scene(object):
-    """The Scene holds the sources and provides the mapping between a giant 1-d
-    array of parameters and the parameters of each source in each band/image
-    """
-
-    filterloc = {'F090W': 0}
-
-    def __init__(self, galaxy=False, nfilters=1):
-
-        self.nfilters = nfilters
-        if galaxy:
-            self.nshape = 4 #ra, dec, q, pa
-            self.use_gradients = slice(0, 5)
-        else:
-            self.nshape = 2 #ra, dec
-            self.use_gradients = slice(0, 3)
-            
-    
-    def param_indices(self, sourceid, filterid):
-        """Get the indices of the relevant parameters in the giant Theta
-        vector, which is assumed to be
-        [(fluxes_1), (shape_1), (fluxes_2), (shape_2), ..., (fluxes_n), (shape_n)]
-        
-        :returns theta:
-            An array with elements [flux, (shape_params)]
-        """
-        start = sourceid * (self.nshape + self.nfilters)
-        # get all the shape parameters
-        # TODO: nshape (and use_gradients) should probably be an attribute of the source
-        inds = range(start + self.nfilters, start + self.nfilters + self.nshape)
-        # put in the flux for this source in this band
-        inds.insert(0, start + filterid)
-        return inds
-
-    def set_source_params(self, theta, source, filterid=None):
-        """Set the parameters of a source
-        """
-        t = np.array(theta).copy()
-        if len(t) == 3:
-            # Star
-            t = np.append(t, np.array([1., 0., 0., 0.]))
-        elif len(t) == 5:
-            # Galaxy
-            t = np.append(np.array(t), np.array([0., 0.]))
-        else:
-            print("theta vector {} not a valid length: {}".format(theta, len(theta)))
-        flux, ra, dec, q, pa, sersic, rh = t
-        # if allowing sources to hold the multiband fluxes you'd do this line
-        # instead.  Or something even smarter since probably want to update all
-        # sources and fluxes at once.
-        #source.flux[filterid] = flux
-        source.flux = flux
-        source.ra = ra
-        source.dec = dec
-        source.q = q
-        source.pa = pa
-        source.sersic = sersic
-        source.rh = rh
-
-    def set_params(self, Theta, filterid=0):
-        """Set all source parameters at once.
-        """
-        for source in self.sources:
-            inds = self.param_indices(source.id, filterid)
-            print(inds)
-            self.set_source_params(Theta[inds], source, filterid)
-
-
-#def negative_lnlike_stamp(theta, scene=None, stamp=None):
-#    nll, nll_grad = negative_lnlike_multistamp(theta, scene=scene, stamps=[stamp])
-#    return nll, nll_grad
-
-
-def negative_lnlike_nograd(theta, scene=None, stamp=None):
-    nll, nll_grad = negative_lnlike_multistamp(theta, scene=scene, stamps=[stamp])
-    return nll
-
+def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
+    lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
+    if grad:
+        return -lnp, -lnp_grad
+    else:
+        return -lnp
 
 def chi_vector(theta, scene=None, stamp=None):
     stamp.residual = stamp.pixel_values.flatten()
@@ -96,9 +25,9 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
     dI_dp = []
     for i, (p, dp) in enumerate(zip(theta0, delta)):
         theta = theta0.copy()
-        imlo, _ = make_image(theta, scene, stamp)
+        imlo, _ = make_image(scene, stamp, Theta=theta)
         theta[i] += dp
-        imhi, _ = make_image(theta, scene, stamp)
+        imhi, _ = make_image(scene, stamp, Theta=theta)
         dI_dp.append((imhi - imlo) / (dp))
 
     return np.array(dI_dp)

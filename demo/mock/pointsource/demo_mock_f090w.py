@@ -8,29 +8,28 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
-from forcepho.gaussmodel import Star
+from forcepho.sources import Star, Scene
 from forcepho import paths
+from forcepho.likelihood import WorkPlan, make_image
 
-from demo_utils import Scene, make_stamp, make_image
-from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
-from demo_utils import numerical_image_gradients
+from demo_utils import make_stamp, numerical_image_gradients, negative_lnlike_multi
 
 
 def setup_scene(psfname='', size=(100, 100), fudge=1.0, add_noise=False):
 
     # --- Get a postage stamp ----
     stamp = make_stamp(size, psfname=psfname)
-
+    stamp.filtername = "F090W"
+    
     # --- get the Scene ---
-    scene = Scene(galaxy=False)
-    sources = [Star()]
-    scene.sources = sources
+    source = Star(filters=["F090W"])
+    scene = Scene([source])
 
     # --- Get the mock image ----
     label = ['flux', 'x', 'y']
     theta = np.array([100., stamp.nx/2., stamp.ny/2.])
     ptrue = theta * fudge
-    stamp.pixel_values = make_image(ptrue, scene, stamp)[0]
+    stamp.pixel_values = make_image(scene, stamp, Theta=ptrue)[0]
     err = stamp.pixel_values.max() * 1e-2
     #err = np.sqrt(stamp.pixel_values.flatten())
     stamp.ierr = np.ones(stamp.npix) / err
@@ -48,13 +47,15 @@ if __name__ == "__main__":
     psfname = os.path.join(paths.psfmixture, 'f090_ng6_em_random.p')
     scene, stamp, ptrue, label = setup_scene(size=(50, 50), psfname=psfname, add_noise=True)    
 
-    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)    
+    # Set up (negative) likelihoods
+    plans = [WorkPlan(stamp)]
+    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
+    nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
 
     # --- Plot a model and gradients thereof ---
     if False:
         theta_init = ptrue * 1.05
-        image_init, partials_init = make_image(theta_init, scene, stamp)
+        image_init, partials_init = make_image(scene, stamp, Theta=theta_init)
         fig, axes = pl.subplots(3, 2, sharex=True, sharey=True)
         ax = axes.flat[0]
         i = ax.imshow(stamp.pixel_values.T, origin='lower')
@@ -69,13 +70,12 @@ if __name__ == "__main__":
         pl.show()
 
 
-
     # ---- Test Image Gradients ------
     if True:
         delta = np.ones_like(ptrue) * 1e-6
         #numerical
         grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
-        image, grad = make_image(ptrue, scene, stamp)
+        image, grad = make_image(scene, stamp, Theta=ptrue)
         fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
         for i in range(3):
             g = grad[i, :].reshape(stamp.nx, stamp.ny)
@@ -122,7 +122,7 @@ if __name__ == "__main__":
                                  options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                                  )
 
-        resid, partials = make_image(result.x, scene, stamp)
+        resid, partials = make_image(scene, stamp, Theta=result.x)
         dim = stamp.pixel_values
         mim = resid
         

@@ -9,22 +9,9 @@ import numpy as np
 import matplotlib.pyplot as pl
 
 from forcepho.sources import Star, SimpleGalaxy, Scene
-from forcepho.likelihood import WorkPlan, make_image, lnlike_multi
+from forcepho.likelihood import WorkPlan, make_image
 
-from demo_utils import make_stamp, numerical_image_gradients
-
-
-def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
-
-    dI_dp = []
-    for i, (p, dp) in enumerate(zip(theta0, delta)):
-        theta = theta0.copy()
-        imlo, _ = make_image(scene, stamp, Theta=theta)
-        theta[i] += dp
-        imhi, _ = make_image(scene, stamp, Theta=theta)
-        dI_dp.append((imhi - imlo) / (dp))
-
-    return np.array(dI_dp)
+from demo_utils import make_stamp, numerical_image_gradients, negative_lnlike_multi
 
 
 def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0,
@@ -76,12 +63,6 @@ if __name__ == "__main__":
     
     # Set up (negative) likelihoods
     plans = [WorkPlan(stamp)]
-    def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
-        lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
-        if grad:
-            return -lnp, -lnp_grad
-        else:
-            return -lnp
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
     nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
 
