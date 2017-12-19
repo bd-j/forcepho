@@ -149,8 +149,8 @@ def get_gaussian_gradients(source, stamp, gig):
     R = rotation_matrix(source.pa)
     S = scale_matrix(source.q)
     T = np.dot(D, np.dot(R, S))
-    CW = stamp.sky_to_pix  #dpix/dra, dpix/ddec
-    G = stamp.photocal  # physical to counts
+    CW = stamp.dpix_dsky  #dpix/dra, dpix/ddec
+    G = stamp.photocounts  # physical to counts
 
     # And its derivatives with respect to scene parameters
     dS_dq = scale_matrix_deriv(source.q)

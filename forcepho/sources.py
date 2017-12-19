@@ -1,5 +1,3 @@
-# Some code along the lines of what we will do in C++
-
 
 import numpy as np
 
@@ -16,62 +14,14 @@ __all__ = ["Scene", "Star", "Galaxy"]
 # ------
 
 
-def negative_lnlike_multi(Theta, scene, plans):
-    """
-    :param Theta:
-        The global theta vector
-
-    :param scene:
-        A scene object that converts between sourceids and filters and indices in the giant Theta vector
-
-    :param plans:
-        A list of WorkPlan objects (corresponding roughly to stamps)
-
-    Assumption: No two sources in a single stamp contribute to the same Theta parameter
-    """
-    scene.set_all_source_params(Theta)
-    lnp = 0.0
-    lnp_grad = np.zeros_like(Theta)
-    
-    for k, plan in enumerate(plans):
-        # Make list of all sources in the plan, keeping track of where they are
-        # in the giant Theta array and where they are the (nsource, nderiv)
-        # array of gradients
-        active, fixed = [], []
-        theta_inds, grad_inds = [], []
-        for source in scene.sources:
-            coverage = plan.stamp.coverage(source)
-            if coverage <= 0:
-                # FAR AWAY
-                continue
-            gig = convert_to_gaussians(source, plan.stamp)
-            if coverage == 1:
-                # FIXED
-                fixed.append(gig)
-                continue
-            if coverage > 1:
-                # ACTIVE
-                gig = get_gaussian_gradients(source, plan.stamp, gig)
-                active.append(gig)
-                # get indices of parameters of the source in the giant Theta array
-                theta_inds += scene.param_indices(source.id, stamp.filtername)
-                # get one-dimensional indices into the (nsource, nderiv) array of lnlike gradients
-                grad_inds += i * NDERIV + np.arange(NDERIV)[source.use_gradients]
-                i += 1
-
-        assert len(np.unique(theta_inds)) == len(theta_inds)
-        lnp_stamp, lnp_stamp_grad = plan.lnlike(active=active, fixed=fixed)
-        lnp += lnp_stamp
-        # TODO: test that flat[] does the right thing here
-        lnp_grad[theta_inds] += lnp_stamp_grad.flat[grad_inds]
-
-    return lnp, lnp_grad
-
-
 class Scene(object):
     """The Scene holds the sources and provides the mapping between a giant 1-d
     array of parameters and the parameters of each source in each band/image
     """
+
+    def __init__(self, sources=[]):
+        self.sources = sources
+        self.identify_sources()
 
     def param_indices(self, sid, filtername=None):
         """Get the indices of the relevant parameters in the giant Theta vector.
@@ -90,8 +40,9 @@ class Scene(object):
         # get all the shape parameters
         # TODO: nshape (and use_gradients) should probably be an attribute of the source
         source = self.sources[sid]
-        start = np.sum(npar_per_source)
+        start = int(np.sum(npar_per_source))
         # indices of the shape and position parameters
+        #print(start, source.nband, source.nparam)
         inds = range(start + source.nband, start + source.nparam)
         # put in the flux for this source in this band
         inds.insert(0, start + source.filter_index(filtername))
@@ -103,6 +54,10 @@ class Scene(object):
             end = start + source.nparam
             source.set_params(Theta[start:end])
             start += source.nparam
+
+    def identify_sources(self):
+        for i, source in enumerate(self.sources):
+            source.id = i
 
 
 class Source(object):

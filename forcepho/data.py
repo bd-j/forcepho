@@ -31,7 +31,7 @@ class PostageStamp(object):
     # The scale matrix D
     scale = np.eye(2)
     # The matrix [dpix/dRA, dpix/dDec]
-    sky_to_pix = np.eye(2)
+    dpix_dsky = np.eye(2)
     # The sky coordinates of the reference pixel
     crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
@@ -41,22 +41,22 @@ class PostageStamp(object):
     #psf = PointSpreadFunction()
 
     # The band name
-    filtername = "F090W"
+    filtername = "dummy"
 
     # photometric conversion, physical to counts
     photocounts = 1.0
 
     # The pixel values and residuals
-    pixel_value = np.zeros([nx, ny])
+    pixel_values = np.zeros([nx, ny])
     residuals = np.zeros([nx * ny])
     ierr = np.zeros_like(residuals)
 
     def sky_to_pix(self, sky):
-        pix = np.dot(self.sky_to_pix, sky - self.crval) + self.crpix
+        pix = np.dot(self.dpix_dsky, sky - self.crval) + self.crpix
         return pix
 
     def pix_to_sky(self, pix):
-        sky = np.dot(np.linalg.inv(self.sky_to_pix), pix - self.crpix) + self.crval
+        sky = np.dot(np.linalg.inv(self.dpix_dsky), pix - self.crpix) + self.crval
         return sky
 
     def coverage(self, source):

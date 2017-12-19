@@ -8,10 +8,10 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
-from forcepho.gaussmodel import Star, Galaxy
-from demo_utils import Scene, make_stamp, make_image
-from demo_utils import negative_lnlike_stamp, negative_lnlike_nograd
-from demo_utils import numerical_image_gradients
+from forcepho.sources import Star, SimpleGalaxy, Scene
+from forcepho.likelihood import WorkPlan, make_image, lnlike_multi
+
+from demo_utils import make_stamp, numerical_image_gradients
 
 
 def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
@@ -19,9 +19,9 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
     dI_dp = []
     for i, (p, dp) in enumerate(zip(theta0, delta)):
         theta = theta0.copy()
-        imlo, _ = make_image(theta, scene, stamp)
+        imlo, _ = make_image(scene, stamp, Theta=theta)
         theta[i] += dp
-        imhi, _ = make_image(theta, scene, stamp)
+        imhi, _ = make_image(scene, stamp, Theta=theta)
         dI_dp.append((imhi - imlo) / (dp))
 
     return np.array(dI_dp)
@@ -35,9 +35,9 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0,
     
     # --- Get a Source and Scene -----
     if galaxy:
-        source = Galaxy()
-        source.ngauss = 1
-        source.radii = np.arange(source.ngauss) * 0.5 + 1.0
+        ngauss = 1
+        source = SimpleGalaxy()
+        source.radii = np.arange(ngauss) * 0.5 + 1.0
         source.q = 0.5
         source.pa = np.deg2rad(30.)
         theta = [100., 10., 10., 0.5, np.deg2rad(10.)]
@@ -49,22 +49,21 @@ def setup_scene(galaxy=False, fudge=1.0, fwhm=1.0, offset=0.0,
         label = ['$\psi$', '$x$', '$y$']
         bounds = [(-1e6, 1e6), (-1e5, 1e5), (-1e5, 1e5)]
 
-    scene = Scene(galaxy=galaxy)
-    scene.sources = [source]
+    scene = Scene([source])
 
     # --- Generate mock  and add to stamp ---
     ptrue = np.array(theta) * fudge
-    true_image, partials = make_image(ptrue, scene, stamp)
+    true_image, partials = make_image(scene, stamp, Theta=ptrue)
     stamp.pixel_values = true_image.copy()
     err = stamp.pixel_values.max() * 1e-2
-    #err = np.sqrt(stamp.pixel_values.flatten())
+    #err = np.sqrt(err**2 + stamp.pixel_values.flatten())
+    err = np.ones(stamp.npix) * err
     stamp.ierr = np.ones(stamp.npix) / err
 
     if add_noise:
-        noise = np.random.normal(0, err, size=(stamp.nx, stamp.ny))
-        stamp.pixel_values += noise
+        noise = np.random.normal(0, err)
+        stamp.pixel_values += noise.reshape(stamp.nx, stamp.ny)
 
-    
     return scene, stamp, ptrue, label
 
 
@@ -73,27 +72,18 @@ if __name__ == "__main__":
     # Get a scene and a stamp at some parameters
     scene, stamp, ptrue, label = setup_scene(galaxy=True, fwhm=2.0, fudge=1.25,
                                              add_noise=True)
-    true_image, partials = make_image(ptrue, scene, stamp)
+    true_image, partials = make_image(scene, stamp, Theta=ptrue)
     
-    # Set up likelihoods
-    nll = argfix(negative_lnlike_stamp, scene=scene, stamp=stamp)
-    nll_nograd = argfix(negative_lnlike_nograd, scene=scene, stamp=stamp)
-
-    # --- Chi2 on a grid ------
-    # needs to be debugged
-    if False:
-        mux = np.linspace(47, 53., 100)
-        muy = np.linspace(47, 53., 100)
-        flux = np.linspace(3000, 5000., 10)
-        chi2 = np.zeros([len(mux), len(muy), len(flux)])
-
-        for i, x in enumerate(mux):
-            for j, y in enumerate(muy):
-                for k, f in enumerate(flux):
-                    theta = np.array([f, x, y])
-                    chi2[i,j,k] = nll(theta)[0]
-
-        sys.exit()
+    # Set up (negative) likelihoods
+    plans = [WorkPlan(stamp)]
+    def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
+        lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
+        if grad:
+            return -lnp, -lnp_grad
+        else:
+            return -lnp
+    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
+    nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
 
 
     # ---- Plot mock image and gradients thereof -----
@@ -116,7 +106,7 @@ if __name__ == "__main__":
         delta = np.ones_like(ptrue) * 1e-6
         #numerical
         grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
-        image, grad = make_image(ptrue, scene, stamp)
+        image, grad = make_image(scene, stamp, Theta=ptrue)
         fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
         for i in range(len(ptrue)):
             g = grad[i,:].reshape(stamp.nx, stamp.ny)
@@ -126,11 +116,12 @@ if __name__ == "__main__":
             fig.colorbar(c, ax=axes[i, 1])
             c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
             fig.colorbar(c, ax=axes[i, 2])
-            
+
         axes[0, 0].set_title('Numerical')
         axes[0, 1].set_title('Analytic')
         axes[0, 2].set_title('N - A')
-    
+
+
     # --- Optimization -----
     if True:
         p0 = ptrue.copy()
@@ -145,7 +136,7 @@ if __name__ == "__main__":
                         options={'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10., 'disp':True, 'iprint': 1, 'maxcor': 20}
                         )
 
-        resid, partials = make_image(result.x, scene, stamp)
+        resid, partials = make_image(scene, stamp, Theta=result.x)
         dim = stamp.pixel_values
         mim = resid
         

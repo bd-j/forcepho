@@ -5,22 +5,9 @@ from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_ga
 __all__ = ["WorkPlan", "make_workplans", "make_image",
            "negative_lnlike_multistamp"]
 
+NDERIV = 7
 
-def negative_lnlike_multistamp(Theta, scene=None, stamps=None):
-
-    lnp = 0.0
-    lnp_grad = np.zeros(len(Theta))
-    plans, indices = make_workplans(Theta, scene, stamps)
-    for wp, inds in zip(plans, indices):
-        lnp_stamp, lnp_stamp_grad = wp.lnlike()
-        lnp += lnp_stamp
-        # TODO: test that flatten does the right thing here
-        lnp_grad[inds] += lnp_stamp_grad[:, scene.use_gradients].flatten()
-
-    return -lnp, -lnp_grad
-
-
-def make_workplans(Theta, scene, stamps):
+def lnlike_multi(Theta, scene, plans):
     """
     :param Theta:
         The global theta vector
@@ -28,42 +15,74 @@ def make_workplans(Theta, scene, stamps):
     :param scene:
         A scene object that converts between sourceids and filters and indices in the giant Theta vector
 
-    :param stamps:
-        A list of stamp objects
+    :param plans:
+        A list of WorkPlan objects (corresponding roughly to stamps)
 
     Assumption: No two sources in a single stamp contribute to the same Theta parameter
     """
-    plans = []
-    param_indices = []
-    for k, stamp in enumerate(stamps):
-        # Create the workplan
-        active = []
-        inds = []
-        for source in scene.sources:
-            sourceinds = scene.param_indices(source.id, stamp.filter)
-            scene.set_source_params(Theta[sourceinds], source, stamp.filter)
-            gig = convert_to_gaussians(source, stamp)
-            gig = get_gaussian_gradients(source, stamp, gig)
-            active.append(gig)
-            inds += sourceinds
-        assert len(np.unique(inds)) == len(inds)
-        # TODO: don't reintialize the workplan every call
-        plans.append(WorkPlan(stamp, active))
-        param_indices.append(inds)
-        
-    return plans, param_indices
+    scene.set_all_source_params(Theta)
+    lnp = 0.0
+    lnp_grad = np.zeros_like(Theta)
+    
+    for k, plan in enumerate(plans):
+        plan, theta_inds, grad_inds = plan_sources(plan, scene)
+        lnp_stamp, lnp_stamp_grad = plan.lnlike()
+        lnp += lnp_stamp
+        # TODO: test that flat[] does the right thing here
+        lnp_grad[theta_inds] += lnp_stamp_grad.flat[grad_inds]
+
+    return lnp, lnp_grad
 
 
-def make_image(Theta, scene, stamp, use_sources=slice(None)):
+def make_image(scene, stamp, Theta=None, use_sources=slice(None)):
     """This only works with WorkPlan object, not FastWorkPlan
     """
-    plans, indices = make_workplans(Theta, scene, [stamp])
-    wp, inds = plans[0], indices[0]
-    wp.process_pixels()
-    im = -wp.residual[use_sources].sum(axis=0).reshape(stamp.nx, stamp.ny)
-    grad = wp.gradients[use_sources].sum(axis=0)[inds, :]
+    if Theta is not None:
+        scene.set_all_source_params(Theta)
+    plan = WorkPlan(stamp)
+    plan, theta_inds, grad_inds = plan_sources(plan, scene)
+    plan.reset()
+    plan.process_pixels()
+    im = -plan.residual[use_sources].sum(axis=0).reshape(plan.stamp.nx, plan.stamp.ny)
+    grad = plan.gradients[use_sources].sum(axis=0)[theta_inds, :]
 
     return im, grad
+
+
+def plan_sources(plan, scene):
+    """Add a set of sources in a scene to a work plan as active and fixed gigs
+    """
+    active, fixed = [], []
+    theta_inds, grad_inds = [], []
+    # Make list of all sources in the plan, keeping track of where they are
+    # in the giant Theta array and where they are the (nsource, nderiv)
+    # array of gradients
+    i = 0
+    for j, source in enumerate(scene.sources):
+        coverage = plan.stamp.coverage(source)
+        if coverage <= 0:
+            # FAR AWAY
+            continue
+        gig = convert_to_gaussians(source, plan.stamp)
+        if coverage == 1:
+            # FIXED
+            fixed.append(gig)
+            continue
+        if coverage > 1:
+            # ACTIVE
+            gig = get_gaussian_gradients(source, plan.stamp, gig)
+            active.append(gig)
+            # get indices of parameters of the source in the giant Theta array
+            theta_inds += scene.param_indices(j, plan.stamp.filtername)
+            # get one-dimensional indices into the (nsource, nderiv) array of lnlike gradients
+            # the somewhat crazy syntax here is because use_gradients is a Slice object
+            grad_inds += ((i * NDERIV + np.arange(NDERIV))[source.use_gradients]).tolist()
+            i += 1
+
+    assert len(np.unique(theta_inds)) == len(theta_inds)
+    plan.active = active
+    plan.fixed = fixed
+    return plan, theta_inds, grad_inds
 
 
 class WorkPlan(object):

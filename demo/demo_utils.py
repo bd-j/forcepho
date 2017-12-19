@@ -1,5 +1,5 @@
 import numpy as np
-from forcepho.likelihood import negative_lnlike_multistamp, make_image
+from forcepho.likelihood import lnlike_multi, make_image
 from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
 
@@ -72,9 +72,9 @@ class Scene(object):
             self.set_source_params(Theta[inds], source, filterid)
 
 
-def negative_lnlike_stamp(theta, scene=None, stamp=None):
-    nll, nll_grad = negative_lnlike_multistamp(theta, scene=scene, stamps=[stamp])
-    return nll, nll_grad
+#def negative_lnlike_stamp(theta, scene=None, stamp=None):
+#    nll, nll_grad = negative_lnlike_multistamp(theta, scene=scene, stamps=[stamp])
+#    return nll, nll_grad
 
 
 def negative_lnlike_nograd(theta, scene=None, stamp=None):
