@@ -7,7 +7,7 @@ __all__ = ["WorkPlan", "make_workplans", "make_image",
 
 NDERIV = 7
 
-def lnlike_multi(Theta, scene, plans):
+def lnlike_multi(Theta, scene, plans, grad=True):
     """
     :param Theta:
         The global theta vector
@@ -31,7 +31,10 @@ def lnlike_multi(Theta, scene, plans):
         # TODO: test that flat[] does the right thing here
         lnp_grad[theta_inds] += lnp_stamp_grad.flat[grad_inds]
 
-    return lnp, lnp_grad
+    if grad:
+        return lnp, lnp_grad
+    else:
+        return lnp
 
 
 def make_image(scene, stamp, Theta=None, use_sources=slice(None)):

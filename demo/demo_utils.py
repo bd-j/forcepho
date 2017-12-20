@@ -1,4 +1,8 @@
 import numpy as np
+
+import astropy.io.fits as fits
+from astropy import wcs as apy_wcs
+
 from forcepho.likelihood import lnlike_multi, make_image
 from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
@@ -84,4 +88,87 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None, offset=0.):
     # --- Add extra information ---
     #stamp.full_header = dict(hdr)
     
+    return stamp
+
+
+def make_real_stamp(imname, center=(None, None), size=(None, None),
+                    center_type='pixels', psfname=None, fwhm=1.0):
+    """Make a postage stamp around the given position using the given image name
+    """
+    data = fits.getdata(imname)
+    hdr = fits.getheader(imname)
+    crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
+    crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
+    CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
+                   [hdr['CD2_1'], hdr['CD2_2']]])
+
+    # Pull slices and transpose to get to an axis order that makes sense to me
+    # and corresponds with the wcs keyword ordering
+    im = data[0, :, :].T
+    err = data[1, :, :].T
+
+    # ---- Extract subarray -----
+    center = np.array(center)
+    # here we get the center coordinates in pixels (accounting for the transpose above)
+    if center_type == 'celestial':
+        world = np.append(center, 0)
+        ast = apy_wcs.WCS(hdr)
+        center = ast.wcs_world2pix(world[None, :], 0)[0, :2]
+    # --- here is much mystery ---
+    size = np.array(size)
+    lo, hi = (center - 0.5 * size).astype(int), (center + 0.5 * size).astype(int)
+    xinds = slice(int(lo[0]), int(hi[0]))
+    yinds = slice(int(lo[1]), int(hi[1]))
+    crpix_stamp = np.floor(0.5 * size)
+    crval_stamp = crpix_stamp + lo
+    W = np.eye(2)
+    if center_type == 'celestial':
+        crval_stamp = ast.wcs_pix2world(np.append(crval_stamp, 0.)[None,:], 0)[0, :2]
+        W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
+
+
+    # --- MAKE STAMP -------
+
+    # --- Add image and uncertainty data to Stamp ----
+    stamp = PostageStamp()
+    stamp.pixel_values = im[xinds, yinds]
+    stamp.ierr = 1./err[xinds, yinds]
+
+    bad = ~np.isfinite(stamp.ierr)
+    stamp.pixel_values[bad] = 0.0
+    stamp.ierr[bad] = 0.0
+    stamp.ierr = stamp.ierr.flatten()
+
+    stamp.nx, stamp.ny = stamp.pixel_values.shape
+    stamp.npix = stamp.nx * stamp.ny
+    # note the inversion of x and y order in the meshgrid call here
+    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
+
+    # --- Add WCS info to Stamp ---
+    stamp.crpix = crpix_stamp
+    stamp.crval = crval_stamp
+    stamp.dpix_dsky = np.matmul(np.linalg.inv(CD), W)
+    stamp.scale = np.linalg.inv(CD * 3600.0)
+    stamp.pixcenter_in_full = center
+    stamp.lo = lo
+    stamp.CD = CD
+    stamp.W = W
+
+    # --- Add the PSF ---
+    if psfname is not None:
+        import pickle
+        with open(psfname, 'rb') as pf:
+            pdat = pickle.load(pf)
+
+        oversample, center = 8, 504 - 400
+        answer = pdat[6][2]
+        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
+    else:
+        stamp.psf = pointspread.PointSpreadFunction()
+        stamp.psf.covaraniaces *= fwhm/2.355
+
+    # --- Add extra information ---
+    stamp.full_header = dict(hdr)
+    stamp.filtername = stamp.full_header["FILTER"]
+
     return stamp
