@@ -2,10 +2,12 @@ import numpy as np
 from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gaussian
 
 
-__all__ = ["WorkPlan", "make_workplans", "make_image",
-           "negative_lnlike_multistamp"]
+__all__ = ["lnlike_multi", "make_image",
+           "plan_sources", "WorkPlan", "FastWorkPlan"
+           ]
 
 NDERIV = 7
+
 
 def lnlike_multi(Theta, scene, plans, grad=True):
     """

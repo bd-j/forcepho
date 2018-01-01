@@ -2,7 +2,7 @@
 import numpy as np
 
 
-__all__ = ["Scene", "Star", "Galaxy"]
+__all__ = ["Scene", "Star", "SimpleGalaxy", "Galaxy"]
    
 
 # ------

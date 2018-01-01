@@ -8,6 +8,12 @@ from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
 
 
+__all__ = ["negative_lnlike_multi", "chi_vector",
+           "numerical_image_gradients",
+           "make_stamp", "make_real_stamp"
+           ]
+
+
 def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
     lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
     if grad:
