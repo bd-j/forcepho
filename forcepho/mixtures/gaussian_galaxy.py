@@ -12,10 +12,12 @@ from scipy.special import gamma, gammainc, gammaincinv
 from scipy.special import hyp1f1 as hyper
 from scipy.optimize import minimize
 
-x = np.linspace(1e-3, 8.0, int(1e3))
-x = np.arange(0.0005, 10.0, 0.001)
+#x = np.linspace(1e-3, 8.0, int(1e3))
+#x = np.arange(0.0005, 10.0, 0.001)
+rgrid = np.arange(0.5, 4.25, 0.5)
 
-# magic numbers
+
+# --- magic numbers ---
 # minrad, maxrad, dlnr
 # arpenalty, arscale
 # asmooth
@@ -25,7 +27,7 @@ x = np.arange(0.0005, 10.0, 0.001)
 
 
 def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
-                  ncomp=6, x=x, asmooth=0.0, arpenalty=0.0):
+                  ncomp=6, x=None, asmooth=0.0, arpenalty=0.0):
     """Fit a mixture of gaussians to a Sersic profile.
 
     :param nsersic:
@@ -86,8 +88,8 @@ def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
 
 
 def chisq(params, x=None, target=None, radii=None,
-          smoothing=0.0, asmooth=0., arpenalty=0,
-          arscale=1.0,
+          smoothing=0.0,
+          asmooth=0., arpenalty=0, arscale=1.0,
           return_models=False):
     """
     :param params:
@@ -197,7 +199,7 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
     cax = fig.add_axes((.1,.1,.8,.2))
     rax = fig.add_axes((.1,.3,.8,.2))
     
-    ax.plot(x, sersic, label='Sersic:n={:3.1f}, rh={:3.2f}'.format(ns, rh))
+    ax.plot(x, sersic, label='Sersic:n={:3.1f}, rh={:3.3f}'.format(ns, rh))
     if  sm_sersic is not None:
         residual = gauss / sm_sersic - 1
         ax.plot(x, sm_sersic, label='smooth Sersic', linewidth=2)
@@ -233,7 +235,7 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
 
     f, cax = plot_cfd(x, ns, rh, amps, radii, smoothing, ax=cax)
     cax.set_xlabel('pixels')
-    [a.set_xlim(3e-2, x.max()) for a in [ax, rax, cax]]
+    [a.set_xlim(x.min() * 0.8, x.max()*1.2) for a in [ax, rax, cax]]
 
     
     return fig
@@ -251,12 +253,12 @@ def plot_cfd(x, ns, rh, amps, radii, smoothing, ax=None):
         fig, ax = pl.subplots()
     else:
         fig = None
-    ax.plot(x, cfd_sersic, label='Sersic', linewidth=2)
-    ax.plot(x, cfd_smgauss, label="smoothed gaussians")
-    ax.plot(x, cfd_gauss, label="native gaussians")
+    ax.plot(x, cfd_sersic, label='Sersic', linewidth=2, alpha=0.5)
+    ax.plot(x, cfd_smgauss, label="smoothed gaussians", alpha=0.5)
+    ax.plot(x, cfd_gauss, label="native gaussians", alpha=0.5)
     ax.axvline(smoothing, linestyle=':', color='blue', label='smoothing radius')
     ax.set_xscale('log')
-    ax.set_xlim(3e-2, x.max())
+    ax.set_xlim(x.min()*0.8, x.max()*1.2)
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel('f(<r)/f(total)')
     ax.legend(fontsize='x-small', loc="upper left")
@@ -321,7 +323,7 @@ def plot_amps(radii, amps):
 
 
 
-def fit_profiles(rgrid=np.arange(0.5, 4.25, 0.5),
+def fit_profiles(rgrid=rgrid,
                  ngrid = np.arange(1.0, 5.5, 1.0),
                  lnradii=np.arange(np.log(0.005), np.log(6.0), np.log(2.)),
                  smoothing=0.0, asmooth=0.0, arpenalty=0.0,
@@ -329,7 +331,8 @@ def fit_profiles(rgrid=np.arange(0.5, 4.25, 0.5),
 
     # Decide whether to fit smoothed sersic profiles (smoothing > 0)
     #smoothing = 0.1 # in units of pixels
-    outname = "mog_model.smooth={:2.1f}.h5".format(smoothing)
+    outroot = "gauss_gal_results/sersic_mog_model.smooth={:2.4f}".format(smoothing)
+    outname = outroot + '.h5'
     if smoothing > 0:
         lnradii = np.insert(lnradii, 0, -np.inf)
     radii = np.exp(lnradii)
@@ -357,9 +360,9 @@ def fit_profiles(rgrid=np.arange(0.5, 4.25, 0.5),
     result.create_dataset('model', shape=(nres, len(x)))
     result.create_dataset('smooth_sersic', shape=(nres, len(x)))
 
-    profiles = PdfPages('mog_model_prof.pdf')
-    amps = PdfPages('mog_model_amps.pdf')
-    cdf = PdfPages('mog_model_cdf.pdf')
+    profiles = PdfPages(outroot+'.prof.pdf')
+    amps = PdfPages(outroot+'.amps.pdf')
+    cdf = PdfPages(outroot+'.cdf.pdf')
     # Loop over radii and sersic indices
     for i, (ns, rh) in enumerate(product(ngrid, rgrid)):
         alpha = gammaincinv(2.0 * ns, 0.5)
@@ -413,19 +416,25 @@ def fit_profiles(rgrid=np.arange(0.5, 4.25, 0.5),
 
 if __name__ == "__main__":
 
-    # set the pixel array that will be used for calculating models
-    
-    # Set up gaussians in pixel space
-    minrad, maxrad, dlnr = 0.20, 28.0, np.log(2)
-    lnradii = np.arange(np.log(minrad), np.log(maxrad), dlnr)
-    #lnradii = np.log(np.arange(minrad, maxrad, 0.5))
+    # set the pixel scale array that will be used for calculating models
     x = np.arange(0.01, 64.0, 0.01)
 
-    outname = fit_profiles(smoothing=0.25, lnradii=lnradii, x=x,
+    # Set up the dispersions of the zero-centered gaussians in pixel space
+    minrad, maxrad, dlnr = 0.20, 28.0, np.log(2)
+    lnradii = np.arange(np.log(minrad), np.log(maxrad), dlnr)
+
+    # Sersic smoothing scale in pixels
+    smoothing = 0.25
+
+    # arcsec per pixel
+    pixscale = 0.03
+
+    outname = fit_profiles(smoothing=smoothing * pixscale,
+                           lnradii=lnradii + np.log(pixscale),
+                           rgrid=rgrid*pixscale, x=x*pixscale,
                            asmooth=1e-8, arpenalty=1e-6)
 
     #result = h5py.File(outname, "r")
     #profiles = PdfPages('mog_model_prof.pdf')
     #amps = PdfPages('mog_model_amps.pdf')
     #for i in len(result['nsersisc']):
-        

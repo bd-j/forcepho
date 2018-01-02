@@ -241,6 +241,9 @@ class Galaxy(Source):
     Methods are provided to return the amplitudes and covariance matrices of
     the constituent gaussians, as well as derivatives of the amplitudes with
     respect to sersic index and half light radius.
+
+    The amplitudes and the derivatives of the amplitudes with respect to the
+    sersic index and half-light radius are based on splines.
     """
 
     radii = np.ones(1)
@@ -249,10 +252,15 @@ class Galaxy(Source):
     npos = 2
     nshape = 2
 
-    def __init__(self, filters=['dummy'], radii=None, splines=None):
+    def __init__(self, filters=['dummy'], radii=None, splinedata=None):
         super(Galaxy, self).__init__(filters=filters, radii=radii)
-        if splines is not None:
+        if splinedata is not None:
             self.nshape = 4
+            #raise ValueError, "Galaxies must have information to make A(r, n) bivariate splines"
+            self.splines = [dummy_spline] * self.ngauss
+        else:
+            self.nshape = 6
+            self.initialize_splines(splinedata)
 
     def set_params(self, theta, filtername=None):
         """Set the parameters from a theta array
@@ -272,6 +280,20 @@ class Galaxy(Source):
         self.sersic = theta[nflux + 4]
         self.rh = theta[nflux + 5]
 
+
+    def initialize_splines(self, splinedata):
+        """Initialize Bivariate Splines used to interpolate and get derivatives
+        for gaussian amplitudes as a function of sersic and rh
+        """
+        with h5py.File(splinedata, "r") as data:
+            n = data["nsersic"][:]
+            r = data["rh"][:]
+            A = data["amplitudes"][:]
+            self.radii = data["radii"][:]
+            nm, ng = A.shape
+            self.splines = [SmoothBivariateSpline(n, r, A[:, i]) for i in range(ng)]
+        
+        
     @property
     def covariances(self):
         """This just constructs a set of covariance matrices based on the fixed
@@ -287,7 +309,7 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.ones(self.ngauss) / (self.ngauss * 1.0)
+        return np.array([spline(self.sersic, self.rh) for spline in self.splines])
 
     @property
     def damplitude_dsersic(self):
@@ -295,7 +317,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.zeros(self.ngauss)
+        return np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines])
 
     @property
     def damplitude_drh(self):
@@ -303,8 +325,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.zeros(self.ngauss)
-
+        return np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines])
 
     
 def scale_matrix(q):
@@ -329,3 +350,10 @@ def scale_matrix_deriv(q):
 def rotation_matrix_deriv(theta):
     return np.array([[-np.sin(theta), -np.cos(theta)],
                      [np.cos(theta), -np.sin(theta)]])
+
+
+def dummy_spline(*args, dx=0, dy=0):
+    if (dx > 0) | (dy > 0):
+        return 0.
+    else:
+        return 1.
