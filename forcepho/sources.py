@@ -281,7 +281,7 @@ class Galaxy(Source):
         self.rh = theta[nflux + 5]
 
 
-    def initialize_splines(self, splinedata):
+    def initialize_splines(self, splinedata, spline_smoothing=None):
         """Initialize Bivariate Splines used to interpolate and get derivatives
         for gaussian amplitudes as a function of sersic and rh
         """
@@ -291,7 +291,7 @@ class Galaxy(Source):
             A = data["amplitudes"][:]
             self.radii = data["radii"][:]
             nm, ng = A.shape
-            self.splines = [SmoothBivariateSpline(n, r, A[:, i]) for i in range(ng)]
+            self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing) for i in range(ng)]
         
         
     @property
@@ -352,7 +352,7 @@ def rotation_matrix_deriv(theta):
                      [np.cos(theta), -np.sin(theta)]])
 
 
-def dummy_spline(*args, dx=0, dy=0):
+def dummy_spline(x, y, dx=0, dy=0):
     if (dx > 0) | (dy > 0):
         return 0.
     else:

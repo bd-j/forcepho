@@ -11,8 +11,8 @@ import cPickle as pickle
 from astropy.io import fits as pyfits
 
 from .gaussian_psf import fit_mvn_mix
-from ..psf import params_to_gauss
-from ..paths import psfims
+#from ..psf import params_to_gauss
+#from ..paths import psfims
 
 
 def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
@@ -89,13 +89,10 @@ def fit_jwst_psf(psfname, band, nmix, start=0, stop=None, nrepeat=5):
     data /= data.sum()
 
     # --- Do the fit ---
-    nrepeat = 5
-    ans_all_em_random = {}
+    ans_all_em_random = {'start': start, 'stop': stop}
     ans_all_em_random[nmix] = fit_mvn_mix(data, nmix, method_opt='em', method_init='random',
                                           repeat=nrepeat, returnfull=True, dlnlike_thresh=1e-9)
 
-    #with open('f090_ng6_em_random.p', 'wb') as out:
-    #    pickle.dump(ans_all_em_random, out)
     # --- Plotting -----
     # set up the gaussian colorbar
     gcmap = get_cmap('viridis')
@@ -141,4 +138,4 @@ def fit_jwst_psf(psfname, band, nmix, start=0, stop=None, nrepeat=5):
 
     pdf.close()
 
-    return ans_ell_random
+    return ans_all_em_random
