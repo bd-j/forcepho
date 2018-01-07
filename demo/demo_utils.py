@@ -43,7 +43,8 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
     return np.array(dI_dp)
 
             
-def make_stamp(size=(100, 100), fwhm=1.0, psfname=None, offset=0.):
+def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
+               offset=0., filtername='dummy'):
     """Make a postage stamp of the given size, including a PSF
 
     :param size:
@@ -84,7 +85,7 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None, offset=0.):
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
 
-        oversample, pcenter = 8, 504 - 400
+        oversample, pcenter = 8, 504 - 400  # HAAAACKKK
         answer = pdat[6][2]
         stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=pcenter)
     else:
@@ -93,7 +94,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None, offset=0.):
         
     # --- Add extra information ---
     #stamp.full_header = dict(hdr)
-    
+    stamp.filtername = filtername
+
     return stamp
 
 
@@ -166,7 +168,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
 
-        oversample, center = 8, 504 - 400
+        oversample, center = 8, 504 - 400  # HAAAACKKK
         answer = pdat[6][2]
         stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
     else:

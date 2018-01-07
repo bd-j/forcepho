@@ -15,13 +15,14 @@ from demo_utils import make_stamp, numerical_image_gradients, negative_lnlike_mu
 
 
 def setup_scene(galaxy=False, sourceparams=[(1.0, 5., 5., 0.7, 30.)],
+                perturb=0,
                 filters=['dummy'],
                 add_noise=False, snr_max=100.,
-                stamp_kwargs={}):
+                stamp_kwargs=[]):
 
 
     # get a stamp
-    stamp = make_stamp(**stamp_kwargs)
+    stamps = [make_stamp(**sk) for sk in stamp_kwargs]
     
     # --- Get Sources and a Scene -----
     if galaxy:
@@ -50,19 +51,19 @@ def setup_scene(galaxy=False, sourceparams=[(1.0, 5., 5., 0.7, 30.)],
     label = []
 
     # --- Generate mock  and add to stamp ---
-    ptrue = np.array(theta)
-    true_image, partials = make_image(scene, stamp, Theta=ptrue)
-    stamp.pixel_values = true_image.copy()
-    err = stamp.pixel_values.max() / snr_max
-    #err = np.sqrt(err**2 + stamp.pixel_values.flatten())
-    err = np.ones(stamp.npix) * err
-    stamp.ierr = np.ones(stamp.npix) / err
+    ptrue = theta * np.random.normal(1.0, perturb, size=theta.shape)
+    for stamp in stamps:
+        true_image, _ = make_image(scene, stamp, Theta=ptrue)
+        stamp.pixel_values = true_image.copy()
+        err = stamp.pixel_values.max() / snr_max
+        #err = np.sqrt(err**2 + stamp.pixel_values.flatten())
+        err = np.ones(stamp.npix) * err
+        stamp.ierr = np.ones(stamp.npix) / err
+        if add_noise:
+            noise = np.random.normal(0, err)
+            stamp.pixel_values += noise.reshape(stamp.nx, stamp.ny)
 
-    if add_noise:
-        noise = np.random.normal(0, err)
-        stamp.pixel_values += noise.reshape(stamp.nx, stamp.ny)
-
-    return scene, stamp, ptrue, label
+    return scene, stamps, ptrue, label
 
 
 if __name__ == "__main__":
@@ -70,19 +71,25 @@ if __name__ == "__main__":
     # Get a scene and a stamp at some parameters
     # Let's make two SimpleGalaxies
     # flux, ra, dec, q, pa(deg)
-    sourcepars = [([10.], 5., 5., 0.7, 45),
-                  ([15.], 10., 10., 0.7, 45)]
-    # And one stamp
-    stamp_kwargs = {'size': (30., 30.), 'fwhm':2.0, 'snr_max': 100}
-    scene, stamp, ptrue, label = setup_scene(galaxy=True, sourceparams=sourcepars,
-                                             add_noise=True,
-                                             stamp_kwargs=stamp_kwargs)
+    sourcepars = [([10., 12.], 5., 5., 0.7, 45),
+                  ([15., 30.], 10., 10., 0.7, 45)]
+    # And stamp(s)
+    stamp_kwargs = [{'size': (30., 30.), 'fwhm': 2.0,
+                     'filtername': "f1"},
+                    {'size': (30., 30.), 'fwhm': 2.0,
+                     'filtername': "f2", 'offset': (-4.5, -4.5)}
+                    ]
+    scene, stamps, ptrue, label = setup_scene(galaxy=True, sourceparams=sourcepars,
+                                              filters=["f1", "f2"],
+                                              perturb=0.0, add_noise=True,
+                                              snr_max=100.,
+                                              stamp_kwargs=stamp_kwargs)
 
-    sys.exit()
-    true_image, partials = make_image(scene, stamp, Theta=ptrue)
+    #sys.exit()
+    true_images = [make_image(scene, stamp, Theta=ptrue)[0] for stamp in stamps]
     
     # Set up (negative) likelihoods
-    plans = [WorkPlan(stamp)]
+    plans = [WorkPlan(stamp) for stamp in stamps]
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
     nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
 
