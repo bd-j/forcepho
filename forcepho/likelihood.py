@@ -3,24 +3,44 @@ from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_ga
 
 
 __all__ = ["lnlike_multi", "make_image",
-           "plan_sources", "WorkPlan", "FastWorkPlan"
+           "plan_sources",
+           "WorkPlan", "FastWorkPlan"
            ]
+
 
 NDERIV = 7
 
 
 def lnlike_multi(Theta, scene, plans, grad=True):
-    """
+    """Calculate the likelihood of the `plans` given the `scene` with
+    parameters `Theta` This propagates the `Theta` vector into the scene, and
+    then loops over the plans accumulating the likelhood (and gradients
+    thereof) of each `plan`
+    Assumption: No two scene sources in a single stamp/plan contribute to the
+    same Theta parameter
+ 
     :param Theta:
-        The global theta vector
+        The global parameter vector, describing the parameters of all sources in
+        the scene.
 
     :param scene:
-        A scene object that converts between sourceids and filters and indices in the giant Theta vector
+        A scene object that contains a list of all sources and that converts
+        between sourceids and filters and indices in the giant Theta vector
 
     :param plans:
-        A list of WorkPlan objects (corresponding roughly to stamps)
+        A list of WorkPlan objects, containing the data and (corresponding
+        roughly to PostageStamps)
 
-    Assumption: No two sources in a single stamp contribute to the same Theta parameter
+    :param grad: (optional, default: `True`)
+        Switch to control whether likelihood gradients are returned
+
+    :returns lnp:
+        The total ln-likelihood of the plans/stamps given the `scene` and
+        `Theta`.  Scalar
+
+    :returns lnp_grad:
+        If `grad==True`, the gradients of the ln-likelihood with respect to the
+        parameters `Theta`.  ndarray of same length a `Theta`
     """
     scene.set_all_source_params(Theta)
     lnp = 0.0
@@ -49,13 +69,39 @@ def make_image(scene, stamp, Theta=None, use_sources=slice(None)):
     plan.reset()
     plan.process_pixels()
     im = -plan.residual[use_sources].sum(axis=0).reshape(plan.stamp.nx, plan.stamp.ny)
-    grad = plan.gradients[use_sources].sum(axis=0)[theta_inds, :]
+    grad = plan.gradients[use_sources].reshape(-1, stamp.npix)[grad_inds, :]
 
     return im, grad
 
 
 def plan_sources(plan, scene):
-    """Add a set of sources in a scene to a work plan as active and fixed gigs
+    """Add the sources in a scene to a work plan as lists of active and fixed
+    `gaussmodel.GaussianImageGalaxies`.  Additionally returns useful arrays of
+    indices for accumulating likelihood gradients in the correct elements of
+    the whole lnp_grad array.  These helper arrays have the following property:
+    
+    `dlnp_dTheta[theta_inds] = (WorkPlan.lnlike()[1]).flat[grad_inds]`
+
+    :param plan:
+        A `likelihood.WorkPlan` object containig data and methods for
+        calculating the ln-likelihood and its gradients.
+
+    :param scene:
+       A `sources.Scene` object containing a list of `source.Source` objects,
+       as well as methods for finding the indices in the `Theta` vector
+       corresponding to each `Source` object.
+
+    :returns plan:
+       The input plan with the appropriate lists of
+       `gaussmodel.GaussianImageGalaxies` added as the `active` and `fixed`
+       attributes.
+
+    :returns theta_inds:
+        The indices in the `Theta` array of the relevant scene parameters
+
+    :returns grad_inds:
+        The indices in the flattened `(nactive, NDERIV)` array of gradients
+        returend by `WorkPlan.lnlike()` of the relevant scene parameters.
     """
     active, fixed = [], []
     theta_inds, grad_inds = [], []
@@ -93,21 +139,39 @@ def plan_sources(plan, scene):
 class WorkPlan(object):
 
     """This is a stand-in for a C++ WorkPlan.  It takes a PostageStamp and
-    lists of active and fixed GaussianImageGalaxies.  It could probably be
-    formulated as a wrapper on a stamp.
+    lists of active and fixed `gaussmodel.GaussianImageGalaxies`.  It could
+    probably be formulated as a wrapper on a stamp.
     """
     
     # options for gaussmodel.compute_gaussians
     compute_keywords = {}
-    nparam = 7 # number of parameters per source
+    nparam = NDERIV # number of parameters per source
 
     def __init__(self, stamp, active=[], fixed=[]):
+        """Constructor.
+
+        :param stamp:
+            A `data.PostageStamp` object.
+
+        :param active: (optional):
+            A list of `gaussmodel.GaussianImageGalaxies` for sources whose
+            likelihood gradients contribute the total likelihood gradient
+            (i.e. active sources)
+
+        :param fixed: (optional)
+            A list of `gaussmodel.GaussianImageGalaxies` for sources that might
+            contribute to the stamp but are assumed not to contribute to the
+            total likelihood gradient (either because they are truly fixed or
+            because only the far wings are contributing to the stamp).
+        """
         self.stamp = stamp
         self.active = active
         self.fixed = fixed
         self.reset()
 
     def reset(self):
+        """Reinitializ the `residual` and `gradient` arrays to zeros.
+        """
         self.residual = np.zeros([self.nactive + self.nfixed, self.stamp.npix])
         self.gradients = np.zeros([self.nactive, self.nparam, self.stamp.npix])
         
@@ -130,7 +194,7 @@ class WorkPlan(object):
                 self.gradients[i, :, :] += np.matmul(g.derivs, dI_dphi)
 
     def lnlike(self, active=None, fixed=None):
-        """Returns a ch^2 value and a chi^2 gradient array of shape (nsource, nparams)
+        """Returns a chi^2 value and a chi^2 gradient array of shape (nactive, NDERIV)
         """
         if active is not None:
             self.active = active
@@ -163,7 +227,8 @@ class WorkPlan(object):
 
 
 class FastWorkPlan(WorkPlan):
-    """Like WorkPlan, but we cumulate the residuals over sources once, and cumulate chisq gradients
+    """Like WorkPlan, but we cumulate the residuals over sources once, and
+    cumulate chisq gradients
     """
 
     def reset(self):
@@ -174,12 +239,14 @@ class FastWorkPlan(WorkPlan):
         """Here we are doing all pixels at once instead of one superpixel at a
         time (like on a GPU).
         """
+        # Loop over active and fixed to get the residual image
         for i, gig in enumerate(self.active + self.fixed):
             for j, g in enumerate(gig.gaussians.flat):
                 # get the image counts for each Gaussian in a GaussianGalaxy
                 self.compute_keywords['compute_deriv'] = False
                 self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
                                                   **self.compute_keywords)
+        # Loop only over active to get the chisq gradients
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians.flat):
                 self.compute_keywords['compute_deriv'] = True
@@ -188,7 +255,8 @@ class FastWorkPlan(WorkPlan):
                                               **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                self.gradients[i, :] += (self.residual * self.ierr * np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
+                self.gradients[i, :] += (self.residual * self.ierr *
+                                         np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
 
     def lnlike(self, active=None, fixed=None):
         if active is not None:
