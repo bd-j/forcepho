@@ -68,7 +68,9 @@ def setup_scene(galaxy=False, sourceparams=[(1.0, 5., 5., 0.7, 30.)],
 
 if __name__ == "__main__":
 
-    # Get a scene and a stamp at some parameters
+    
+    # --- Setup Scene and Stamp(s) ---
+
     # Let's make two SimpleGalaxies
     # flux, ra, dec, q, pa(deg)
     sourcepars = [([10., 12.], 5., 5., 0.7, 45),
@@ -82,17 +84,16 @@ if __name__ == "__main__":
     scene, stamps, ptrue, label = setup_scene(galaxy=True, sourceparams=sourcepars,
                                               filters=["f1", "f2"],
                                               perturb=0.0, add_noise=True,
-                                              snr_max=100.,
+                                              snr_max=10.,
                                               stamp_kwargs=stamp_kwargs)
 
     #sys.exit()
-    true_images = [make_image(scene, stamp, Theta=ptrue)[0] for stamp in stamps]
+    #true_images = [make_image(scene, stamp, Theta=ptrue)[0] for stamp in stamps]
     
     # Set up (negative) likelihoods
     plans = [WorkPlan(stamp) for stamp in stamps]
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
     nll_nograd = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=False)
-
 
     # --- Optimization -----
     if True:
@@ -110,16 +111,17 @@ if __name__ == "__main__":
         #                         'disp':True, 'iprint': 1, 'maxcor': 20}
         #                )
 
-        mim, partials = make_image(scene, stamp, Theta=result.x)
-        dim = stamp.pixel_values
+        vals = result.x
+        rfig, raxes = pl.subplots(len(stamps), 3, sharex=True, sharey=True)
+        for i, stamp in enumerate(stamps):
+            im, grad = make_image(scene, stamp, Theta=vals)
+            raxes[i, 0].imshow(stamp.pixel_values.T, origin='lower')
+            raxes[i, 1].imshow(im.T, origin='lower')
+            resid = raxes[i, 2].imshow((stamp.pixel_values - im).T, origin='lower')
+            rfig.colorbar(resid, ax=raxes[i,:].tolist())
         
-        fig, axes = pl.subplots(1, 3, sharex=True, sharey=True, figsize=(13.75, 4.25))
-        images = [dim, mim, dim-mim]
         labels = ['Data', 'Model', 'Data-Model']
-        for k, ax in enumerate(axes):
-            c = ax.imshow(images[k].T, origin='lower')
-            pl.colorbar(c, ax=ax)
-            ax.set_title(labels[k])
+        [ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
         
 
     pl.show()
