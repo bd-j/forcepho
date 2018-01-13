@@ -192,7 +192,7 @@ def normal(x, sigma):
 
 
 def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
-                  ns=None, rh=None, chisq=None, amps=None,
+                  ns=0.0, rh=0.0, chisq=None, amps=None,
                   xmax=None, smoothing=None):
     fig = pl.figure()
     ax = fig.add_axes((.1,.5,.8,.4))
@@ -378,7 +378,9 @@ def fit_profiles(rgrid=rgrid,
                             arpenalty=arpenalty)
         result['nsersic'][i] = ns
         result['rh'][i] = rh
-        result['amplitudes'][i] = np.exp(res.x)
+        # renormalize to unit total flux
+        A = np.exp(res.x)
+        result['amplitudes'][i] = A / A.sum()
         result['chisq'][i] = res.fun
         result['success'][i] = res.success
         sersic = sersic_profile(x, n=ns, rh=rh, sigma=0)

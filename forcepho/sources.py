@@ -1,5 +1,6 @@
 import numpy as np
-
+from scipy.interpolate import SmoothBivariateSpline
+import h5py
 
 __all__ = ["Scene", "Source",
            "Star", "SimpleGalaxy", "Galaxy"]
@@ -339,13 +340,15 @@ class Galaxy(Source):
     nshape = 2
 
     def __init__(self, filters=['dummy'], radii=None, splinedata=None):
-        super(Galaxy, self).__init__(filters=filters, radii=radii)
-        if splinedata is not None:
-            self.nshape = 4
-            #raise ValueError, "Galaxies must have information to make A(r, n) bivariate splines"
-            self.splines = [dummy_spline] * self.ngauss
+        self.filternames = filters
+        self.flux = np.zeros(len(self.filternames))
+        if radii is not None:
+            self.radii = radii
+        if splinedata is None:
+            raise ValueError, "Galaxies must have information to make A(r, n) bivariate splines"
+            #self.splines = [dummy_spline] * self.ngauss
         else:
-            self.nshape = 6
+            self.nshape = 4
             self.initialize_splines(splinedata)
 
     def set_params(self, theta, filtername=None):
@@ -401,8 +404,11 @@ class Galaxy(Source):
             r = data["rh"][:]
             A = data["amplitudes"][:]
             self.radii = data["radii"][:]
-            nm, ng = A.shape
-            self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing) for i in range(ng)]
+
+        nm, ng = A.shape
+        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing) for i in range(ng)]
+        self.rh_range = (r.min(), r.max())
+        self.sersic_range = (n.min(), n.max())
         
     @property
     def covariances(self):
@@ -419,7 +425,7 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.array([spline(self.sersic, self.rh) for spline in self.splines])
+        return np.squeeze(np.array([spline(self.sersic, self.rh) for spline in self.splines]))
 
     @property
     def damplitude_dsersic(self):
