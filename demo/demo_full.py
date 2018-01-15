@@ -8,49 +8,47 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
-from forcepho.sources import Star, SimpleGalaxy, Scene
+from forcepho import paths
+from forcepho.sources import SimpleGalaxy, Galaxy, Scene
 from forcepho.likelihood import WorkPlan, make_image
 
-from demo_utils import make_stamp, negative_lnlike_multi
+from demo_utils import make_stamp, negative_lnlike_multi, numerical_image_gradients
 
 
-def setup_scene(galaxy=False, sourceparams=[(1.0, 5., 5., 0.7, 30.)],
-                perturb=0,
+def setup_scene(sourceparams=[(1.0, 5., 5., 0.7, 30., 1.0, 0.05)],
+                splinedata=None, perturb=0,
                 filters=['dummy'],
                 add_noise=False, snr_max=100.,
                 stamp_kwargs=[]):
 
-
-    # get a stamp
-    stamps = [make_stamp(**sk) for sk in stamp_kwargs]
-    
     # --- Get Sources and a Scene -----
-    if galaxy:
-        ngauss = 1
-        sources = []
-        for (flux, x, y, q, pa) in sourceparams:
+    sources = []
+    for (flux, x, y, q, pa, n, rh) in sourceparams:
+        if splinedata is not None:
+            s = Galaxy(filters=filters, splinedata=splinedata)
+            s.sersic = n
+            s.rh = rh
+        else:
             s = SimpleGalaxy(filters=filters)
-            s.flux = flux
-            s.ra = x
-            s.dec = y
-            s.q = q
-            s.pa = np.deg2rad(pa)
-            s.radii = np.arange(ngauss) * 0.5 + 1.0
-            sources.append(s)
-
-    else:
-        sources = []
-        for (x, y, q, pa) in sourcelocs:
-            s = Star(filters=filters)
-            s.ra = x
-            s.dec = y            
-            sources.append(s)
+        s.flux = flux
+        s.ra = x
+        s.dec = y
+        s.q = q
+        s.pa = np.deg2rad(pa)
+        sources.append(s)
 
     scene = Scene(sources)
     theta = scene.get_all_source_params()
     label = []
 
+    # get stamps
+    stamps = [make_stamp(**sk) for sk in stamp_kwargs]
+    if splinedata is not None:
+        for stamp in stamps:
+            stamp.scale = np.array([[32.0, 0.0], [0.0, 32.0]])
+
     # --- Generate mock  and add to stamp ---
+
     ptrue = theta * np.random.normal(1.0, perturb, size=theta.shape)
     for stamp in stamps:
         true_image, _ = make_image(scene, stamp, Theta=ptrue)
@@ -65,6 +63,7 @@ def setup_scene(galaxy=False, sourceparams=[(1.0, 5., 5., 0.7, 30.)],
 
     return scene, stamps, ptrue, label
 
+
 class Posterior(object):
 
     def __init__(self, scene, plans, upper=np.inf, lower=-np.inf):
@@ -74,7 +73,16 @@ class Posterior(object):
         self.lower = lower
         self.upper = upper
 
+    #def denormalize_thetaprime(self, Theta):
+    #    Thetaprime = Theta * (self.upper - self.lower) + self.lower
+    #    return Thetaprime
+
+    #def renormalize_theta(self, Thetaprime):
+    #    Theta = (Thetaprime - self.lower) / (self.upper - self.lower)
+    #    return Theta
+    
     def evaluate(self, Theta):
+    #    Theta = self.denormalize_thetaprime(Thetaprime)
         nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
         self._lnp = -nll
         self._lnp_grad = -nll_grad
@@ -88,7 +96,7 @@ class Posterior(object):
     def lnprob_grad(self, Theta):
         if np.any(Theta != self.theta):
             self.evaluate(Theta)
-        return self._lnp_grad
+        return self._lnp_grad #/ (self.upper - self.lower)
 
     def check_constrained(self, theta):
         """Method that checks parameter values against constraints.  If they
@@ -127,33 +135,29 @@ class Posterior(object):
 
 if __name__ == "__main__":
 
-    
+
     # --- Setup Scene and Stamp(s) ---
 
-    # Let's make one SimpleGalaxy in one and
-    # flux, ra, dec, q, pa(deg)
-    filters = ["flux"]
-    #sourcepars = [([30.], 10., 10., 0.7, 45)]
-    nsource = 2
-    sourcepars = [([10.], 11.0, 11.0, 0.7, 45),
-                  ([15], 15.0, 15.0, 0.7, 45)]
+    # Let's make one stamp
+    filters = ["F090W"] #, "F150W"]
+    psfnames = ['f090_ng6_em_random.p'] # , 'f150w_ng6_em_random.p']
+    psfnames = [os.path.join(paths.psfmixture, p) for p in psfnames]
+    stamp_kwargs = [{'size': (30, 30), 'psfname': p, 'filtername': f}
+                    for p, f in zip(psfnames, filters)]
 
-    upper = np.array(nsource * [20., 20., 20., 1.0, np.pi/2.])
-    lower = np.array(nsource * [2., 2., 5., 0.0, -np.pi/2])
-    
-    
-    
-    # And one stamp
-    stamp_kwargs = [{'size': (30., 30.), 'fwhm': 2.0,
-                     'filtername': "flux"},
-                    {'size': (30., 30.), 'fwhm': 2.0,
-                     'filtername': "flux"}]
-    scene, stamps, ptrue, label = setup_scene(galaxy=True, sourceparams=sourcepars,
+    # Let's make one Galaxy in one band
+    # flux, ra, dec, q, pa(deg), n, sersic
+    sourcepars = [([30.], 10., 10., 0.7, 45, 2.1, 0.07)]
+    upper = np.array([60., 20., 20., 1.0, np.pi/2., 5.0, 0.12])
+    lower = np.array([10., 5., 5., 0.0, -np.pi/2, 1.0, 0.03])
+
+    scene, stamps, ptrue, label = setup_scene(sourceparams=sourcepars,
+                                              splinedata=paths.galmixture,
                                               perturb=0.0, add_noise=True,
-                                              snr_max=10., filters=filters,
+                                              snr_max=50., filters=filters,
                                               stamp_kwargs=stamp_kwargs)
 
-    
+    #sys.exit()
     # --- Set up posterior prob fns ----
     plans = [WorkPlan(stamp) for stamp in stamps]
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans)
@@ -163,8 +167,28 @@ if __name__ == "__main__":
     model = Posterior(scene, plans, upper=upper, lower=lower)
 
 
+    # --- Gradient Check ---
+    if True:
+        delta = np.ones_like(ptrue) * 1e-7
+        #numerical
+        grad_num = numerical_image_gradients(ptrue, delta, scene, stamp)
+        image, grad = make_image(scene, stamps[0], Theta=ptrue)
+        fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
+        for i in range(len(ptrue)):
+            g = grad[i,:].reshape(stamp.nx, stamp.ny)
+            c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 0])
+            c = axes[i, 1].imshow(g.T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 1])
+            c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+            fig.colorbar(c, ax=axes[i, 2])
+
+        axes[0, 0].set_title('Numerical')
+        axes[0, 1].set_title('Analytic')
+        axes[0, 2].set_title('N - A')
+    
     # --- Optimization -----
-    if False:
+    if True:
         p0 = ptrue.copy()
         from scipy.optimize import minimize
         def callback(x):
@@ -186,26 +210,24 @@ if __name__ == "__main__":
         
         labels = ['Data', 'Model', 'Data-Model']
         [ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
-        
 
-    
+
     # --- Sampling -----
-    if True:
-        p0 = ptrue.copy()
+    if False:
+        p0 = ptrue.copy() #model.renormalize_theta(ptrue)
 
         import hmc
             #initialize sampler and sample
         sampler = hmc.BasicHMC(verbose=False)
         eps = sampler.find_reasonable_epsilon(p0, model)
+        #eps = 0.01
         #sys.exit()
-        iterations = 5000
-        length = 50
-        sigma_length = 10
-        pos, prob, eps = sampler.sample(p0*1.2, model, iterations=iterations,
-                                        epsilon=eps/5., length=length, sigma_length=sigma_length,
-                                        store_trajectories=True)
+        iterations = 50
+        length = 200
+        pos, prob, eps = sampler.sample(p0*1.1, model, iterations=iterations,
+                                        epsilon=eps, length=length, store_trajectories=True)
 
-        vals = pos
+        vals = pos  # model.renormalize_theta(pos)
         rfig, raxes = pl.subplots(len(stamps), 3, sharex=True, sharey=True)
         raxes = np.atleast_2d(raxes)
         for i, stamp in enumerate(stamps):
@@ -218,35 +240,24 @@ if __name__ == "__main__":
         labels = ['Data', 'Model', 'Data-Model']
         [ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
 
-        ndim = nsource * 5
+
+        ndim = scene.sources[0].nparam
         tfig, taxes = pl.subplots(ndim, 2)
         for i in range(ndim):
-            taxes[i, 0].plot(sampler.chain[:, i].flatten())
+            taxes[i, 0].plot(sampler.trajectories[:, :, i].flatten())
+            taxes[i, 0].plot(np.arange(0, iterations*length, length),
+                             sampler.trajectories[:, -1, i].flatten(),
+                             'o')
             taxes[i, 0].axhline(p0[i], linestyle=':', color='k')
-            taxes[i, 1].hist(sampler.chain[:, i].flatten(), alpha=0.5, bins=30)
+            taxes[i, 1].hist(sampler.trajectories[:, -1, i].flatten(), alpha=0.5, bins=30)
             taxes[i, 1].axvline(p0[i], linestyle=':', color='k')
 
-        pnames = 'flux', 'RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)'
+        pnames = 'flux', 'RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$'
         [ax.set_xlabel(p) for ax, p in zip(taxes[:, 1], pnames)]
 
-        pl.show()
-
         #tfig.tight_layout()
-        # import corner
-        # choose = [0, 5]
-        # cfig = corner.corner(sampler.chain[:, choose], labels=["$Flux_1$", "$Flux_2$"])
-        # cfig.savefig("demo_simple_fluxcovar.pdf")
-
-        sampler.sourcepars = sourcepars
-        sampler.stamp_kwargs = stamp_kwargs
-        sampler.filters = filters
-        sampler.offsets = [(0., 0.)]
-        sampler.plans = plans
-        sampler.scene = scene
-
-        import pickle
-        with open("result_verysimple.pkl", "wb") as f:
-            pickle.dump(sampler, f)
-
+        #import corner
+        #cfig = corner.corner(
         
 
+    pl.show()
