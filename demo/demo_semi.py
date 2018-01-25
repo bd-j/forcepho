@@ -31,7 +31,8 @@ def setup_scene(sourceparams=[(1.0, 5., 5., 0.7, 30., 1.0, 0.05)],
 
     # --- Get Sources and a Scene -----
     sources = []
-    for (flux, x, y, q, pa, n, rh) in sourceparams:
+    for pars in sourceparams:
+        flux, x, y, q, pa, n, rh = np.copy(pars)
         if splinedata is not None:
             s = Galaxy(filters=filters, splinedata=splinedata)
             s.sersic = n
@@ -185,10 +186,10 @@ if __name__ == "__main__":
     lower = np.array(len(sourcepars) * lo)
 
 
-    scene, stamps, ptrue, label = setup_scene(sourceparams=sourcepars.copy(),
+    scene, stamps, ptrue, label = setup_scene(sourceparams=sourcepars,
                                               splinedata=None,  # paths.galmixture,
                                               perturb=0.0, add_noise=True,
-                                              snr_max=20., filters=filters,
+                                              snr_max=10., filters=filters,
                                               stamp_kwargs=stamp_kwargs)
 
 
@@ -267,7 +268,7 @@ if __name__ == "__main__":
         iterations = 2000
         length = 50
         sigma_length = 10
-        pos, prob, eps = sampler.sample(p0*1.1, model, iterations=iterations,
+        pos, prob, eps = sampler.sample(p0*1.05, model, iterations=iterations,
                                         epsilon=eps/5., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)
 
@@ -304,15 +305,16 @@ if __name__ == "__main__":
         pnames = filters + ['RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$']
         [ax.set_xlabel(p) for ax, p in zip(taxes[:, 1], pnames)]
 
-        sampler.sourcepars = sourcepars.copy()
+        sampler.sourcepars = sourcepars
         sampler.stamp_kwargs = stamp_kwargs
         sampler.filters = filters
         sampler.offsets = offsets
         sampler.plans = plans
         sampler.scene = scene
+        sampler.truths = ptrue.copy()
 
         import pickle
-        with open("results.pkl", "wb") as f:
+        with open("semi_results_snr10.pkl", "wb") as f:
             pickle.dump(sampler, f)
 
         #tfig.tight_layout()

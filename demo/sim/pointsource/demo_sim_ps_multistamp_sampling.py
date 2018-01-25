@@ -128,8 +128,15 @@ if __name__ == "__main__":
         print('----')
         print(vals)
         print(c['counts'])
-        #out.write(strfmt.format(i, vals[0], vals[1], vals[2], result['logl'].max(), stamps[0].pixel_values.sum(), result['ncall']))
 
-    #out.close()
+        counts = vals[0]
+        center = np.array(stamp.pixcenter_in_full)
+        lo = (center - 0.5 * size).astype(int)
+        x, y = lo + vals[1:]
+        all_pos.append((x, y))
+
+        out.write(strfmt.format(i, x, y, counts, result['logl'].max(), stamp.pixel_values.sum(), result['ncall']))
+
+    out.close()
     #ocat = np.genfromtxt(fn, dtype=dt2)
     

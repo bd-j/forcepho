@@ -151,7 +151,7 @@ def plot_seds(sampler, start=1000):
 
 
 if __name__ == "__main__":
-    sampler, scene, plans = load_results()
+    sampler, scene, plans = load_results(fn="semi_results_snr10.pkl")
     stamps = [p.stamp for p in plans]
     stamps_to_show = [stamps[0], stamps[1], stamps[13], stamps[22]]
     pos = sampler.chain[-1, :]
@@ -163,4 +163,4 @@ if __name__ == "__main__":
     
     rfig, raxes = plot_model_images(pos, scene, stamps_to_show)
 
-    tfig, taxes, ffig, faxes = plot_chain(sampler, source=1)
+    tfig, taxes, ffig, faxes = plot_chain(sampler, source=2)
