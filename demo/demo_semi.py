@@ -261,14 +261,14 @@ if __name__ == "__main__":
 
         import hmc
             #initialize sampler and sample
-        sampler = hmc.BasicHMC(verbose=False)
-        eps = sampler.find_reasonable_epsilon(p0, model, epsilon_guess=1e-2)
+        sampler = hmc.BasicHMC(model, verbose=False)
+        eps = sampler.find_reasonable_epsilon(p0, epsilon_guess=1e-2)
         #eps = 0.01
         #sys.exit()
         iterations = 2000
         length = 50
         sigma_length = 10
-        pos, prob, eps = sampler.sample(p0*1.05, model, iterations=iterations,
+        pos, prob, eps = sampler.sample(p0*1.05, iterations=iterations,
                                         epsilon=eps/5., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)
 

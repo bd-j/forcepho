@@ -218,13 +218,13 @@ if __name__ == "__main__":
 
         import hmc
             #initialize sampler and sample
-        sampler = hmc.BasicHMC(verbose=False)
-        eps = sampler.find_reasonable_epsilon(p0, model)
+        sampler = hmc.BasicHMC(model, verbose=False)
+        eps = sampler.find_reasonable_epsilon(p0)
         #eps = 0.01
         #sys.exit()
         iterations = 50
         length = 200
-        pos, prob, eps = sampler.sample(p0*1.1, model, iterations=iterations,
+        pos, prob, eps = sampler.sample(p0*1.1, iterations=iterations,
                                         epsilon=eps, length=length, store_trajectories=True)
 
         vals = pos  # model.renormalize_theta(pos)

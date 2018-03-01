@@ -195,13 +195,13 @@ if __name__ == "__main__":
 
         import hmc
             #initialize sampler and sample
-        sampler = hmc.BasicHMC(verbose=False)
-        eps = sampler.find_reasonable_epsilon(p0, model)
+        sampler = hmc.BasicHMC(model, verbose=False)
+        eps = sampler.find_reasonable_epsilon(p0)
         #sys.exit()
         iterations = 5000
         length = 50
         sigma_length = 10
-        pos, prob, eps = sampler.sample(p0*1.2, model, iterations=iterations,
+        pos, prob, eps = sampler.sample(p0*1.2, iterations=iterations,
                                         epsilon=eps/5., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)
 

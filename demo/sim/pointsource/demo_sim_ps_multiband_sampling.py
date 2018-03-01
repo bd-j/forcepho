@@ -7,10 +7,13 @@ from functools import partial as argfix
 
 import numpy as np
 import matplotlib.pyplot as pl
+from matplotlib.backends.backend_pdf import PdfPages
 
 from forcepho import paths
 from forcepho.sources import Star, Scene
 from forcepho.likelihood import WorkPlan, lnlike_multi, make_image
+
+from corner import quantile
 
 from demo_utils import make_real_stamp as make_stamp
 
@@ -22,6 +25,7 @@ psfnames = ['f090_ng6_em_random.p', 'f090_ng6_em_random.p',
             'f150w_ng6_em_random.p', 'f150w_ng6_em_random.p']
 psfnames = [os.path.join(paths.psfmixture, p) for p in psfnames]
 filters = ["F090W", "F150W"]
+
 
 def fit_source(ra=53.115295, dec=-27.803501, dofit=True, nlive=100):
 
@@ -86,6 +90,9 @@ def fit_source(ra=53.115295, dec=-27.803501, dofit=True, nlive=100):
 if __name__ == "__main__":
 
 
+    showfit = True
+    nfit = 20
+
     # ---- Read the input catalog -----
     catname = os.path.join(paths.starsims, 'stars_f090w.cat')
     dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
@@ -95,46 +102,82 @@ if __name__ == "__main__":
     cat150 = np.genfromtxt(os.path.join(paths.starsims, 'stars_f150w.cat'), usecols=np.arange(1, 9), dtype=dt)[:100]
     
     # --- setup output ---
-    #fn = 'output_pointsource_dynesty.dat'
-    #pn = 'pointsource_resid.pdf'
-    #out = open(fn, 'w')
-    #strfmt = "{}  {:11.8f}   {:11.8f}  {:10.2f}  {:10.2f}  {:14.6f}   {} \n"
-    #dt2 = np.dtype([(n, np.float) for n in ['id', 'ra', 'dec', 'counts', 'sum', 'lnp', 'ncall']])
-    #out.write("# i    ra    dec   counts    imsum    lnp   ncall\n")
-    #pdf = PdfPages(pn)
+    nband = len(filters)
+    
+    fn = 'output_pointsource_dynesty.dat'
+    pn = 'pointsource_resid_dynesty.pdf'
+    out = open(fn, 'w')
+    strfmt = "{}  {:11.8f}   {:11.8f}" + "".join((nband * 3) * ["  {:10.2f}"]) + "  {:10.2f}  {:14.6f} {} \n"
+    cols = ("# i    ra    dec" +
+            "".join(["  counts16_{f}   counts50_{f}   counts84_{f}".format(f=f.lower()) for f in filters]) +
+            "  imsum    lnp   ncall\n")
+    # dt2 = np.dtype([(n, np.float) for n in ['id', 'ra', 'dec', 'counts', 'sum', 'lnp', 'ncall']])
+    out.write(cols)
+    if showfit:
+        pdf = PdfPages(pn)
 
     label = ['Counts_f090', 'Counts_f150', 'RA', 'Dec']
 
+    #sys.exit()
     all_results, all_pos = [], []
-    for i, c in enumerate(cat[:1]):
-        blob = fit_source(ra=c['ra'], dec=c['dec'], nlive=100)
+    for i, c in enumerate(cat[:nfit]):
+        blob = fit_source(ra=c['ra'], dec=c['dec'], nlive=50)
 
         result, vals, stamps, scene = blob
         all_results.append(result)
 
-        from dynesty import plotting as dyplot
-        cfig, caxes = dyplot.cornerplot(result, fig=pl.subplots(4,4, figsize=(13., 10)),
-                                        labels=label, show_titles=True, title_fmt='.8f')
-        tfig, taxes = dyplot.traceplot(result, fig=pl.subplots(4, 2, figsize=(13., 13.)),
-                                       labels=label)
-        #
-        rfig, raxes = pl.subplots(len(stamps), 3, sharex=True, sharey=True)
-        for i, stamp in enumerate(stamps):
-            im, grad = make_image(scene, stamp, Theta=vals)
-            raxes[i, 0].imshow(stamp.pixel_values.T, origin='lower')
-            raxes[i, 1].imshow(im.T, origin='lower')
-            resid = raxes[i, 2].imshow((stamp.pixel_values - im).T, origin='lower')
-            rfig.colorbar(resid, ax=raxes[i,:].tolist())
-        [ax.set_xlim(35, 65) for ax in raxes.flat]
-        [ax.set_ylim(35, 65) for ax in raxes.flat]
-        #pdf.savefig(rfig)
-        #pl.close(rfig)
+        #from dynesty import plotting as dyplot
+        #cfig, caxes = dyplot.cornerplot(result, fig=pl.subplots(4,4, figsize=(13., 10)),
+        #                                labels=label, show_titles=True, title_fmt='.8f')
+        #tfig, taxes = dyplot.traceplot(result, fig=pl.subplots(4, 2, figsize=(13., 13.)),
+        #                               labels=label)
+
+        if showfit:
+            rfig, raxes = pl.subplots(len(stamps), 6, sharex=True, sharey=True)
+            raxes = np.atleast_2d(raxes)
+            for j, stamp in enumerate(stamps):
+                err = 1. / stamp.ierr.reshape(stamp.nx, stamp.ny)
+                snr = stamp.pixel_values * stamp.ierr.reshape(stamp.nx, stamp.ny)
+                model, grad = make_image(scene, stamp, Theta=vals)
+                data = stamp.pixel_values
+                resid = (data - model)
+                chi = resid / err
+                imlist = [err, snr, data, model, resid, chi]
+                for ax, im in zip(raxes[j, :], imlist):
+                    cc = ax.imshow(im[20:35, 20:35].T, origin='lower')
+                rfig.colorbar(cc, ax=raxes[j,:].tolist())
+            #[ax.set_xlim(35, 65) for ax in raxes.flat]
+            #[ax.set_ylim(35, 65) for ax in raxes.flat]
+            pdf.savefig(rfig)
+            pl.close(rfig)
 
         print('----')
         print(vals)
         print(c['counts'], cat150[i]['counts'], c['ra'], c['dec'])
-        #out.write(strfmt.format(i, vals[0], vals[1], vals[2], result['logl'].max(), stamps[0].pixel_values.sum(), result['ncall']))
 
-    #out.close()
-    #ocat = np.genfromtxt(fn, dtype=dt2)
+        counts90, counts50 = vals[0], vals[1]
+        size = np.array([stamp.nx, stamp.ny])
+        center = np.array(stamp.pixcenter_in_full)
+        lo = (center - 0.5 * size).astype(int)
+        x, y = lo + vals[nband:]
+        all_pos.append((x, y))
+        wght = np.exp(result["logwt"] - result['logz'][-1])
+        flux = np.array([quantile(result["samples"][:, k], [0.16, 0.5, 0.84], wght) for k in range(nband)])
+
+        # cols = ([i] + vals[nband:].tolist() + vals[:nband].tolist() +
+        cols = ([i] + vals.tolist()[nband:] + flux.flatten().tolist() + 
+                [result['logl'].max(), stamp.pixel_values.sum(), result['ncall'].sum()])
+        out.write(strfmt.format(*cols))
+
+    if showfit:
+        pdf.close()
+    else:
+        pl.show()
+    out.close()
+    ocat = np.genfromtxt(fn)#, dtype=dt2)
+    ratio = ocat[:, 4] / cat[:nfit]["counts"]
+    hi = ocat[:, 5]/cat[:nfit]["counts"] - ocat[:, 4]/cat[:nfit]["counts"]
+    lo = ocat[:, 4]/cat[:nfit]["counts"] - ocat[:, 3]/cat[:nfit]["counts"]
+    fig, ax = pl.subplots()
+    ax.errorbar(cat[:nfit]["counts"], ratio, yerr=[lo, hi], capsize=5, capthick=2)
     
