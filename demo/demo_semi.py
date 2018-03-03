@@ -258,18 +258,40 @@ if __name__ == "__main__":
     # --- Sampling -----
     if True:
         p0 = ptrue.copy() #model.renormalize_theta(ptrue)
+        scales = nband * [4.0] + 2 * [1.0] + [1.0] + [1.0]
+        scales = np.array(len(sourcepars) * scales)
+        mass_matrix = 1.0 / scales**2
+        #mass_matrix = None
 
+        # Initialize sampler
         import hmc
-            #initialize sampler and sample
         sampler = hmc.BasicHMC(model, verbose=False)
-        eps = sampler.find_reasonable_epsilon(p0, epsilon_guess=1e-2)
+        sampler.ndim = len(p0)
+        sampler.set_mass_matrix(mass_matrix)
+        sampler.sourcepars = sourcepars
+        sampler.stamp_kwargs = stamp_kwargs
+        sampler.filters = filters
+        sampler.offsets = offsets
+        sampler.plans = plans
+        sampler.scene = scene
+        sampler.truths = ptrue.copy()
+
+        
+        eps = sampler.find_reasonable_stepsize(p0, epsilon_guess=1e-2)
         #eps = 0.01
         #sys.exit()
-        iterations = 2000
         length = 50
         sigma_length = 10
-        pos, prob, eps = sampler.sample(p0*1.05, iterations=iterations,
-                                        epsilon=eps/5., length=length, sigma_length=sigma_length,
+        # Burn-in
+        pos, prob, grad = sampler.sample(p0*1.05, iterations=20, mass_matrix=mass_matrix,
+                                        epsilon=eps / 2., length=length, sigma_length=sigma_length,
+                                        store_trajectories=True)
+
+        post_burnin = pos.copy()
+        eps_run = sampler.find_reasonable_stepsize(pos, epsilon_guess=eps)
+        sys.exit()
+        pos, prob, grad = sampler.sample(pos, iterations=100, mass_matrix=mass_matrix,
+                                        epsilon=eps_run / 2., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)
 
         vals = pos  # model.renormalize_theta(pos)
@@ -305,18 +327,13 @@ if __name__ == "__main__":
         pnames = filters + ['RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$']
         [ax.set_xlabel(p) for ax, p in zip(taxes[:, 1], pnames)]
 
-        sampler.sourcepars = sourcepars
-        sampler.stamp_kwargs = stamp_kwargs
-        sampler.filters = filters
-        sampler.offsets = offsets
-        sampler.plans = plans
-        sampler.scene = scene
-        sampler.truths = ptrue.copy()
 
+        sampler.model = None
         import pickle
         with open("semi_results_snr10.pkl", "wb") as f:
             pickle.dump(sampler, f)
-
+        sampler.model = model
+        
         #tfig.tight_layout()
         #import corner
         #cfig = corner.corner(

@@ -26,77 +26,82 @@ def plot_data(stamps, filters, offsets):
 
 
 def plot_chain(sampler, start=1000, source=0,
-               show_trajectories=False):
+               show_trajectories=False, equal_axes=False):
     ndim = sampler.scene.sources[0].nparam
     p0 = sampler.truths
     filters = sampler.filters
     nband = len(filters)
 
-    
     ffig, faxes = pl.subplots(nband, 2, figsize=(8.5, 9.),
                               gridspec_kw={'width_ratios':[2, 1]})
     for j in range(nband):
         i = source * ndim + j
-        l, n = [], 0
-        if show_trajectories:
-            for traj in sampler.trajectories:
-                faxes[j, 0].plot(np.arange(len(traj)) + n,
-                                traj[:, i], color='r')
-                n += len(traj)
-                l.append(n)
-            cut = l[start]
-        else:
-            l = np.arange(sampler.chain.shape[0])
-            cut = start
-        faxes[j, 0].plot(np.array(l), sampler.chain[:, i],'o')
-        faxes[j, 0].axhline(p0[i], linestyle=':', color='k')
-        faxes[j, 1].hist(sampler.chain[start:, i], alpha=0.5, bins=30, orientation='horizontal')
-        faxes[j, 1].axhline(p0[i], linestyle=':', color='k')
-        faxes[j, 0].axvline(cut, linestyle='--', color='r')
+        _ = one_chain(faxes[j, :], sampler, i, p0[i], start,
+                      show_trajectories=show_trajectories)
 
-    faxes = prettify_chains(faxes, filters)
+    faxes = prettify_chains(faxes, filters, equal_axes=equal_axes,
+                            show_trajectories=show_trajectories)
     
     tfig, taxes = pl.subplots(ndim-nband, 2, figsize=(8.5, 9.),
                               gridspec_kw={'width_ratios':[2, 1]})
     for j in range(ndim-nband):
         i = source * ndim + nband + j
-        l, n = [], 0
-        if show_trajectories:
-            for traj in sampler.trajectories:
-                taxes[j, 0].plot(np.arange(len(traj)) + n,
-                                traj[:, i], color='r')
-                n += len(traj)
-                l.append(n)
-            cut = l[start]
-        else:
-            l = np.arange(sampler.chain.shape[0])
-            cut = start
-        taxes[j, 0].plot(np.array(l), sampler.chain[:, i],'o')
-        taxes[j, 0].axhline(p0[i], linestyle=':', color='k')
-        taxes[j, 1].hist(sampler.chain[start:, i], alpha=0.5, bins=30, orientation='horizontal')
-        taxes[j, 1].axhline(p0[i], linestyle=':', color='k')
-        taxes[j, 0].axvline(cut, linestyle='--', color='r')
+        _ = one_chain(taxes[j, :], sampler, i, p0[i], start,
+                      show_trajectories=show_trajectories)
 
     pnames = ['RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$']
-    taxes = prettify_chains(taxes, pnames)
-    
+    taxes = prettify_chains(taxes, pnames, equal_axes=equal_axes,
+                            show_trajectories=show_trajectories)
 
     return tfig, taxes, ffig, faxes
 
 
-def prettify_chains(axes, labels, fontsize=10):
+def one_chain(axes, sampler, i, truth=None, start=0, show_trajectories=False):
+    l, n = [], 0
+    if show_trajectories:
+        label = "trajectories"
+        for traj in sampler.trajectories:
+            axes[0].plot(np.arange(len(traj)) + n,
+                         traj[:, i], color='r', label=label)
+            n += len(traj)
+            l.append(n)
+            label=None
+        cut = l[start]
+    else:
+        l = np.arange(sampler.chain.shape[0])
+        cut = start
+    axes[0].plot(np.array(l), sampler.chain[:, i],'o', label="samples")
+    axes[1].hist(sampler.chain[start:, i], alpha=0.5, bins=30, orientation='horizontal')
+    axes[0].axvline(cut, linestyle='--', color='r')
+    if truth is not None:
+        axes[0].axhline(truth, linestyle=':', color='k', label="Truth")
+        axes[1].axhline(truth, linestyle=':', color='k')
+    return axes
+
+
+def prettify_chains(axes, labels, fontsize=10, equal_axes=False,
+                    show_trajectories=False):
     [ax.set_ylabel(p) for ax, p in zip(axes[:, 0], labels)]
     [ax.set_xticklabels('') for ax in axes[:-1, 0]]
     [ax.set_xticklabels('') for ax in axes[:, 1]]
     [ax.yaxis.tick_right() for ax in axes[:, 1]]
     [ax.set_ylabel(p) for ax, p in zip(axes[:, 1], labels)]
     [ax.yaxis.set_label_position("right") for ax in axes[:, 1]]
-    axes[-1, 0].set_xlabel('HMC iteration')
+    if show_trajectories:
+        axes[-1, 0].set_xlabel('Step number')
+        axes[0, 0].legend()
+    else:
+        axes[-1, 0].set_xlabel('HMC iteration')
     
     [item.set_fontsize(fontsize)
      for ax in axes.flat
      for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels())
     ]
+
+    if equal_axes:
+        [ax[1].set_ylim(ax[0].get_ylim()) for ax in axes]
+
+    
     return axes
 
     
