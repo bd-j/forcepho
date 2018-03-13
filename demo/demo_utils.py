@@ -8,10 +8,74 @@ from forcepho.data import PostageStamp
 from forcepho import psf as pointspread
 
 
-__all__ = ["negative_lnlike_multi", "chi_vector",
+__all__ = ["Posterior",
+           "negative_lnlike_multi", "chi_vector",
            "numerical_image_gradients",
            "make_stamp", "make_real_stamp"
            ]
+
+
+class Posterior(object):
+
+    def __init__(self, scene, plans, upper=np.inf, lower=-np.inf):
+        self.scene = scene
+        self.plans = plans
+        self.theta = -99
+        self.lower = lower
+        self.upper = upper
+
+    def evaluate(self, Theta):
+        print(Theta)
+        t = time.time()
+        nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
+        print(time.time() - t)
+        self._lnp = -nll
+        self._lnp_grad = -nll_grad
+        self._theta = Theta
+
+    def lnprob(self, Theta):
+        if np.any(Theta != self.theta):
+            self.evaluate(Theta)
+        return self._lnp
+
+    def lnprob_grad(self, Theta):
+        if np.any(Theta != self.theta):
+            self.evaluate(Theta)
+        return self._lnp_grad
+
+    def check_constrained(self, theta):
+        """Method that checks parameter values against constraints.  If they
+        are above or below the boundaries, the sign of the momentum is flipped
+        and theta is adjusted as if the trajectory had bounced off the
+        constraint.
+
+        :param theta:
+            The parameter vector
+
+        :returns theta:
+            the new theta vector
+
+        :returns sign:
+            a vector of multiplicative signs for the momenta
+
+        :returns flag:
+            A flag for if the values are still out of bounds.
+        """
+
+        #initially no flips
+        sign = np.ones_like(theta)
+        oob = True #pretend we started out-of-bounds to force at least one check
+        #print('theta_in ={0}'.format(theta))
+        while oob:
+            above = theta > self.upper
+            theta[above] = 2*self.upper[above] - theta[above]
+            sign[above] *= -1
+            below = theta < self.lower
+            theta[below] = 2*self.lower[below] - theta[below]
+            sign[below] *= -1
+            oob = np.any(below | above)
+            #print('theta_out ={0}'.format(theta))
+        return theta, sign, oob
 
 
 def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
@@ -44,7 +108,8 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
 
             
 def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
-               offset=0., filtername='dummy'):
+               offset=0., filtername='dummy', oversample=8,
+               psfcenter=104):
     """Make a postage stamp of the given size, including a PSF
 
     :param size:
@@ -85,9 +150,9 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
 
-        oversample, pcenter = 8, 504 - 400  # HAAAACKKK
+        #oversample, pcenter = 8, 504 - 400  # HAAAACKKK
         answer = pdat[6][2]
-        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=pcenter)
+        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=psfcenter)
     else:
         stamp.psf = pointspread.PointSpreadFunction()
         stamp.psf.covariances *= fwhm / 2.355
@@ -100,7 +165,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
 
 
 def make_real_stamp(imname, center=(None, None), size=(None, None),
-                    center_type='pixels', psfname=None, fwhm=1.0):
+                    center_type='pixels', psfname=None, fwhm=1.0,
+                    oversample=8, psfcenter=104, fix_header=False):
     """Make a postage stamp around the given position using the given image name
     """
     data = fits.getdata(imname)
@@ -109,6 +175,11 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
     CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
                    [hdr['CD2_1'], hdr['CD2_2']]])
+
+    if fix_header:
+        # because hdr PC/CD/CDELT is sometimes wrong.
+        hdr["CDELT1"] = hdr['CD1_1'] / hdr["PC1_1"]
+        hdr["CDELT2"] = hdr['CD2_2'] / hdr["PC2_2"]
 
     # Pull slices and transpose to get to an axis order that makes sense to me
     # and corresponds with the wcs keyword ordering
@@ -119,8 +190,8 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     center = np.array(center)
     # here we get the center coordinates in pixels (accounting for the transpose above)
     if center_type == 'celestial':
-        world = np.append(center, 0)
-        ast = apy_wcs.WCS(hdr)
+        world = center.copy()
+        ast = apy_wcs.WCS(hdr, naxis=2)
         center = ast.wcs_world2pix(world[None, :], 0)[0, :2]
     # --- here is much mystery ---
     size = np.array(size)
@@ -131,7 +202,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     crval_stamp = crpix_stamp + lo
     W = np.eye(2)
     if center_type == 'celestial':
-        crval_stamp = ast.wcs_pix2world(np.append(crval_stamp, 0.)[None,:], 0)[0, :2]
+        crval_stamp = ast.wcs_pix2world(crval_stamp[None,:], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
 
@@ -170,7 +241,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
 
         oversample, center = 8, 504 - 400  # HAAAACKKK
         answer = pdat[6][2]
-        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=center)
+        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=psfcenter)
     else:
         stamp.psf = pointspread.PointSpreadFunction()
         stamp.psf.covaraniaces *= fwhm/2.355

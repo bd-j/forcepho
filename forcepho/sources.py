@@ -6,7 +6,6 @@ __all__ = ["Scene", "Source",
            "Star", "SimpleGalaxy", "Galaxy"]
 
 
-
 class Scene(object):
     """The Scene holds the sources and provides the mapping between a giant 1-d
     array of parameters and the parameters of each source in each band/image
@@ -34,11 +33,9 @@ class Scene(object):
         """
         npar_per_source = [s.nparam for s in self.sources[:sid]]
         # get all the shape parameters
-        # TODO: nshape (and use_gradients) should probably be an attribute of the source
         source = self.sources[sid]
         start = int(np.sum(npar_per_source))
         # indices of the shape and position parameters
-        #print(start, source.nband, source.nparam)
         inds = range(start + source.nband, start + source.nparam)
         # put in the flux for this source in this band
         inds.insert(0, start + source.filter_index(filtername))

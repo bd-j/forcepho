@@ -9,7 +9,7 @@ except(IndexError):
     band = 'f150w'
 
 pname = psfims + 'PSF_NIRCam_{}.fits'.format(band.upper())
-start, stop = 400, 600
+start, stop = 100, 400
 nmix = 6
 ans = fit_jwst_psfs.fit_jwst_psf(pname, band, nmix=nmix, start=start, stop=stop, nrepeat=3)
 
