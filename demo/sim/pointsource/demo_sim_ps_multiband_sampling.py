@@ -50,15 +50,16 @@ def fit_source(ra=53.115295, dec=-27.803501, dofit=True, nlive=100):
     lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
 
     # --- Initialize ---
-    theta_init = np.array([stamps[0].pixel_values.sum() * 1.0, stamps[2].pixel_values.sum(), ra_init, dec_init])
+    counts = [stamp[0].pixel_values.sum() * 1.0 for stamp in stamps]
+    theta_init = np.array(counts + [ra_init, dec_init])
     # a rough measure of dcoordinate/dpix
     plate_scale, _ = np.linalg.eig(np.linalg.inv(stamps[0].dpix_dsky))
-    # make the prior ~10 pixels wide, and 50% of counts
-    theta_width = np.array([0.5 * theta_init[0], 0.5 * theta_init[1], 10 * plate_scale[0], 10 * plate_scale[1]])
+    # make the prior ~10 pixels wide, and 100% of counts
+    theta_width = np.array(counts + [10 * plate_scale[0], 10 * plate_scale[1]])
     #print(theta_init, theta_width)
 
     # --- Nested sampling ---
-    ndim = 4
+    ndim = len(theta_init)
 
     def prior_transform(unit_coords):
         # convert to uniform -1 to 1
@@ -92,18 +93,14 @@ if __name__ == "__main__":
 
     showfit = True
     nfit = 20
-
-    # ---- Read the input catalog -----
-    catname = os.path.join(paths.starsims, 'stars_f090w.cat')
-    dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
-    cat = np.genfromtxt(catname, usecols=np.arange(1, 9), dtype=dt)
-    cat = cat[:100]
-
-    cat150 = np.genfromtxt(os.path.join(paths.starsims, 'stars_f150w.cat'), usecols=np.arange(1, 9), dtype=dt)[:100]
-    
-    # --- setup output ---
     nband = len(filters)
+
+    # ---- Read the input catalog(s) -----
+    dt = np.dtype([(n, np.float) for n in ['ra', 'dec', 'x', 'y', 'mag', 'counts', 'flux1', 'flux2']])
+    catnames = [os.path.join(paths.starsims, 'stars_{}.cat'.format(band.lower())) for band in filters]
+    cats = [np.genfromtxt(cn, usecols=np.arange(1, 9), dtype=dt)[:100] for cn in catnames]
     
+    # --- setup output ---    
     fn = 'output_pointsource_dynesty.dat'
     pn = 'pointsource_resid_dynesty.pdf'
     out = open(fn, 'w')
@@ -116,13 +113,12 @@ if __name__ == "__main__":
     if showfit:
         pdf = PdfPages(pn)
 
-    label = ['Counts_f090', 'Counts_f150', 'RA', 'Dec']
+    label = ['Counts_{}'.format(f.lower()) for f in filters] + ['RA', 'Dec']
 
     #sys.exit()
     all_results, all_pos = [], []
-    for i, c in enumerate(cat[:nfit]):
+    for i, c in enumerate(cats[0][:nfit]):
         blob = fit_source(ra=c['ra'], dec=c['dec'], nlive=50)
-
         result, vals, stamps, scene = blob
         all_results.append(result)
 
@@ -153,18 +149,16 @@ if __name__ == "__main__":
 
         print('----')
         print(vals)
-        print(c['counts'], cat150[i]['counts'], c['ra'], c['dec'])
+        counts = [c[i]["counts"] for c in  cats]
+        print(counts, c['ra'], c['dec'])
 
-        counts90, counts50 = vals[0], vals[1]
-        size = np.array([stamp.nx, stamp.ny])
-        center = np.array(stamp.pixcenter_in_full)
-        lo = (center - 0.5 * size).astype(int)
-        x, y = lo + vals[nband:]
-        all_pos.append((x, y))
+        #size = np.array([stamp.nx, stamp.ny])
+        #center = np.array(stamp.pixcenter_in_full)
+        #lo = (center - 0.5 * size).astype(int)
+        #x, y = lo + vals[nband:]
+        #all_pos.append((x, y))
         wght = np.exp(result["logwt"] - result['logz'][-1])
         flux = np.array([quantile(result["samples"][:, k], [0.16, 0.5, 0.84], wght) for k in range(nband)])
-
-        # cols = ([i] + vals[nband:].tolist() + vals[:nband].tolist() +
         cols = ([i] + vals.tolist()[nband:] + flux.flatten().tolist() + 
                 [result['logl'].max(), stamp.pixel_values.sum(), result['ncall'].sum()])
         out.write(strfmt.format(*cols))
@@ -174,10 +168,11 @@ if __name__ == "__main__":
     else:
         pl.show()
     out.close()
-    ocat = np.genfromtxt(fn)#, dtype=dt2)
-    ratio = ocat[:, 4] / cat[:nfit]["counts"]
-    hi = ocat[:, 5]/cat[:nfit]["counts"] - ocat[:, 4]/cat[:nfit]["counts"]
-    lo = ocat[:, 4]/cat[:nfit]["counts"] - ocat[:, 3]/cat[:nfit]["counts"]
-    fig, ax = pl.subplots()
-    ax.errorbar(cat[:nfit]["counts"], ratio, yerr=[lo, hi], capsize=5, capthick=2)
+
     
+    ocat = np.genfromtxt(fn)#, dtype=dt2)
+    ratio = ocat[:, 4] / cats[0][:nfit]["counts"]
+    hi = ocat[:, 5]/cats[0][:nfit]["counts"] - ocat[:, 4]/cats[0][:nfit]["counts"]
+    lo = ocat[:, 4]/cats[0][:nfit]["counts"] - ocat[:, 3]/cats[0][:nfit]["counts"]
+    fig, ax = pl.subplots()
+    ax.errorbar(cats[0][:nfit]["counts"], ratio, yerr=[lo, hi], capsize=5, capthick=2)
