@@ -29,7 +29,7 @@ class PostageStamp(object):
     ny = 100
     npix = 100 * 100
 
-    # The scale matrix D (arcseconds per pixel)
+    # The scale matrix D (pixels per arcsecond)
     scale = np.eye(2)
     # The matrix [dpix/dRA, dpix/dDec]
     dpix_dsky = np.eye(2)

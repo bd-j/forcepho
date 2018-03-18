@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
         post_burnin = pos.copy()
         eps_run = sampler.find_reasonable_stepsize(pos, epsilon_guess=eps)
-        sys.exit()
+        #sys.exit()
         pos, prob, grad = sampler.sample(pos, iterations=100, mass_matrix=mass_matrix,
                                         epsilon=eps_run / 2., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)

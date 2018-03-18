@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 import astropy.io.fits as fits
 from astropy import wcs as apy_wcs
@@ -166,7 +167,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
 
 def make_real_stamp(imname, center=(None, None), size=(None, None),
                     center_type='pixels', psfname=None, fwhm=1.0,
-                    oversample=8, psfcenter=104, fix_header=False):
+                    oversample=8, psfcenter=104, fix_header=False,
+                    psf_ngauss=6, psf_realization=2):
     """Make a postage stamp around the given position using the given image name
     """
     data = fits.getdata(imname)
@@ -239,8 +241,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
         with open(psfname, 'rb') as pf:
             pdat = pickle.load(pf)
 
-        oversample, center = 8, 504 - 400  # HAAAACKKK
-        answer = pdat[6][2]
+        answer = pdat[psf_ngauss][psf_realization]
         stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=psfcenter)
     else:
         stamp.psf = pointspread.PointSpreadFunction()

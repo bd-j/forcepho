@@ -429,7 +429,7 @@ if __name__ == "__main__":
     smoothing = 0.25
 
     # arcsec per pixel
-    pixscale = 0.03
+    pixscale = 0.032
 
     outname = fit_profiles(smoothing=smoothing * pixscale,
                            lnradii=lnradii + np.log(pixscale),
