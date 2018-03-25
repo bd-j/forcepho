@@ -7,7 +7,7 @@ __all__ = ["lnlike_multi", "make_image",
            "WorkPlan", "FastWorkPlan"
            ]
 
-
+# Number of derivatives (on-sky params)
 NDERIV = 7
 
 

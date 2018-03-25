@@ -107,6 +107,7 @@ class Source(object):
             The length of the supplied `filters` list will determine the length
             of the `flux` vector, accessible via the `nband` attribute.
         """
+        assert type(filters) == list
         self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
@@ -138,6 +139,12 @@ class Source(object):
         d/dsersic, d/drh) will you actually use?
         """
         return slice(0, 1 + self.npos + self.nshape)
+
+    @property
+    def parameter_names(self):
+        names = self.filternames + ["ra", "dec"] + ["q", "pa", "n", "r"][:self.nshape]
+        names = ["{}_{}".format(n, self.id) for n in names]
+        return names
 
     def filter_index(self, filtername):
         """Returns the index of the element of the `flux` array that
@@ -251,7 +258,7 @@ class SimpleGalaxy(Source):
       * dec: declination (degrees)
       * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
 
-    The radial profile is assumed to be a sum of equally weighted, gaussians
+    The radial profile is assumed to be a sum of equally weighted gaussians
     with radii given by SimpleGalaxy.radii
     """
 
@@ -334,9 +341,9 @@ class Galaxy(Source):
     
     # Galaxies have two position parameters, 2  or 4 shape parameters (pa and q) and nband flux parameters
     npos = 2
-    nshape = 2
+    nshape = 4
 
-    def __init__(self, filters=['dummy'], radii=None, splinedata=None):
+    def __init__(self, filters=['dummy'], radii=None, splinedata=None, free_sersic=True):
         self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
@@ -345,8 +352,11 @@ class Galaxy(Source):
             raise ValueError, "Galaxies must have information to make A(r, n) bivariate splines"
             #self.splines = [dummy_spline] * self.ngauss
         else:
-            self.nshape = 4
             self.initialize_splines(splinedata)
+
+        if not free_sersic:
+            # Fix the sersic parameters n_sersic and r_h
+            self.nshape = 2
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
@@ -355,8 +365,8 @@ class Galaxy(Source):
 
         :param theta:
             The source parameter values that are to be set.  Sequence of length
-            either `nband + 6` (if `filtername` is `None`) or 7 (if a filter is
-            specified)
+            either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
+            npos + nshape` (if a filter is specified)
 
         :param filtername: (optional, default: None)
             If supplied, the theta vector is assumed to be 7-element (fluxI,
@@ -371,14 +381,15 @@ class Galaxy(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) == nflux + 6, "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + self.npos + self.nshape, "The length of the parameter vector is not appropriate for this source"
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
         self.q   = theta[nflux + 2]
         self.pa  = theta[nflux + 3]
-        self.sersic = theta[nflux + 4]
-        self.rh = theta[nflux + 5]
+        if self.nshape > 2:
+            self.sersic = theta[nflux + 4]
+            self.rh = theta[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -387,9 +398,9 @@ class Galaxy(Source):
             flux = [self.flux[self.filter_index(filtername)]]
         else:
             flux = self.flux
-        params = np.concatenate([flux, [self.ra], [self.dec],
-                                 [self.q], [self.pa],
-                                 [self.sersic], [self.rh]])
+        params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
+        if self.nshape > 2:
+            params = np.concatenate([params, [self.sersic, self.rh]])
         return params
 
     def initialize_splines(self, splinedata, spline_smoothing=None):

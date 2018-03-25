@@ -25,7 +25,8 @@ class Posterior(object):
         self.lower = lower
         self.upper = upper
 
-    def evaluate(self, Theta):
+    def evaluate(self, theta):
+        Theta = self.complete_theta(theta)
         print(Theta)
         t = time.time()
         nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
@@ -43,6 +44,9 @@ class Posterior(object):
         if np.any(Theta != self.theta):
             self.evaluate(Theta)
         return self._lnp_grad
+
+    def complete_theta(self, theta):
+        return theta
 
     def check_constrained(self, theta):
         """Method that checks parameter values against constraints.  If they

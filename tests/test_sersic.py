@@ -8,7 +8,7 @@ from forcepho.sources import Galaxy, Scene
 from forcepho.likelihood import WorkPlan, make_image, lnlike_multi
 
 
-from demo_utils import make_stamp, negative_lnlike_multi, numerical_image_gradients
+from demo_utils import make_stamp, negative_lnlike_multi, numerical_image_gradients, Posterior
 
 
 class Sersic(Galaxy):
@@ -74,6 +74,9 @@ def setup_scene(sourceparams=[(1.0, 5., 5., 0.7, 30., 1.0, 0.05)],
             noise = np.random.normal(0, err)
             stamp.pixel_values += noise.reshape(stamp.nx, stamp.ny)
 
+
+    label = filters + ["ra", "dec", "q", "pa", "n", "rh"]
+
     return scene, stamps, ptrue, label
 
 
@@ -85,14 +88,14 @@ if __name__ == "__main__":
     filters = ["F090W"] #, "F150W"]
     psfnames = ['f090_ng6_em_random.p'] # , 'f150w_ng6_em_random.p']
     psfnames = [os.path.join(paths.psfmixture, p) for p in psfnames]
-    stamp_kwargs = [{'size': (30, 30), 'psfname': p, 'filtername': f}
+    stamp_kwargs = [{'size': (50, 50), 'psfname': p, 'filtername': f}
                     for p, f in zip(psfnames, filters)]
 
     # Let's make one Galaxy in one band
     # flux, ra, dec, q, pa(deg), n, sersic
-    sourcepars = [([30.], 15., 15., 0.7, 45, 2.1, 0.07)]
-    upper = np.array([60., 20., 20., 1.0, np.pi/2., 5.0, 0.12])
-    lower = np.array([10., 10., 10., 0.0, -np.pi/2, 1.0, 0.03])
+    sourcepars = [([30.], 25., 25., 0.7, 45, 2.1, 0.07)]
+    upper = np.array([60., 30., 30., 1.0, np.pi/2., 5.0, 0.12])
+    lower = np.array([10., 20., 20., 0.0, -np.pi/2, 1.0, 0.03])
 
     scene, stamps, ptrue, label = setup_scene(sourceparams=sourcepars,
                                               splinedata=paths.galmixture,
@@ -136,9 +139,12 @@ if __name__ == "__main__":
         rgrid = np.linspace(lo, hi, npg)
         lo, hi = scene.sources[0].sersic_range
         ngrid = np.linspace(lo, hi, npg)
-        grids = [rgrid, ngrid]
-        ind = [-1, -2]
-        p = ["$R_h$", "$n_{sersic}$"]
+        lo, hi = lower[0], upper[0]
+        fgrid = np.linspace(lo, hi, npg)
+        
+        grids = [rgrid, ngrid, fgrid]
+        ind = [-1, -2, 0]
+        p = ["$R_h$", "$n_{sersic}$", "flux"]
 
         xi, dxi = [], []
 
@@ -165,7 +171,7 @@ if __name__ == "__main__":
         pl.show()
 
     # --- sampling ---
-    if True:
+    if False:
         lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
         theta_width = (upper - lower)
         nlive = 50
@@ -191,19 +197,46 @@ if __name__ == "__main__":
         truths = ptrue.copy()
         label = filters + ["ra", "dec", "q", "pa", "n", "rh"]
         cfig, caxes = dyplot.cornerplot(results, fig=pl.subplots(ndim, ndim, figsize=(13., 10)),
-                                        labels=label, show_titles=True, title_fmt='.8f', truths=truths)
+                                        labels=label, show_titles=True, title_fmt='.3f', title_kwargs={'fontsize':12}, truths=truths)
         tfig, taxes = dyplot.traceplot(results, fig=pl.subplots(ndim, 2, figsize=(13., 13.)),
                                     labels=label)
 
         
-    if False:
+    if True:
         p0 = ptrue.copy()
         scales = upper - lower
+        scales = np.array([ 50. ,   5. ,   5. ,   0.5,   3. ,   4. ,   1. ])
+        #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
+        #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
 
+        from hmc import BasicHMC
         model = Posterior(scene, plans, upper=upper, lower=lower)
         sampler = BasicHMC(model, verbose=False)
         sampler.ndim = len(p0)
-        pos, prob, grad = sampler.sample(p0, iterations=100, mass_matrix=1/scales**2,
-                                         epsilon=None, length=20, sigma_length=5,
+        sampler.sourcepars = sourcepars
+        sampler.stamp_kwargs = stamp_kwargs
+        sampler.filters = filters
+        sampler.offsets = None
+        sampler.plans = plans
+        sampler.scene = scene
+        sampler.truths = ptrue.copy()
+
+        sampler.set_mass_matrix(1/scales**2)
+        eps = sampler.find_reasonable_stepsize(p0*1.1)
+        # eps = 0.00390625
+        #sys.exit()
+        pos, prob, grad = sampler.sample(p0, iterations=10, mass_matrix=1/scales**2,
+                                         epsilon=eps/2, length=20, sigma_length=5,
                                          store_trajectories=True)
-        results = {"samples":sampler.chain.copy()}
+        eps = sampler.find_reasonable_stepsize(pos)
+        pos, prob, grad = sampler.sample(p0, iterations=1000, mass_matrix=1/scales**2,
+                                         epsilon=eps/2, length=20, sigma_length=5,
+                                         store_trajectories=True)
+        #results = {"samples":sampler.chain.copy()}
+        
+        sys.exit()
+        sampler.model = None
+        import pickle
+        with open("test_sersic_v2.pkl", "wb") as f:
+            pickle.dump(sampler, f)
+        sampler.model = model

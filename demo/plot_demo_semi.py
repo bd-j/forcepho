@@ -25,7 +25,7 @@ def plot_data(stamps, filters, offsets):
     return dfig, daxes
 
 
-def plot_chain(sampler, start=1000, source=0,
+def plot_chain(sampler, start=0, stop=-1, source=0,
                show_trajectories=False, equal_axes=False):
     ndim = sampler.scene.sources[0].nparam
     p0 = sampler.truths
@@ -34,9 +34,10 @@ def plot_chain(sampler, start=1000, source=0,
 
     ffig, faxes = pl.subplots(nband, 2, figsize=(8.5, 9.),
                               gridspec_kw={'width_ratios':[2, 1]})
+    faxes = np.atleast_2d(faxes)
     for j in range(nband):
         i = source * ndim + j
-        _ = one_chain(faxes[j, :], sampler, i, p0[i], start,
+        _ = one_chain(faxes[j, :], sampler, i, p0[i], start, stop,
                       show_trajectories=show_trajectories)
 
     faxes = prettify_chains(faxes, filters, equal_axes=equal_axes,
@@ -46,7 +47,7 @@ def plot_chain(sampler, start=1000, source=0,
                               gridspec_kw={'width_ratios':[2, 1]})
     for j in range(ndim-nband):
         i = source * ndim + nband + j
-        _ = one_chain(taxes[j, :], sampler, i, p0[i], start,
+        _ = one_chain(taxes[j, :], sampler, i, p0[i], start, stop,
                       show_trajectories=show_trajectories)
 
     pnames = ['RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$']
@@ -56,23 +57,30 @@ def plot_chain(sampler, start=1000, source=0,
     return tfig, taxes, ffig, faxes
 
 
-def one_chain(axes, sampler, i, truth=None, start=0, show_trajectories=False):
+def one_chain(axes, sampler, i, truth=None, start=0, stop=-1,
+              show_trajectories=False):
     l, n = [], 0
     if show_trajectories:
         label = "trajectories"
-        for traj in sampler.trajectories:
+        for k, traj in enumerate(sampler.trajectories[:stop]):
+            if sampler.accepted[k]:
+                color = 'tomato'
+            else:
+                color = 'maroon'
             axes[0].plot(np.arange(len(traj)) + n,
-                         traj[:, i], color='r', label=label)
+                         traj[:, i], color=color, label=label)
             n += len(traj)
             l.append(n)
             label=None
+        l = np.array(l) - 1
         cut = l[start]
     else:
-        l = np.arange(sampler.chain.shape[0])
+        l = np.arange(sampler.chain.shape[0])[:stop]
         cut = start
-    axes[0].plot(np.array(l), sampler.chain[:, i],'o', label="samples")
-    axes[1].hist(sampler.chain[start:, i], alpha=0.5, bins=30, orientation='horizontal')
-    axes[0].axvline(cut, linestyle='--', color='r')
+    axes[0].plot(l, sampler.chain[:stop, i],'o', label="samples")
+    axes[1].hist(sampler.chain[start:stop, i], alpha=0.5, bins=30, orientation='horizontal')
+    if start > 0:
+        axes[0].axvline(cut, linestyle='--', color='r')
     if truth is not None:
         axes[0].axhline(truth, linestyle=':', color='k', label="Truth")
         axes[1].axhline(truth, linestyle=':', color='k')
@@ -153,6 +161,13 @@ def plot_seds(sampler, start=1000):
     [ax.set_ylabel("Flux") for ax in saxes.flat]
     saxes.flat[-1].set_xlabel("$\lambda (\mu m)$")
     return sfig, saxes
+
+
+def hmc_movie(sampler, iterations, stamps_to_show):
+    pass
+
+def hmc_movie_frame(sampler, i, stamps_to_show):
+    pass
 
 
 if __name__ == "__main__":
