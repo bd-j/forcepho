@@ -133,6 +133,48 @@ def test_image_gradients(ptrue, delta, scene=None, stamp=None):
 
 
 
+def gradient_slices(ptrue, n_per_dim=20, scene=None, plans=None):
+    """Compute the gradients along slices in a parameter starting from ptrue.
+    Currently hardcoded to look at rh, n, and flux[0]
+    """
+    # Rh
+    npg = n_per_dim
+    lo, hi = scene.sources[0].rh_range
+    rgrid = np.linspace(lo, hi, npg)
+    lo, hi = scene.sources[0].sersic_range
+    ngrid = np.linspace(lo, hi, npg)
+    lo, hi = 0.0, sources[0].flux[0] * 2
+    fgrid = np.linspace(lo, hi, npg)
+    
+    grids = [rgrid, ngrid, fgrid]
+    ind = [-1, -2, 0]
+    p = ["$R_h$", "$n_{sersic}$", "flux"]
+
+    xi, dxi = [], []
+
+    fig, axes = pl.subplots(2, len(grids))
+    for g, grid in enumerate(grids):
+        x, del_x = [], []
+        for i, v in enumerate(grid):
+            pnew = ptrue.copy()
+            pnew[ind[g]] = v
+            nll, nll_grad = negative_lnlike_multi(pnew, scene=scene, plans=plans)
+            x.append(nll)
+            del_x.append(nll_grad)
+        xi.append(x)
+        dxi.append(del_x)
+        dxi_dp = np.gradient(x) / np.gradient(grid)
+        axes[0, g].plot(grid, x, '-o')
+        axes[1, g].plot(grid, np.array(del_x)[:, ind[g]], '-o')
+        axes[1, g].plot(grid, dxi_dp, '-o')
+        axes[1, g].set_xlabel(p[g])
+        axes[0, 0].set_ylabel("$\\chi^2/2$")
+        axes[1, 0].set_ylabel("$\partial\\chi^2/\partial \\theta$")
+
+    [ax.legend() for ax in axes.flat]
+    return fig, axes
+
+
 if __name__ == "__main__":
 
     fig, ax, grad, grad_num = test_image_gaussian_gradients(1e-7)
