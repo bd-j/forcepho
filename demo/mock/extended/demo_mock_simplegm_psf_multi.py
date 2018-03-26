@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     
     # --- Setup Scene and Stamp(s) ---
-    catname = "catalog_for_demo_full.dat"
+    catname = "catalog_for_demo.dat"
     sourcepars, filters, offsets = read_catalog(catname)
     #sys.exit()
     

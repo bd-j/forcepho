@@ -11,26 +11,6 @@ from forcepho.likelihood import WorkPlan, make_image, lnlike_multi
 from demo_utils import make_stamp, negative_lnlike_multi, numerical_image_gradients, Posterior
 
 
-class Sersic(Galaxy):
-
-    npos = 0
-    nshape = 2
-    nband = 0
-
-    def __init__(self):
-        pass
-    
-    @property
-    def use_gradients(self):
-        return slice(6, 6 + self.nshape)
-
-    def set_params(self):
-        pass
-
-    def get_param_vector(self):
-        pass
-
-
 def setup_scene(sourceparams=[(1.0, 5., 5., 0.7, 30., 1.0, 0.05)],
                 splinedata=None, perturb=0,
                 filters=['dummy'],
@@ -197,7 +177,8 @@ if __name__ == "__main__":
         truths = ptrue.copy()
         label = filters + ["ra", "dec", "q", "pa", "n", "rh"]
         cfig, caxes = dyplot.cornerplot(results, fig=pl.subplots(ndim, ndim, figsize=(13., 10)),
-                                        labels=label, show_titles=True, title_fmt='.3f', title_kwargs={'fontsize':12}, truths=truths)
+                                        labels=label, show_titles=True, title_fmt='.3f',
+                                        title_kwargs={'fontsize':12}, truths=truths)
         tfig, taxes = dyplot.traceplot(results, fig=pl.subplots(ndim, 2, figsize=(13., 13.)),
                                     labels=label)
 
