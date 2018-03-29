@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
 
-from forcepho.gaussmodel import Star
+from forcepho.sources import Star, Scene
 from forcepho.data import PostageStamp
 from forcepho.psf import PointSpreadFunction
-from forcepho.likelihood import model_image
+from forcepho.likelihood import make_image
 
 
 def get_stamp(n, dx=1):
@@ -15,7 +15,8 @@ def get_stamp(n, dx=1):
     stamp.npix = stamp.nx * stamp.ny
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
-    stamp.distortion = np.eye(2) / dx
+    stamp.scale = np.eye(2) / dx
+    stamp.dpix_dsky = np.eye(2) / dx
 
     stamp.crval = np.zeros([2])
     stamp.crpix = np.zeros([2])
@@ -23,13 +24,10 @@ def get_stamp(n, dx=1):
     return stamp
 
 
-def get_image(x, y, source, stamp, **extras):
-    stamp.residual = np.zeros(stamp.npix)
-    theta = np.array([1, x, y, 1, 0, 0, 0])
-    residual, partials = model_image([theta], [source], stamp,
-                                     use_gradients=use, **extras)
-
-    return -residual.reshape(stamp.nx, stamp.ny)
+def get_image(x, y, scene, stamp, **extras):
+    theta = np.array([1, x, y])
+    im, partials = make_image(scene, stamp, Theta=theta, **extras)
+    return im
 
 
 def rebin(a, new_shape):
@@ -51,31 +49,31 @@ def compare(x, y, source, native, oversampled):
 if __name__ == "__main__":
 
     source = Star()
-    use = slice(0, 3)
+    scene = Scene([source])
      
     # FWHM in native pixels
     fwhm = 1.0
     sigma = fwhm/2.355
 
     # native resolution
-    native = get_stamp(30)
+    native = get_stamp(10)
     native.psf.covariances = np.array([np.eye(2) * sigma**2])
-    native.crpix = np.array([15, 15])
+    native.crpix = np.array([5, 5])
 
     # oversampled image
     oversample = 8
     dx = 1./oversample
-    oversampled = get_stamp(int(30 / dx), dx)
+    oversampled = get_stamp(int(10 / dx), dx)
     oversampled.psf.covariances = np.array([np.eye(2) * (sigma / dx)**2])
     oversampled.crpix = np.array([oversampled.nx/2, oversampled.ny/2]) + oversample/2. - 0.5
 
-    pdf = PdfPages('undersample.pdf')
+    pdf = PdfPages('undersample_v2.pdf')
     xs = [0.0, 0.25, 0.5]
     coordlist = list(product(xs, xs))
     
     for x, y in coordlist:
-        image = get_image(x, y, source, native)
-        oimage = get_image(x, y, source, oversampled)
+        image = get_image(x, y, scene, native)
+        oimage = get_image(x, y, scene, oversampled)
         rimage = rebin(oimage, image.shape) * oversample**2
         ims = [oimage, rimage, image, image/rimage]
         label = ['oversampled (by {})'.format(oversample), 'rebinned',
