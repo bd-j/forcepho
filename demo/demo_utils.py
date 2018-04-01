@@ -238,6 +238,10 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     stamp.lo = lo
     stamp.CD = CD
     stamp.W = W
+    try:
+        stamp.wcs = ast
+    except:
+        pass
 
     # --- Add the PSF ---
     if psfname is not None:

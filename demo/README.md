@@ -22,3 +22,5 @@ These demos run on _simulated_ data, which were generated using a detailed NIRCA
 * `demo_sim_ps_multiband_sampling.py`  Fit a single point-source to multiple (dithered) simulated exposures possibly in the multiple bands, looping over all sources in an image. Use nested sampling of the posterior instead of optimization.
 
 * `demo_sim_ps_sandro_sampling.py` As above, but using the updated `guitarra` simulated images from S. Tachella which have correct noise estimates but include background and some different keywords.
+
+* `demo_sim_extended_pixelspace.py` Fit a simulated single-band 3-source scene using GMs, with fixed `nsersic` and `r_h`.  Also, fir coordinates in the pixel space.
