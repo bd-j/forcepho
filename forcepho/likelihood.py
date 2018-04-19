@@ -59,12 +59,14 @@ def lnlike_multi(Theta, scene, plans, grad=True):
         return lnp
 
 
-def make_image(scene, stamp, Theta=None, use_sources=slice(None)):
+def make_image(scene, stamp, Theta=None, use_sources=slice(None),
+               compute_kwargs={}):
     """This only works with WorkPlan object, not FastWorkPlan
     """
     if Theta is not None:
         scene.set_all_source_params(Theta)
     plan = WorkPlan(stamp)
+    plan.compute_keywords = compute_kwargs
     plan, theta_inds, grad_inds = plan_sources(plan, scene)
     plan.reset()
     plan.process_pixels()

@@ -6,7 +6,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from forcepho.sources import Star, Scene
 from forcepho.data import PostageStamp
 from forcepho.psf import PointSpreadFunction
-from forcepho.likelihood import make_image
+from forcepho.likelihood import make_image, plan_sources, WorkPlan
 
 
 def get_stamp(n, dx=1):
@@ -52,8 +52,9 @@ if __name__ == "__main__":
     scene = Scene([source])
      
     # FWHM in native pixels
-    fwhm = 1.0
+    fwhm = 2.0
     sigma = fwhm/2.355
+    ck = {"second_order": False}
 
     # native resolution
     native = get_stamp(10)
@@ -67,12 +68,12 @@ if __name__ == "__main__":
     oversampled.psf.covariances = np.array([np.eye(2) * (sigma / dx)**2])
     oversampled.crpix = np.array([oversampled.nx/2, oversampled.ny/2]) + oversample/2. - 0.5
 
-    pdf = PdfPages('undersample_v2.pdf')
-    xs = [0.0, 0.25, 0.5]
+    pdf = PdfPages('undersample_1storder.pdf')
+    xs = [0.0, 0.3, 0.5]
     coordlist = list(product(xs, xs))
     
     for x, y in coordlist:
-        image = get_image(x, y, scene, native)
+        image = get_image(x, y, scene, native, compute_keywords=ck)
         oimage = get_image(x, y, scene, oversampled)
         rimage = rebin(oimage, image.shape) * oversample**2
         ims = [oimage, rimage, image, image/rimage]
@@ -98,7 +99,8 @@ if __name__ == "__main__":
         cbar = fig.colorbar(c, ax=ax)
         cbar.ax.set_visible(False)
         axes[0,0].set_visible(False)
-        title = 'FWHM={} pixels,\n$\\Delta x={{{}}}, \\Delta y={{{}}}$'.format(fwhm, x, y)
+        title_string = 'FWHM={} pixels,\n$\\Delta x={{{}}}, \\Delta y={{{}}}$\nsums={:3.2},{:3.2},{:3.2}'
+        title = title_string.format(fwhm, x, y, oimage.sum(), rimage.sum(), image.sum())
         fig.text(0.14, 0.8, title,
                  transform=fig.transFigure)
         pdf.savefig(fig)
