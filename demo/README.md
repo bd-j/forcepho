@@ -1,5 +1,17 @@
 # Forcepho demos
 
+| Im Type | Source Type | Source #    | PSF      | Band # |  Coords | Solver   | Filename |
+| ------- | ----------- | ----------- | -------- | ------ | ------- | -------- | -------- |
+| mock    | Point       | single      | mixtures | single | pixel   | opt      | `mock_one_point_single.py` |
+| mock    | Gauss       | single      | gauss    | single | pixel   | opt      | `mock_one_gauss_single_gpsf.py` |
+| mock    | Gauss       | multi       | gauss    | multi  | pixel   | opt      | `mock_many_gauss_multi_gpsf.py` |
+| mock    | Gauss       | multi       | mixtures | multi  | pixel   | opt, hmc | `mock_many_gauss_multi.py` |
+| mock    | Sersic      | single      | mixtures | single | pixel   | nest,hmc | `mock_one_sersic_single.py` |
+| sim_cw  | Point       | single loop | mixtures | single | pixel   | opt      | `simcw_one_point_single.py` |
+| sim_cw  | Point       | single loop | mixtures | multi  | sky     | nest     | `simcw_one_point_multi.py` |
+| sim     | Point       | single loop | mixtures | single | sky     | nest,hmc | `sim_one_point_single.py` |
+| sim     | FixSersic   | multi       | mixtures | single | pixel   | hmc      | `mock_gauss_multi_psf.py` |
+
 
 ## Mock data
 

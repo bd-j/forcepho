@@ -18,19 +18,22 @@ __all__ = ["Posterior",
 
 class Posterior(object):
 
-    def __init__(self, scene, plans, upper=np.inf, lower=-np.inf):
+    def __init__(self, scene, plans, upper=np.inf, lower=-np.inf, verbose=False):
         self.scene = scene
         self.plans = plans
         self.theta = -99
         self.lower = lower
         self.upper = upper
+        self.verbose = verbose
 
     def evaluate(self, theta):
         Theta = self.complete_theta(theta)
-        print(Theta)
-        t = time.time()
+        if self.verbose:
+            print(Theta)
+            t = time.time()
         nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
-        print(time.time() - t)
+        if self.verbose:
+            print(time.time() - t)
         self._lnp = -nll
         self._lnp_grad = -nll_grad
         self._theta = Theta
