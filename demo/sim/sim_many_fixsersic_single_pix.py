@@ -184,6 +184,27 @@ if __name__ == "__main__":
 
     # --------------------------------
     # --- sampling ---
+
+    # --- hemcee ---
+    if True:
+        p0 = ptrue.copy()
+        scales = upper - lower
+        scales = np.array(nsource * [ 5., plate_scale, plate_scale, 1.0, 1. ])
+        #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
+        #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
+
+        model = Posterior(scene, plans, upper=upper, lower=lower)
+        
+        from hemcee import NoUTurnSampler
+        from hemcee.metric import DiagonalMetric
+        metric = DiagonalMetric(scales)
+        model = Posterior(scene, plans, upper=upper, lower=lower)
+        sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
+
+        pos, lnp0 = sampler.run_warmup(p0, 1000)
+        chain, lnp = sampler.run_mcmc(pos, 2000)
+
+    # --- nested ---
     if False:
         lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
         theta_width = (upper - lower)
@@ -216,13 +237,11 @@ if __name__ == "__main__":
         tfig, taxes = dyplot.traceplot(results, fig=pl.subplots(ndim, 2, figsize=(13., 13.)),
                                     labels=label)
 
-        
-    if True:
+    # -- hmc ---
+    if False:
         p0 = ptrue.copy()
         prange = upper - lower
         scales = np.array(nsource * [ 5., plate_scale, plate_scale, 1.0, 1. ])
-        #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
-        #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
 
         from hmc import BasicHMC
         model = Posterior(scene, plans, upper=upper, lower=lower)
@@ -250,7 +269,6 @@ if __name__ == "__main__":
         #pos, prob, grad = sampler.sample(pos, iterations=100, mass_matrix=1/scales**2,
         #                                 epsilon=use_eps, length=30, sigma_length=8,
         #                                 store_trajectories=True)
-        #hresults = {"samples":sampler.chain.copy()}
 
         sampler.model = None
         import pickle
@@ -264,9 +282,9 @@ if __name__ == "__main__":
         out = plot_chain(sampler, show_trajectories=True, equal_axes=True, source=2)
         #import corner
         #cfig = corner.corner(sampler.chain[10:], truths=ptrue.copy(), labels=label, show_titles=True)
-        
         #sys.exit()
-
+        
+    # ---------------------------
     # --- Plot results ---
     if True:
         # plot the data and model
