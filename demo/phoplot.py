@@ -38,7 +38,8 @@ def plot_chain(sampler, start=0, stop=-1, source=0,
     nband = len(filters)
 
     ffig, faxes = pl.subplots(nband, 2, figsize=(8.5, 9.),
-                              gridspec_kw={'width_ratios':[2, 1]})
+                              gridspec_kw={'width_ratios':[2, 1]},
+                              sharex='col', sharey='row')
     faxes = np.atleast_2d(faxes)
     for j in range(nband):
         i = source * ndim + j

@@ -192,8 +192,6 @@ if __name__ == "__main__":
         scales = np.array(nsource * [ 5., plate_scale, plate_scale, 1.0, 1. ])
         #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
         #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
-
-        model = Posterior(scene, plans, upper=upper, lower=lower)
         
         from hemcee import NoUTurnSampler
         from hemcee.metric import DiagonalMetric

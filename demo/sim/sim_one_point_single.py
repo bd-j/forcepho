@@ -60,7 +60,8 @@ def prep_stamps(ra, dec):
     return stamps
 
 
-def fit_source(ra=53.115295, dec=-27.803501, mag=None, dofit='dynesty', nlive=100):
+def fit_source(ra=53.115295, dec=-27.803501, mag=None, dofit='dynesty',
+               nlive=100, nburn=600, niter=200):
 
     # --- Get the data ---
     stamps = prep_stamps(ra, dec)
@@ -87,6 +88,10 @@ def fit_source(ra=53.115295, dec=-27.803501, mag=None, dofit='dynesty', nlive=10
 
     # --- Sampling ---
     ndim = 3
+    p0 = theta_init.copy()
+    upper = theta_init + theta_width / 2.
+    lower = theta_init - theta_width / 2.
+    scales = theta_width
 
     if dofit == 'dynesty':
 
@@ -101,7 +106,7 @@ def fit_source(ra=53.115295, dec=-27.803501, mag=None, dofit='dynesty', nlive=10
         import dynesty, time
         
         # "Standard" nested sampling.
-        sampler = dynesty.NestedSampler(lnlike, prior_transform, ndim, nlive=nlive, bootstrap=0)
+        sampler = dynesty.NestedSampler(lnlike, prior_transform, ndim, bootstrap=0, nlive=nlive)
         t0 = time.time()
         sampler.run_nested()
         dur = time.time() - t0
@@ -112,19 +117,37 @@ def fit_source(ra=53.115295, dec=-27.803501, mag=None, dofit='dynesty', nlive=10
 
     elif dofit == "hmc":
 
-        p0 = theta_init.copy()
-        upper = theta_init + theta_width / 2.
-        lower = theta_init - theta_width / 2.
-        scales = theta_width
-        
-        model = Posterior(scene, plans, upper=upper, lower=lower)
-        sampler = BasicHMC(model, verbose=False)
-        sampler.ndim = len(p0)
-        pos, prob, grad = sampler.sample(p0, iterations=100, mass_matrix=1/scales**2,
-                                         epsilon=None, length=20, sigma_length=5,
-                                         store_trajectories=True)
-        results = {"samples":sampler.chain.copy()}
+        from hmc import BasicHMC
 
+        model = Posterior(scene, plans, upper=upper, lower=lower)
+        hsampler = BasicHMC(model, verbose=False)
+        hsampler.ndim = len(p0)
+        hsampler.set_mass_matrix( 1 / scales**2)
+        eps = hsampler.find_reasonable_stepsize(p0)
+        pos, prob, grad = hsampler.sample(p0, iterations=nburn, mass_matrix=1/scales**2,
+                                          epsilon=eps*1.5, length=10, sigma_length=3,
+                                          store_trajectories=False)
+        pos, prob, grad = hsampler.sample(pos, iterations=niter, mass_matrix=1/scales**2,
+                                          epsilon=eps, length=20, sigma_length=5,
+                                          store_trajectories=True)
+
+        results = {"samples":sampler.chain.copy(), "lnprobability": sampler.lnp.copy()}
+        theta_max = sampler.chain[np.argmax(sampler.lnprob), :]
+
+    elif dofit == "hemcee":
+
+        from hemcee import NoUTurnSampler
+        from hemcee.metric import DiagonalMetric
+
+        model = Posterior(scene, plans, upper=np.inf, lower=-np.inf)
+        metric = DiagonalMetric(scales**2)
+        usampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
+        pos, lnp0 = usampler.run_warmup(p0, nburn)
+        chain, lnp = usampler.run_mcmc(pos, niter)
+
+        results = {"samples": chain, "lnprobability": lnp}
+        theta_max = chain[np.argmax(lnp), :]
+        
     else:
         results = None
         theta_max = np.zeros(3)
@@ -138,6 +161,9 @@ if __name__ == "__main__":
     start = 30
     end = 100
     nlive = 80
+    nburn = 100
+    niter = 200
+    dofit = "hmc"
 
     # ---- Read the input catalog -----
     dt = np.dtype([(n, np.float) for n in ['id', 'ra', 'dec', 'mag']])
@@ -145,8 +171,8 @@ if __name__ == "__main__":
 
     # --- setup output ---
     nband = len(filters)
-    fn = 'output_pointsource_sandro_{}.dat'.format(filters[0])
-    pn = 'pointsource_resid_sandro_{}.pdf'.format(filters[0])
+    fn = 'output_pointsource_sandro_{}_{}.dat'.format(filters[0], dofit)
+    pn = 'pointsource_resid_sandro_{}_{}.pdf'.format(filters[0], dofit)
     out = open(fn, 'w')
     strfmt = "{}  {:11.8f}   {:11.8f}" + "".join((nband * 3) * ["  {:10.2f}"]) + "  {:10.2f}  {:14.6f} {} \n"
     cols = ("# i    ra    dec" +
@@ -161,8 +187,8 @@ if __name__ == "__main__":
     # --- Loop over sources ---
     all_results, all_pos = [], []
     for i, c in enumerate(cat[start:end]):
-        blob = fit_source(ra=c['ra'], dec=c['dec'], mag=c["mag"], nlive=nlive, dofit='dynesty')
-
+        blob = fit_source(ra=c['ra'], dec=c['dec'], mag=c["mag"], dofit=dofit,
+                          nlive=nlive, nburn=nburn, niter=niter)
         result, vals, stamps, scene = blob
         all_results.append(result)
         ndim = len(vals)

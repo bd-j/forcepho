@@ -264,13 +264,13 @@ It is possible to reparameterize in terms of Cartesian coordinates of a normal v
 Since we are not concerned in these transformations with the radius we can fix it at 1, yielding the following useful conversions.
 \begin{eqnarray}
 \hat{n} & = & n_x\, \hat{x} + n_y\, \hat{y} + n_z \, \hat{z} \\
-n_x & = & \sin\theta \, \cos\phi \\
-n_y & = & \sin\theta \, \sin\phi \\
-n_z & = & \cos\theta \\
-      & = & q \\
-n_y & = & \sqrt{1 - n_x^2 - n_z^2} \\
-r_{xy} & = & \sqrt{n_x^2 + n_y^2} \\
-       & = & \sin \theta \\
+n_x & = & \sin\theta \, \cos\phi \nonumber\\
+n_y & = & \sin\theta \, \sin\phi \nonumber\\
+n_z & = & \cos\theta \nonumber\\
+      & = & q \nonumber\\
+n_y & = & \sqrt{1 - n_x^2 - n_z^2} \nonumber\\
+r_{xy} & = & \sqrt{n_x^2 + n_y^2} \nonumber\\
+       & = & \sin \theta \nonumber\\
 \end{eqnarray}
 The transformation matrix $R\, S$ then becomes
 \begin{eqnarray}
@@ -396,6 +396,28 @@ PostageStamps are assumed to have a single constant PSF and a linear coordinate 
  The other is Sources, which can be PointSources or Sersic profiles, and contain information about the source parameters.
 There is then code which translates the Sources and PostageStamp properties into on-image collections of Gaussians and the associated Jacobians, 
 and another set of code that computes and accumulates the pixel counts and gradients thereof.
+
+
+
+\subsection{Accumulation}
+We need to accumulate the on-image gradients correctly into the vector of all parameters. 
+We try to use the notation above, but make some small changes.
+
+First, we write the vector of all on-sky scene parameters (for all sources) as 
+\begin{eqnarray}
+\Theta & \in & \mathbb{R}^{S} \\
+ & = & (\theta_j)_{j=1}^{j=J} \\
+theta_j & \in & \mathbb{R}^{6+B} \\
+S & = & (6 + B) \, J
+\end{eqnarray}
+where each source has on-sky parameters $\theta_j$, and there are $B$ different bands.
+
+Then, for a given subimage or stamp $k$ we can write the sequence of parameters of on-image gaussians corresponding to a single source in that image as 
+\begin{eqnarray}
+G & = & (\phi_{j, k, \ell, m}) \\
+\phi_{j, k, \ell, m} & \in & \mathbb{R}^{6}
+\end{eqnarray}
+
 
 \subsection{Levels of parallelization}
 There are various places we could parallelize this code, 

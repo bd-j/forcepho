@@ -25,6 +25,7 @@ class Posterior(object):
         self.lower = lower
         self.upper = upper
         self.verbose = verbose
+        self.ncall = 0
 
     def evaluate(self, theta):
         Theta = self.complete_theta(theta)
@@ -34,6 +35,7 @@ class Posterior(object):
         nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
         if self.verbose:
             print(time.time() - t)
+        self.ncall += 1
         self._lnp = -nll
         self._lnp_grad = -nll_grad
         self._theta = Theta
