@@ -195,7 +195,7 @@ if __name__ == "__main__":
         
         from hemcee import NoUTurnSampler
         from hemcee.metric import DiagonalMetric
-        metric = DiagonalMetric(scales)
+        metric = DiagonalMetric(scales**2)
         model = Posterior(scene, plans, upper=upper, lower=lower)
         sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
 

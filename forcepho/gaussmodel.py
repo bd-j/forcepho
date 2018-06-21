@@ -158,6 +158,12 @@ def get_gaussian_gradients(source, stamp, gig):
     dT_dq = np.dot(D, np.dot(R, dS_dq))
     dT_dpa = np.dot(D, np.dot(dR_dpa, S))
 
+    # get source spline and derivatives
+    scovars = source.covariances
+    samps = source.amplitudes
+    da_dn = source.damplitude_dsersic
+    da_dr = source.damplitude_drh
+
     # pull the correct flux from the multiband array
     flux = np.atleast_1d(source.flux)
     if len(flux) == 1:
@@ -175,9 +181,9 @@ def get_gaussian_gradients(source, stamp, gig):
         pcovar = stamp.psf.covariances
         pmeans = stamp.psf.means
         pamps = stamp.psf.amplitudes
-    
+
     for i in range(source.ngauss):
-        scovar = source.covariances[i]
+        scovar = scovars[i]
         scovar_im = np.matmul(T, np.matmul(scovar, T.T))
         for j in range(stamp.psf.ngauss):
             #gaussid = (source.id, stamp.id, i, j)
@@ -186,7 +192,7 @@ def get_gaussian_gradients(source, stamp, gig):
             Sigma = scovar_im + pcovar[j]
             F = np.linalg.inv(Sigma)
             detF = np.linalg.det(F)
-            am, al = source.amplitudes[i], pamps[j]
+            am, al = samps[i], pamps[j]
             K = flux * G * am * al * detF**(0.5) / (2 * np.pi)
 
             # Now get derivatives
@@ -203,8 +209,8 @@ def get_gaussian_gradients(source, stamp, gig):
             dA_dq = K / (2 * detF) * ddetF_dq  # 1
             dA_dpa = K / (2 * detF) * ddetF_dpa  # 1
             dA_dflux = K / flux # 1
-            dA_dsersic = K / am * source.damplitude_dsersic[i] # 1
-            dA_drh = K / am * source.damplitude_drh[i] # 1
+            dA_dsersic = K / am * da_dn[i] # 1
+            dA_drh = K / am * da_dr[i] # 1
 
             # Add derivatives to gaussians
             # As a list of just nonzero

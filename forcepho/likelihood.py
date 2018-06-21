@@ -170,6 +170,7 @@ class WorkPlan(object):
         self.active = active
         self.fixed = fixed
         self.reset()
+        self.pixel_values = self.stamp.pixel_values.flatten()
 
     def reset(self):
         """Reinitializ the `residual` and `gradient` arrays to zeros.
@@ -205,10 +206,9 @@ class WorkPlan(object):
         self.reset()
         self.process_pixels()
         # Do all the sums over pixels (and sources) here.  This is super inefficient.
-        chi = (self.stamp.pixel_values.flatten() + self.residual.sum(axis=0)) * self.ierr
+        chi = (self.pixel_values + self.residual.sum(axis=0)) * self.ierr
 
-        return -0.5 * np.sum(chi*chi, axis=-1), np.sum(chi * self.ierr * self.gradients, axis=-1)
-
+        return -0.5 * np.dot(chi, chi.T), np.dot(self.gradients, chi * self.ierr)
 
     def make_image(self, use_sources=slice(None)):
         self.reset()
@@ -257,8 +257,7 @@ class FastWorkPlan(WorkPlan):
                                               **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                self.gradients[i, :] += (self.residual * self.ierr *
-                                         np.matmul(g.derivs, dI_dphi)).sum(axis=-1)
+                self.gradients[i, :] += np.matmul(g.derivs, np.matmul(dI_dphi, self.residual * self.ierr))
 
     def lnlike(self, active=None, fixed=None):
         if active is not None:
@@ -269,4 +268,4 @@ class FastWorkPlan(WorkPlan):
         self.process_pixels()
         chi = self.residual * self.ierr
 
-        return -0.5 * np.sum(chi*chi, axis=-1), self.gradients
+        return -0.5 * np.dot(chi*chi.T), self.gradients

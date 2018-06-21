@@ -196,7 +196,7 @@ if __name__ == "__main__":
     # --- Sampling -----
     if True:
         p0 = ptrue.copy() #model.renormalize_theta(ptrue)
-        scales = nband * [4.0] + 2 * [1.0] + [1.0] + [1.0]
+        scales = nband * [0.5] + 2 * [0.2] + [0.05] + [0.05]
         scales = np.array(len(sourcepars) * scales)
         mass_matrix = 1.0 / scales**2
         #mass_matrix = None
@@ -232,49 +232,38 @@ if __name__ == "__main__":
                                         epsilon=eps_run / 2., length=length, sigma_length=sigma_length,
                                         store_trajectories=True)
 
-        vals = pos  # model.renormalize_theta(pos)
-        #rfig, raxes = pl.subplots(len(stamps), 3, sharex=True, sharey=True)
-        #raxes = np.atleast_2d(raxes)
-        #for i, stamp in enumerate(stamps):
-        #    im, grad = make_image(scene, stamp, Theta=vals)
-        #    raxes[i, 0].imshow(stamp.pixel_values.T, origin='lower')
-        #    raxes[i, 1].imshow(im.T, origin='lower')
-        #    resid = raxes[i, 2].imshow((stamp.pixel_values - im).T, origin='lower')
-        #    rfig.colorbar(resid, ax=raxes[i,:].tolist())
-        
-        #labels = ['Data', 'Model', 'Data-Model']
-        #[ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
 
-
-        ndim = scene.sources[0].nparam
-        tfig, taxes = pl.subplots(ndim, 2)
-        #traj_end = np.arange(0, iterations*length, length)
-        for i in range(ndim):
-            l, n = [], 0
-            for traj in sampler.trajectories:
-                taxes[i, 0].plot(np.arange(len(traj)) + n,
-                                 traj[:, i], color='r')
-                n += len(traj)
-                l.append(n)
-            taxes[i, 0].plot(np.array(l), sampler.chain[:, i],'o')
-
-            taxes[i, 0].axhline(p0[i], linestyle=':', color='k')
-            taxes[i, 1].hist(sampler.chain[:, i], alpha=0.5, bins=30)
-            taxes[i, 1].axvline(p0[i], linestyle=':', color='k')
-
-        pnames = filters + ['RA', 'Dec', '$\sqrt{b/a}$', 'PA (rad)', 'n', 'r$_h$']
-        [ax.set_xlabel(p) for ax, p in zip(taxes[:, 1], pnames)]
-
+        best = sampler.chain[sampler.lnp.argmax()]
+        from phoplot import plot_chain
+        out = plot_chain(sampler, show_trajectories=True, equal_axes=True, source=1)
+        #import corner
+        #cfig = corner.corner(sampler.chain[10:], truths=ptrue.copy(), labels=label, show_titles=True)
+        #pl.show()
 
         sampler.model = None
         import pickle
-        with open("semi_results_snr10.pkl", "wb") as f:
+        with open("mock_simplegm_{}stamp_snr{:02.0f}.pkl".format(len(stamps), snr_max), "wb") as f:
             pickle.dump(sampler, f)
         sampler.model = model
+
         
-        #tfig.tight_layout()
-        #import corner
-        #cfig = corner.corner(
+    # --- Plot results ---
+    if False:
+        # plot the data and model
+        from phoplot import plot_model_images
+        rfig, raxes = plot_model_images(best, scene, stamps[:6])
+        pl.show()
+
+    if False:
+        # plot movies
+        from phoplot import hmc_movie
+        sourceid = 1
+        iterations = [1, 2, 3, 4, 5, 10, 15, 20]
+        psub = np.array([0, 1, 2, 3, 4, 5])
+        pinds = scene.sources[0].nparam * sourceid + psub
+        stamps_to_show = [stamps[0], stamps[3]]
+        label = np.array(scene.sources[sourceid].parameter_names)[psub]
+        hmc_movie(sampler, iterations, stamps_to_show, pinds, label)#, x=slice(10, 40), y=slice(10, 40))
         
 
     pl.show()

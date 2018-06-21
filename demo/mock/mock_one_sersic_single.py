@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, time
 from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
@@ -154,22 +154,27 @@ if __name__ == "__main__":
     # --- sampling
 
     # --- hemcee ---
-    if True:
+    if False:
         p0 = ptrue.copy()
         scales = upper - lower
-        scales = np.array([ 50. ,   5. ,   5. ,   0.5,   3. ,   4. ,   1. ])
-        #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
-        #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
+        scales = np.array([ 5. ,   0.2 ,   0.2 ,   0.1,   0.2,   1.0 ,   0.02 ])
 
         from hemcee import NoUTurnSampler
         from hemcee.metric import DiagonalMetric
-        metric = DiagonalMetric(scales)
+        metric = DiagonalMetric(scales**2)
         model = Posterior(scene, plans, upper=upper, lower=lower)
         sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
 
 
-        pos, lnp0 = sampler.run_warmup(p0, 500)
+        t = time.time()
+        pos, lnp0 = sampler.run_warmup(p0, 600)
+        twarm = time.time() - t
+        ncwarm = np.copy(model.ncall)
+        model.ncall = 0
+        t = time.time()
         chain, lnp = sampler.run_mcmc(pos, 2000)
+        tsample = time.time() - t
+        nc = model.ncall
 
     # --- nested ---
     if False:
@@ -182,7 +187,7 @@ if __name__ == "__main__":
             theta = lower + theta_width * unit_coords
             return theta
 
-        import dynesty, time
+        import dynesty
         
         # "Standard" nested sampling.
         sampler = dynesty.NestedSampler(lnlike, prior_transform, ndim, nlive=nlive, bootstrap=0)
@@ -204,15 +209,13 @@ if __name__ == "__main__":
                                     labels=label)
 
     # --- hmc ----
-    if False:
+    if True:
         p0 = ptrue.copy()
         scales = upper - lower
-        scales = np.array([ 50. ,   5. ,   5. ,   0.5,   3. ,   4. ,   1. ])
-        #scales = np.array([ 50. ,   10. ,   10. ,   1.,   3. ,   4. ,   0.1 ])
-        #scales = np.array([100., 5., 5., 1., 3., 5., 1.0])
+        scales = np.array([ 1. ,   0.05 ,   0.05 ,   0.03,   0.05,   0.1 ,   0.005 ])
 
         from hmc import BasicHMC
-        model = Posterior(scene, plans, upper=upper, lower=lower)
+        model = Posterior(scene, plans, upper=upper, lower=lower, verbose=False)
         sampler = BasicHMC(model, verbose=False)
         sampler.ndim = len(p0)
         sampler.sourcepars = sourcepars
@@ -224,16 +227,22 @@ if __name__ == "__main__":
         sampler.truths = ptrue.copy()
 
         sampler.set_mass_matrix(1/scales**2)
-        eps = sampler.find_reasonable_stepsize(p0*1.1)
+        eps = sampler.find_reasonable_stepsize(p0)
         # eps = 0.00390625
         #sys.exit()
+        t = time.time()
         pos, prob, grad = sampler.sample(p0, iterations=10, mass_matrix=1/scales**2,
                                          epsilon=eps/2, length=20, sigma_length=5,
                                          store_trajectories=True)
+        ncburn = np.copy(model.ncall)
+        model.ncall = 0
+        tburn = time.time() - t
         eps = sampler.find_reasonable_stepsize(pos)
+        t = time.time()
         pos, prob, grad = sampler.sample(p0, iterations=1000, mass_matrix=1/scales**2,
                                          epsilon=eps/2, length=20, sigma_length=5,
                                          store_trajectories=True)
+        thmc = time.time() - t
         #results = {"samples":sampler.chain.copy()}
         
         sys.exit()

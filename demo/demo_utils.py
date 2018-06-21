@@ -21,7 +21,7 @@ class Posterior(object):
     def __init__(self, scene, plans, upper=np.inf, lower=-np.inf, verbose=False):
         self.scene = scene
         self.plans = plans
-        self.theta = -99
+        self._theta = -99
         self.lower = lower
         self.upper = upper
         self.verbose = verbose
@@ -41,12 +41,12 @@ class Posterior(object):
         self._theta = Theta
 
     def lnprob(self, Theta):
-        if np.any(Theta != self.theta):
+        if np.any(Theta != self._theta):
             self.evaluate(Theta)
         return self._lnp
 
     def lnprob_grad(self, Theta):
-        if np.any(Theta != self.theta):
+        if np.any(Theta != self._theta):
             self.evaluate(Theta)
         return self._lnp_grad
 
