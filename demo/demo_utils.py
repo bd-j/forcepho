@@ -265,3 +265,11 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     stamp.filtername = stamp.full_header["FILTER"]
 
     return stamp
+
+
+class Result(object):
+
+    def __init__(self):
+        self.offsets = None
+
+    
