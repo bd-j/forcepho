@@ -58,6 +58,12 @@ class Scene(object):
         params = np.concatenate(plist)
         return params
 
+    @property
+    def parameter_names(self):
+        """Get names for all the parameters in the scene
+        """
+        return np.concatenate([s.parameter_names for s in self.sources])
+
     def identify_sources(self):
         """Give each source in the scene a unique identification number.
         """
