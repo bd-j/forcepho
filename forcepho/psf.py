@@ -22,10 +22,10 @@ class PointSpreadFunction(object):
         """Make psf from a structured array of parameters, of length `ngauss`
         """
         self.ngauss = len(parameters)
-        cov = [np.array([[p["vx"], p["vxy"]],[p["vxy"], p["vy"]]])
+        cov = [np.array([[p["vxx"], p["vxy"]],[p["vxy"], p["vyy"]]])
                for p in parameters]
         self.covariances = np.array(cov)
-        self.means = np.array([parameters["x"], paramters["y"]]).T
+        self.means = np.array([parameters["x"], parameters["y"]]).T
         self.amplitudes = parameters["amp"]
 
 

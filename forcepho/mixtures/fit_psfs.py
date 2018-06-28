@@ -55,7 +55,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
 
     # read in the psf, slice it, and normalize it
     data = np.array(fits.getdata(psfimname))
-    hdr = dict(fits.getheader(psfimname))
+    hdr = fits.getheader(psfimname)
     size = data.shape
     total_flux = data.sum()
     # where integers refer to the center of a pixel
@@ -69,6 +69,13 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     data = data[start[0]:stop[0], start[1]:stop[1]]
     fractional_flux = data.sum() * 1.0 / total_flux
     data /= data.sum()
+
+    try:
+        from astropy.wcs import WCS
+        wcs = WCS(hdr)
+        plate_scale = np.mean(np.linalg.eigvals(3600 * wcs.wcs.cd))
+    except:
+        plate_scale = -1
 
     # --- Do the fit ---
     results = fit_mvn_mix(data, nmix, method_opt='em', method_init='random',
@@ -111,8 +118,11 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
 
         im = out.create_dataset("psf_image", data=data.T)
         #im.attrs["header"] = json.dumps(hdr)
+        im.attrs["arcsec_per_pixel"] = plate_scale
         out.create_dataset("models", data=np.array(models))
-        out.create_dataset("parameters", data=parameters)
+        params = out.create_dataset("parameters", data=parameters)
+        params.attrs["arcsec_per_pixel"] = oversample * plate_scale
+        params.attrs["units"] = "pixels"
         out.create_dataset("lnlike", data=np.array(lnlike))
 
     output = {"data": data.T, "header": hdr,"flux_fraction": fractional_flux,

@@ -6,8 +6,6 @@ from astropy import wcs as apy_wcs
 
 from forcepho.likelihood import lnlike_multi, make_image
 from forcepho.data import PostageStamp
-from forcepho import psf as pointspread
-
 
 __all__ = ["Posterior",
            "negative_lnlike_multi", "chi_vector",
@@ -250,9 +248,10 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
 
 
 def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
-            ngauss=None, oversample=oversample, center=center):
+            ngauss=None, oversample=8, center=104):
     """Given a filename and some other choices, try to build and return a PSF
     """
+    from forcepho.psf import make_psf, PointSpreadFunction
     if psfname is not None:
         # oldstyle
         try:
@@ -263,17 +262,17 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
             if ngauss is None:
                 ngauss = pdat.keys()[0]
             answer = pdat[ngauss][psf_realization]
-            psf = pointspread.make_psf(answer, oversample=oversample, center=center)
+            psf = make_psf(answer, oversample=oversample, center=center)
         # newstyle
         except:
             import h5py
-            with h5py.open(psfname, "r") as pdat:
+            with h5py.File(psfname, "r") as pdat:
                 psf_pars = pdat["parameters"][psf_realization]
             psf = PointSpreadFunction(psf_pars)
 
     else:
-        psf = pointspread.PointSpreadFunction()
-        psf.covaraniaces *= fwhm/2.355
+        psf = PointSpreadFunction()
+        psf.covariances *= fwhm/2.355
 
     return psf
 
