@@ -8,11 +8,13 @@ from matplotlib.cm import get_cmap
 from matplotlib.backends.backend_pdf import PdfPages
 
 import cPickle as pickle
-from astropy.io import fits as pyfits
-import h5py
+from astropy.io import fits
+import h5py, json
 
 from .gaussian_psf import fit_mvn_mix
 from ..psf import params_to_gauss
+
+__all__ = ["psf_mixture"]
 
 
 def radial_profile(answer, ax, center):
@@ -52,19 +54,19 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     """
 
     # read in the psf, slice it, and normalize it
-    data = np.array(pyfits.getdata(psfimname))
-    hdr = dict(pyfits.getheader(psfimname))
+    data = np.array(fits.getdata(psfimname))
+    hdr = dict(fits.getheader(psfimname))
     size = data.shape
     total_flux = data.sum()
     # where integers refer to the center of a pixel
-    center_full = (size-1) / 2.
+    center_full = (np.array(size)-1) / 2.
     if width is not None:
-        start = (center_full - width).astype(int)
-        stop = (center_full + width).astype(int)
+        start = np.clip((center_full - width), *size).astype(int)
+        stop = np.clip(center_full + width, *size).astype(int)
     else:
-        start = np.zeros(2)
+        start = np.zeros(2).astype(int)
         stop = size
-    data = data[start[0]:stop[0], start[0]:stop[0]]
+    data = data[start[0]:stop[0], start[1]:stop[1]]
     fractional_flux = data.sum() * 1.0 / total_flux
     data /= data.sum()
 
@@ -73,7 +75,8 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
                           repeat=nrepeat, returnfull=True, dlnlike_thresh=1e-9)
 
     # --- Plotting -----
-    plot_model(results)
+    outroot = 'gmpsf_{}_ng{}'.format(band, nmix)
+    plot_model(results, outroot)
 
     if not newstyle:
         return {nmix: results}
@@ -91,10 +94,10 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
         for j in range(nmix):
             parameters[i, j] = (x[j], y[j], vx[j], vy[j], vxy[j], amp[j])
         # transpose to match the x, y order I expect and the parameters structure
-        model.append(r["recon_image"].T)
+        models.append(r["recon_image"].T)
         lnlike.append(r["final_log_likelihood"])
 
-    with h5py.File('gmpsf_{}_ng{}.h5'.format(band, nmix), "w") as out:
+    with h5py.File(outroot + '.h5', "w") as out:
         
         out.attrs["nmix"] = nmix
         out.attrs["nrepeat"] = nrepeat
@@ -107,36 +110,39 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
         out.attrs["flux_fraction"] = fractional_flux
 
         im = out.create_dataset("psf_image", data=data.T)
-        im.attrs["header"] = json.dumps(hdr)
+        #im.attrs["header"] = json.dumps(hdr)
         out.create_dataset("models", data=np.array(models))
         out.create_dataset("parameters", data=parameters)
-        out.create_dataset("lnlike", dataset=np.array(lnlike))
+        out.create_dataset("lnlike", data=np.array(lnlike))
 
-    return [data.T, hdr], models, parameters, lnlike, np.array([center_full, start, stop])
+    output = {"data": data.T, "header": hdr,"flux_fraction": fractional_flux,
+              "models": models, "parameters": parameters, "lnlike": lnlike,
+              "center": center_full, "start": start, "stop": stop}
+    return output
 
 
-def plot_model(results):
+def plot_model(results, outroot):
     # set up the gaussian colorbar
     gcmap = get_cmap('viridis')
     Z = [[0,0],[0,0]]
     levels = np.arange(0, 0.6, 0.1)
     dummy = pl.contourf(Z, levels, cmap=gcmap)
 
-    pdf = PdfPages('gmpsf_{}_ng{}.pdf'.format(band, nmix))
+    pdf = PdfPages(outroot + '.pdf')
     for j, result in enumerate(results):
         fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
         ax = axes[0, 0]
-        d = ax.imshow(data, origin='lower')
+        d = ax.imshow(result['original_image'], origin='lower')
         fig.colorbar(d, ax=ax)
         ax.text(0.1, 0.9, 'Truth', transform=ax.transAxes)
 
         ax = axes[0, 1]
-        m1 = ax.imshow((result['recon_image']), origin='lower')
+        m1 = ax.imshow(result['recon_image'], origin='lower')
         fig.colorbar(m1, ax=ax)
         ax.text(0.1, 0.9, 'Model', transform=ax.transAxes)
         ax = axes[1, 0]
 
-        r = ax.imshow((data - result['recon_image']), origin='lower')
+        r = ax.imshow((result['original_image'] - result['recon_image']), origin='lower')
         fig.colorbar(r, ax=ax)
         ax.text(0.1, 0.9, 'Residual', transform=ax.transAxes)
         gax = axes[1, 1]
