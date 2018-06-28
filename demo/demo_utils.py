@@ -155,18 +155,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
 
 
     # --- Add the PSF ---
-    if psfname is not None:
-        import pickle
-        with open(psfname, 'rb') as pf:
-            pdat = pickle.load(pf)
+    stamp.psf = get_psf(psfname, fwhm, 2, 6, oversample, psfcenter)
 
-        #oversample, pcenter = 8, 504 - 400  # HAAAACKKK
-        answer = pdat[6][2]
-        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=psfcenter)
-    else:
-        stamp.psf = pointspread.PointSpreadFunction()
-        stamp.psf.covariances *= fwhm / 2.355
-        
     # --- Add extra information ---
     #stamp.full_header = dict(hdr)
     stamp.filtername = filtername
@@ -176,8 +166,8 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
 
 def make_real_stamp(imname, center=(None, None), size=(None, None),
                     center_type='pixels', psfname=None, fwhm=1.0,
-                    oversample=8, psfcenter=104, fix_header=False,
-                    psf_ngauss=6, psf_realization=2):
+                    psf_realization=2, fix_header=False,
+                    psf_ngauss=6, psfcenter=104, oversample=8):
     """Make a postage stamp around the given position using the given image name
     """
     data = fits.getdata(imname)
@@ -216,7 +206,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
         crval_stamp = ast.wcs_pix2world(crval_stamp[None,:], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
-
+    # -----------
     # --- MAKE STAMP -------
 
     # --- Add image and uncertainty data to Stamp ----
@@ -249,16 +239,8 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
         pass
 
     # --- Add the PSF ---
-    if psfname is not None:
-        import pickle
-        with open(psfname, 'rb') as pf:
-            pdat = pickle.load(pf)
-
-        answer = pdat[psf_ngauss][psf_realization]
-        stamp.psf = pointspread.make_psf(answer, oversample=oversample, center=psfcenter)
-    else:
-        stamp.psf = pointspread.PointSpreadFunction()
-        stamp.psf.covaraniaces *= fwhm/2.355
+    stamp.psf = get_psf(psfname, fwhm, psf_realization,
+                        psf_ngauss, oversample, psfcenter)
 
     # --- Add extra information ---
     stamp.full_header = dict(hdr)
@@ -267,9 +249,37 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     return stamp
 
 
+def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
+            ngauss=None, oversample=oversample, center=center):
+    """Given a filename and some other choices, try to build and return a PSF
+    """
+    if psfname is not None:
+        # oldstyle
+        try:
+            import pickle
+            with open(psfname, 'rb') as pf:
+                pdat = pickle.load(pf)
+
+            if ngauss is None:
+                ngauss = pdat.keys()[0]
+            answer = pdat[ngauss][psf_realization]
+            psf = pointspread.make_psf(answer, oversample=oversample, center=center)
+        # newstyle
+        except:
+            import h5py
+            with h5py.open(psfname, "r") as pdat:
+                psf_pars = pdat["parameters"][psf_realization]
+            psf = PointSpreadFunction(psf_pars)
+
+    else:
+        psf = pointspread.PointSpreadFunction()
+        psf.covaraniaces *= fwhm/2.355
+
+    return psf
+
+
 class Result(object):
 
     def __init__(self):
         self.offsets = None
 
-    

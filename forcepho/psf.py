@@ -1,19 +1,32 @@
 import numpy as np
 
-__all__ = ["PoinstSpreadFunction", "make_psf"]
+__all__ = ["PoinstSpreadFunction", "make_psf", "params_to_gauss"]
 
 
 class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF.
     """
 
-    def __init__(self, units='pixels'):
-        self.ngauss = 1
-        self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
-        self.means = np.zeros([self.ngauss, 2])
-        self.amplitudes = np.ones(self.ngauss)
+    def __init__(self, parameters=None, units='pixels'):
+        if parameters is None:
+            self.ngauss = 1
+            self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
+            self.means = np.zeros([self.ngauss, 2])
+            self.amplitudes = np.ones(self.ngauss)
+        else:
+            self.make_from_parameters(parameters)
 
         self.units = units
+
+    def make_from_parameters(self, parameters):
+        """Make psf from a structured array of parameters, of length `ngauss`
+        """
+        self.ngauss = len(parameters)
+        cov = [np.array([[p["vx"], p["vxy"]],[p["vxy"], p["vy"]]])
+               for p in parameters]
+        self.covariances = np.array(cov)
+        self.means = np.array([parameters["x"], paramters["y"]]).T
+        self.amplitudes = parameters["amp"]
 
 
 def make_psf(answer, **kwargs):
