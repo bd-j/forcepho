@@ -345,7 +345,9 @@ class Galaxy(Source):
 
     radii = np.ones(1)
     
-    # Galaxies have two position parameters, 2  or 4 shape parameters (pa and q) and nband flux parameters
+    # Galaxies have 2 position parameters,
+    #    2 or 4 shape parameters (pa and q),
+    #    and nband flux parameters
     npos = 2
     nshape = 4
 

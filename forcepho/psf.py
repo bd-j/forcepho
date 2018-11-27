@@ -1,6 +1,6 @@
 import numpy as np
 
-__all__ = ["PoinstSpreadFunction", "make_psf", "params_to_gauss"]
+__all__ = ["PoinstSpreadFunction", "get_psf", "make_psf", "params_to_gauss"]
 
 
 class PointSpreadFunction(object):
@@ -27,6 +27,57 @@ class PointSpreadFunction(object):
         self.covariances = np.array(cov)
         self.means = np.array([parameters["x"], parameters["y"]]).T
         self.amplitudes = parameters["amp"]
+
+
+def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
+            ngauss=None, oversample=8, center=104):
+    """Given a filename and some other choices, try to build and return a PSF.
+    This supercedes `make_psf` and can work with newstyle hdf5 PSF data.
+
+    :param psfname:
+        Absolute path to a file contining PSF information
+
+    :param psf_realization:
+        Zero-based index for the PSF solution to be used (often multiple
+        solutions are found for a given PSF mixture by starting from different
+        conditions)
+
+    :param ngauss, oversample, center:
+        Necessary parameters for oldstyle PSFs in pickle files, which are keyed
+        by `ngauss` and require knowledge of the central pixel and oversampling
+        of the original PSF image.
+
+    :param fwhm:
+        If `psfname` is not given, the psf will be a single gaussian with this
+        FWHM (in pixels).
+
+    :returns psf:
+        An instance of PointSpreadFunction
+    """
+    from forcepho.psf import make_psf, PointSpreadFunction
+    if psfname is not None:
+        # oldstyle
+        try:
+            import pickle
+            with open(psfname, 'rb') as pf:
+                pdat = pickle.load(pf)
+
+            if ngauss is None:
+                ngauss = pdat.keys()[0]
+            answer = pdat[ngauss][psf_realization]
+            psf = make_psf(answer, oversample=oversample, center=center)
+        # newstyle
+        except:
+            import h5py
+            with h5py.File(psfname, "r") as pdat:
+                psf_pars = pdat["parameters"][psf_realization]
+            psf = PointSpreadFunction(psf_pars)
+
+    else:
+        psf = PointSpreadFunction()
+        psf.covariances *= fwhm/2.355
+
+    return psf
 
 
 def make_psf(answer, **kwargs):

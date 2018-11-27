@@ -14,7 +14,7 @@ from scipy.optimize import minimize
 
 #x = np.linspace(1e-3, 8.0, int(1e3))
 #x = np.arange(0.0005, 10.0, 0.001)
-rgrid = np.arange(0.5, 4.25, 0.5)
+rgrid = np.arange(0.5, 5.25, 0.5)
 
 
 # --- magic numbers ---
@@ -323,7 +323,7 @@ def plot_amps(radii, amps):
 
 
 
-def fit_profiles(rgrid=rgrid,
+def fit_profiles(outroot=None, rgrid=rgrid,
                  ngrid = np.arange(1.0, 5.5, 1.0),
                  lnradii=np.arange(np.log(0.005), np.log(6.0), np.log(2.)),
                  smoothing=0.0, asmooth=0.0, arpenalty=0.0,
@@ -331,7 +331,8 @@ def fit_profiles(rgrid=rgrid,
 
     # Decide whether to fit smoothed sersic profiles (smoothing > 0)
     #smoothing = 0.1 # in units of pixels
-    outroot = "gauss_gal_results/sersic_mog_model.smooth={:2.4f}".format(smoothing)
+    if outroot is None:
+        outroot = "gauss_gal_results/sersic_mog_model.smooth={:2.4f}".format(smoothing)
     outname = outroot + '.h5'
     if smoothing > 0:
         lnradii = np.insert(lnradii, 0, -np.inf)
@@ -428,10 +429,11 @@ if __name__ == "__main__":
     # Sersic smoothing scale in pixels
     smoothing = 0.25
 
-    # arcsec per pixel
-    pixscale = 0.032
+    # arcsec per pixel (0.032 for NIRCAM, 0.06 for XDF)
+    pixscale = 0.06
 
-    outname = fit_profiles(smoothing=smoothing * pixscale,
+    oname = "gauss_gal_results/sersic_mog_model.smooth={:2.4f}".format(smoothing * pixscale)
+    outname = fit_profiles(outroot=oname, smoothing=smoothing * pixscale,
                            lnradii=lnradii + np.log(pixscale),
                            rgrid=rgrid*pixscale, x=x*pixscale,
                            asmooth=1e-8, arpenalty=1e-6)

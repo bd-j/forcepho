@@ -2,7 +2,8 @@ import numpy as np
 from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gaussian
 
 
-__all__ = ["lnlike_multi", "make_image",
+__all__ = ["lnlike_multi", "negative_lnlike_multi",
+           "make_image",
            "plan_sources",
            "WorkPlan", "FastWorkPlan"
            ]
@@ -57,6 +58,14 @@ def lnlike_multi(Theta, scene, plans, grad=True):
         return lnp, lnp_grad
     else:
         return lnp
+
+
+def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
+    lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
+    if grad:
+        return -lnp, -lnp_grad
+    else:
+        return -lnp
 
 
 def make_image(scene, stamp, Theta=None, use_sources=slice(None),
