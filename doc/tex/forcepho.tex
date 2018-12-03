@@ -388,6 +388,35 @@ K & = & \frac{\psi \, a_\ell \, a_m \, \sqrt{\det{F}}}{2\pi} \nonumber \\
 \end{eqnarray}
 
 
+\section{Parameter Transfromations}
+Sometimes it is useful to sample in parameters other than the native galaxy parameters $\theta$.
+This is true when using MCMC samplers that expect the parameters to be unconstrained.
+In this case, it is possible to sample in an unconstrained parameter $z$ and then use a logistic transform to convert to constrained parameters.
+However, because we still desire the prior to be defined (uniform by default) in the constrained parameter space, we must account for this change of variables when calculating the posterior probability.
+And, of course, the ln-posterior gradients with respect to the parameters $\theta$ must be multiplied by the jacobian of this transformation
+\begin{eqnarray}
+  \theta_i & = & g(z_i) \\
+         & = & \theta_{min} + (\theta_{max} - \theta_{min}) \, \frac{1}{1 + e^{-z_i}} \\
+  J_{t,i} & = & \frac{\partial \theta_i}{\partial z_i} \\
+           &  = &  R \, g(z_i) \, (1 - g(z_i)) \\
+     R & \equiv & \theta_{max} - \theta_{min}
+\end{eqnarray}
+
+The term that needs to be added to the ln-posterior probability is the natural log of the absolute value of the determinant of the Jacobian
+(basically this is a parameter volume correction.)
+For the simple independent parameter transfromations described above, this is easily calculated as
+\begin{eqnarray}
+  ln|\det{J_t}|& = & ln | \product_i \frac{\partial \theta_i}{\partial z_i} | \\
+                 & = & \\
+\end{eqnarray}
+Now the gradients of the ln-posterior become somewhat more complicated, since this Jacobian term also ahs to be differntiated.
+Fortunately the logistic function we are using has easy second derivatives.
+\begin{eqnarray}
+ \frac{\partial \det{J_t}}{\partial z_i} & = & \frac{\det{J_t}}{J_{t,i}} \frac{\partial^2\theta_i}{\partial^2 z_i}\\
+                 & = & \det{J_t} \, (1 - 2 \, g(z_i))
+\end{eqnarray}
+
+
 \section{Translation into code}
 There are two main kinds of classes.
 One is PostageStamps, which contain the image data and information about the image.
@@ -509,8 +538,14 @@ Other codes that do all or some of generative modeling of exposure level images 
 \item Photo (SDSS/HSC/LSST).  Optimization of parametric models.
 \item The Tractor (DECaLs, MzLS).  Optimization (and posterior sampling) of multiband parameteric models.
 \item Celeste (SDSS)
-\item GALFIT/Gim2D
+ \item PROFIT
+\item GALFIT/GALAPAGOS
+\item IMFIT
+\item BUDDA
 
+%Brute force matrix factorization
+\item SCARLET
+  
 % Point source fitting
 \item PCAT
 \item DAOPHOT
@@ -518,7 +553,7 @@ Other codes that do all or some of generative modeling of exposure level images 
 \item MOPEX
 
 % matched aperture with high-resolution galaxy template
-\item Mofongo (CANDELS, 3DHST)
+\item Mofongo? (CANDELS, 3DHST)
 \item TPHOT (CANDELS, DEEP) 
 \item XID+ (Herschel)
 
