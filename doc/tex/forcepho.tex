@@ -8,6 +8,7 @@
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
 \newcommand{\given}{\,|\,}
 \renewcommand{\det}[1]{||{#1}||}
+\renewcommand{\abs}[1]{|{#1}|}
 \DeclareMathOperator{\trace}{Tr}
 
 \newcommand{\counts}{C}
@@ -94,7 +95,7 @@ In what follows we will drop $\nu$ from consideration, assuming that $\qe(\nu)$ 
 In the limit of infinite exposure time (or very many photons), we can replace the sum of a large dumber of draws with integrals to obtain the expected count rate.
 \begin{eqnarray}
 \label{eqn:psf_convolve}
-\model(x, y | \gamma, \beta) & = & \iint \, dx' \, dy' \, \psf(x - x', y-y' \given \gamma, x', y') \, \scene( D^{-1}(x', y') \given \beta) \\
+\model(x, y \given \gamma, \beta) & = & \iint \, dx' \, dy' \, \psf(x - x', y-y' \given \gamma, x', y') \, \scene( D^{-1}(x', y') \given \beta) \\
 \countrate_n & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \model(x, y \given \gamma, \beta) \nonumber
 \end{eqnarray}
 where $A_n$ is the region of the $n$th pixel, 
@@ -107,7 +108,7 @@ This probably depends on the form of $D$ and on how the $\qe$ and $\psf$ functio
 Nevertheless, by switching the order of integration we can write
 \begin{eqnarray}
 \label{eqn:prf_integral}
-\prf_n(x', y' | \gamma) & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \psf(x' - x, y' - y \given \gamma, x, y) \\
+\prf_n(x', y' \given \gamma) & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \psf(x' - x, y' - y \given \gamma, x, y) \\
 \countrate_n & = & \iint \, dx' \, dy' \, \prf_n(x', y' \given \gamma) \, \scene( D^{-1}(x', y') \given \beta) \nonumber
 \end{eqnarray}
 where $\prf_n(x', y')$ gives the response of a pixel to a point source at detector coordinates $(x', y')$ including the effect of the pixel-averaged PSF.
@@ -393,11 +394,11 @@ Sometimes it is useful to sample in parameters other than the native galaxy para
 This is true when using MCMC samplers that expect the parameters to be unconstrained.
 In this case, it is possible to sample in an unconstrained parameter $z$ and then use a logistic transform to convert to constrained parameters.
 However, because we still desire the prior to be defined (uniform by default) in the constrained parameter space, we must account for this change of variables when calculating the posterior probability.
-And, of course, the ln-posterior gradients with respect to the parameters $\theta$ must be multiplied by the jacobian of this transformation
+And, of course, the ln-posterior gradients with respect to the parameters $\theta$ must be multiplied by the Jacobian of this transformation, $J_b$
 \begin{eqnarray}
   \theta_i & = & g(z_i) \\
          & = & \theta_{min} + (\theta_{max} - \theta_{min}) \, \frac{1}{1 + e^{-z_i}} \\
-  J_{t,i} & = & \frac{\partial \theta_i}{\partial z_i} \\
+  J_{b,i} & = & \frac{\partial \theta_i}{\partial z_i} \\
            &  = &  R \, g(z_i) \, (1 - g(z_i)) \\
      R & \equiv & \theta_{max} - \theta_{min}
 \end{eqnarray}
@@ -406,15 +407,18 @@ The term that needs to be added to the ln-posterior probability is the natural l
 (basically this is a parameter volume correction.)
 For the simple independent parameter transfromations described above, this is easily calculated as
 \begin{eqnarray}
-  ln|\det{J_t}|& = & ln | \product_i \frac{\partial \theta_i}{\partial z_i} | \\
-                 & = & \\
-\end{eqnarray}
-Now the gradients of the ln-posterior become somewhat more complicated, since this Jacobian term also ahs to be differntiated.
+   \ln P   & = & \ln \like + \ln Pr + \ln\abs{\det{J_b}} \\
+ & = & \ln \like + \ln Pr + \ln \abs{ \prod_i \frac{\partial \theta_i}{\partial z_i} } \\
+ \end{eqnarray}
+Now the gradients of the ln-posterior become somewhat more complicated, since this Jacobian term also ahs to be differentiated.
 Fortunately the logistic function we are using has easy second derivatives.
 \begin{eqnarray}
- \frac{\partial \det{J_t}}{\partial z_i} & = & \frac{\det{J_t}}{J_{t,i}} \frac{\partial^2\theta_i}{\partial^2 z_i}\\
-                 & = & \det{J_t} \, (1 - 2 \, g(z_i))
+  \frac{\ln \abs{\partial \det{J_b}}}{\partial z_i} & = & \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}} \frac{\partial \det{J_b}}{\partial z_i} \\
+   & = &  \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}}  \frac{\det{J_b}}{J_{b,i}} \frac{\partial^2\theta_i}{\partial^2 z_i} \\
+   & = & \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}}  \frac{\det{J_b}}{J_{b,i}} \, J_{b,i} \, (1 - 2 \, g(z_i))
+   & = & (1 - 2 \, g(z_i))
 \end{eqnarray}
+assuming the determinant is always real.
 
 
 \section{Translation into code}
@@ -436,7 +440,7 @@ First, we write the vector of all on-sky scene parameters (for all sources) as
 \begin{eqnarray}
 \Theta & \in & \mathbb{R}^{S} \\
  & = & (\theta_j)_{j=1}^{j=J} \\
-theta_j & \in & \mathbb{R}^{6+B} \\
+\theta_j & \in & \mathbb{R}^{6+B} \\
 S & = & (6 + B) \, J
 \end{eqnarray}
 where each source has on-sky parameters $\theta_j$, and there are $B$ different bands.
