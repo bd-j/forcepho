@@ -67,6 +67,10 @@ class PostageStamp(object):
         """
         return 2
 
+    @property
+    def shape(self):
+        return np.array([self.nx, self.ny])
+
 
 class SimpleWCS(object):
     """Class to make various transformations between coordinate systems for a
