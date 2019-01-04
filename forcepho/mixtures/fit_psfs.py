@@ -73,7 +73,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     try:
         from astropy.wcs import WCS
         wcs = WCS(hdr)
-        plate_scale = np.mean(np.linalg.eigvals(3600 * wcs.wcs.cd))
+        plate_scale = np.mean(np.abs(np.linalg.eigvals(3600 * wcs.wcs.cd)))
     except:
         plate_scale = -1
 
