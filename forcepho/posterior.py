@@ -1,4 +1,10 @@
 import numpy as np
+try:
+    import theano.tensor as tt
+    Op = tt.Op
+except:
+    Op = object
+
 from .likelihood import lnlike_multi
 
 __all__ = ["Posterior", "LogLikeWithGrad",
@@ -105,7 +111,7 @@ class Posterior(object):
         return theta, sign, oob
 
 
-class ModelGradOp(tt.Op):
+class ModelGradOp(Op):
     """Wraps the Posterior object lnprob_grad() method in a theano tensor
     operation
     """
@@ -122,7 +128,7 @@ class ModelGradOp(tt.Op):
         outputs[0][0] = ll_grads
 
 
-class LogLikeWithGrad(tt.Op):
+class LogLikeWithGrad(Op):
     """Wraps the Posterior object lnprob() and lnprob_grad() methods in theano
     tensor operations
     """
