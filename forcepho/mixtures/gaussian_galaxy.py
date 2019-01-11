@@ -1,3 +1,6 @@
+# --- Script for generating gaussian mixture approximations to Sersic indices ---
+
+
 from itertools import product
 
 from scipy.special import factorial
@@ -12,18 +15,7 @@ from scipy.special import gamma, gammainc, gammaincinv
 from scipy.special import hyp1f1 as hyper
 from scipy.optimize import minimize
 
-#x = np.linspace(1e-3, 8.0, int(1e3))
-#x = np.arange(0.0005, 10.0, 0.001)
 rgrid = np.arange(0.5, 5.25, 0.5)
-
-
-# --- magic numbers ---
-# minrad, maxrad, dlnr
-# arpenalty, arscale
-# asmooth
-# xmax
-# chsq weighting scheme
-# ar penalty form
 
 
 def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
@@ -145,6 +137,7 @@ def sersic_profile(x, n=4, rh=1, sigma=0.0, order=50):
     else:
         # xx = np.concatenate([x, np.atleast_1d(rh)])
         value = np.zeros_like(x)
+        sersic = np.exp(-(x / r0)**(1.0 / n) + alpha)
         use = x < sigma * 15
         xx = x[use]
         #print(sigma, r0, rh, n)
@@ -163,8 +156,8 @@ def sersic_profile(x, n=4, rh=1, sigma=0.0, order=50):
             #total[good] += term[good]
         value[use] = A * total * np.exp(alpha) # last term normalizes to unit intensity at the half-light radius
         # deal with large radii where the gaussian fails, by replacing with the unconvolved sersic
-        bad = (~np.isfinite(value)) | (~use)
-        value[bad] = np.exp(-(x[bad] / r0)**(1.0 / n) + alpha)
+        bad = (~np.isfinite(value)) | (~use) | ((sersic > 1.5 * value) & (x > sigma))
+        value[bad] = sersic[bad]
         return value #[:-1] / value[-1], value[-1]
 
 
@@ -239,6 +232,15 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
 
     
     return fig
+
+
+def rfrac_from_halfn(frac, n=4, rh=1):
+    assert frac <= 1.0
+    beta = gammaincinv(2 * n, frac)
+    alpha = gammaincinv(2 * n, 0.5)
+    r0 = rh / alpha**n
+    r_frac = r0 * beta **n
+    return r_frac
 
 
 def plot_cfd(x, ns, rh, amps, radii, smoothing, ax=None):
@@ -324,7 +326,7 @@ def plot_amps(radii, amps):
 
 
 def fit_profiles(outroot=None, rgrid=rgrid,
-                 ngrid = np.arange(1.0, 5.5, 1.0),
+                 ngrid=np.arange(1.0, 5.5, 1.0),
                  lnradii=np.arange(np.log(0.005), np.log(6.0), np.log(2.)),
                  smoothing=0.0, asmooth=0.0, arpenalty=0.0,
                  x=np.arange(0.0005, 10.0, 0.001)):
@@ -419,24 +421,53 @@ def fit_profiles(outroot=None, rgrid=rgrid,
 
 if __name__ == "__main__":
 
-    # set the pixel scale array that will be used for calculating models
-    x = np.arange(0.01, 64.0, 0.01)
+    if False:
+        # rh grid in pixels
+        rgrid = np.arange(0.5, 10.25, 0.5)
+        # sersic index grid
+        ngrid = np.arange(1.0, 8.0, 0.5)
 
-    # Set up the dispersions of the zero-centered gaussians in pixel space
-    minrad, maxrad, dlnr = 0.20, 28.0, np.log(2)
-    lnradii = np.arange(np.log(minrad), np.log(maxrad), dlnr)
+        # set the pixel scale array that will be used for calculating models
+        x = np.arange(0.01, 64.0, 0.01)
 
-    # Sersic smoothing scale in pixels
-    smoothing = 0.25
+        # Set up the dispersions of the zero-centered gaussians in pixel space
+        minrad, maxrad, dlnr = 0.20, 28.0, np.log(2)
+        lnradii = np.arange(np.log(minrad), np.log(maxrad), dlnr)
 
-    # arcsec per pixel (0.032 for NIRCAM, 0.06 for XDF)
-    pixscale = 0.06
+        # Sersic smoothing scale in pixels
+        smoothing = 0.25
 
-    oname = "gauss_gal_results/sersic_mog_model.smooth={:2.4f}".format(smoothing * pixscale)
-    outname = fit_profiles(outroot=oname, smoothing=smoothing * pixscale,
-                           lnradii=lnradii + np.log(pixscale),
-                           rgrid=rgrid*pixscale, x=x*pixscale,
-                           asmooth=1e-8, arpenalty=1e-6)
+        # arcsec per pixel (0.032 for NIRCAM, 0.06 for XDF)
+        pixscale = 0.03
+
+        oname = "gauss_gal_results/sersic_mog.expanded.smooth={:2.4f}".format(smoothing * pixscale)
+        outname = fit_profiles(outroot=oname, smoothing=smoothing * pixscale,
+                               lnradii=lnradii + np.log(pixscale), ngrid=ngrid,
+                               rgrid=rgrid*pixscale, x=x*pixscale,
+                               asmooth=1e-8, arpenalty=1e-6)
+
+
+    if True:
+        rgrid = np.arange(0.5, 10.25, 1.0)
+        ngrid = np.arange(5, 8.25, 0.5)
+
+        maxrad = rfrac_from_halfn(0.9, rh=rgrid.max(), n=ngrid.max())
+        x = np.arange(0.01, maxrad * 2, 0.01)
+        minrad, maxrad, dlnr = 0.2, np.round(maxrad), np.log(3)
+        lnradii = np.arange(np.log(minrad), np.log(maxrad) + dlnr, dlnr)
+        lnradii = np.linspace(np.log(minrad), np.log(maxrad), 10)
+
+        # Sersic smoothing scale in pixels
+        smoothing = 0.25
+
+        # arcsec per pixel (0.032 for NIRCAM, 0.06 for XDF)
+        pixscale = 0.03
+
+        oname = "test_mog"
+        outname = fit_profiles(outroot=oname, smoothing=smoothing * pixscale,
+                               lnradii=lnradii + np.log(pixscale), ngrid=ngrid,
+                               rgrid=rgrid*pixscale, x=x*pixscale,
+                               asmooth=1e-8, arpenalty=1e-6)
 
     #result = h5py.File(outname, "r")
     #profiles = PdfPages('mog_model_prof.pdf')

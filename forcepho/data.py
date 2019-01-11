@@ -27,7 +27,6 @@ class PostageStamp(object):
     # Size of the stamp
     nx = 100
     ny = 100
-    npix = 100 * 100
 
     # The scale matrix D (pixels per arcsecond)
     scale = np.eye(2)
@@ -66,6 +65,10 @@ class PostageStamp(object):
         considered (<=0).
         """
         return 2
+
+    @property
+    def npix(self):
+        return self.nx * self.ny
 
     @property
     def shape(self):
