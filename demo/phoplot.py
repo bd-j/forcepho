@@ -1,12 +1,105 @@
-import os
+import os, sys, glob
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib import gridspec
 from matplotlib.backends.backend_pdf import PdfPages
-import pickle, sys
+import cPickle as pickle
 
-#from demo_semi import setup_scene, Posterior
 from forcepho.likelihood import make_image
+
+# code to force angular values to an interval
+# phim = np.mod((phi + np.pi / 2), np.pi) - np.pi / 2.
+
+def display(data, savedir="", show=False, root="xdf"):
+
+    if type(data) is str:
+        fn = data
+        root = fn.split("/")[-1].replace('.pkl', '')
+        with open(fn, "r") as f:
+            try:
+                result = pickle.load(f)
+            except(ImportError):
+                print("couldn't import {}".format(fn))
+                return
+    else:
+        result = data
+
+    if (show is False) & (savedir == ""):
+        return result
+
+    # --- Chains ---
+    npar = np.max([s.nparam for s in result.scene.sources])
+    fig, axes = pl.subplots(npar+1, len(result.scene.sources), sharex=True, figsize=(13, 12))
+    for i, ax in enumerate(axes[:-1, ...].T.flat):
+        ax.plot(result.chain[:, i])
+        ax.set_ylabel(result.scene.parameter_names[i])
+    try:
+        [ax.plot(result.lnp) for ax in axes[-1, ...].flat]
+        [ax.set_xlabel("iteration") for ax in axes[-1, ...].flat]
+        axes[-1, ...].set_ylabel("ln P")
+    except(AttributeError):
+        [ax.set_xlabel("iteration") for ax in axes[-2, ...].flat]
+        [ax.set_visible(False) for ax  in axes[-1, ...].flat]
+    #for i, ax in enumerate(axes.T.flat): ax.axhline(result.pinitial[i], color='k', linestyle=':')
+    if savedir != "":
+        fig.savefig(os.path.join(savedir, root + ".chain.pdf"))
+
+    # --- Corner Plot ----
+    import corner
+    cfig = corner.corner(result.chain, labels=result.scene.parameter_names,
+                         show_titles=True, fill_contours=True,
+                         plot_datapoints=False, plot_density=False)
+    if savedir != "":
+        cfig.savefig(os.path.join(savedir, root + ".corner.pdf"))
+
+    # --- Residual ---
+    try:
+        best = result.chain[result.lnp.argmax(), :]
+    except:
+        best = result.chain[-1, :]
+        print("using last position")
+    rfig, raxes = plot_model_images(best, result.scene, result.stamps, share=False)
+    if savedir != "":
+        rfig.savefig(os.path.join(savedir, root + ".residual.pdf"))
+
+    if show:
+        pl.show()
+    else:
+        pl.close(rfig)
+        pl.close(fig)
+        pl.close(cfig)
+
+    return result
+
+
+def plot_model_images(pos, scene, stamps, axes=None, colorbars=True,
+                      x=slice(None), y=slice(None), share=True):
+    vals = pos
+    if axes is None:
+        rfig, raxes = pl.subplots(len(stamps), 4, figsize=(14, 3.3*len(stamps) + 0.5),
+                                  sharex=share, sharey=share)
+    else:
+        rfig, raxes = None, axes
+    raxes = np.atleast_2d(raxes)
+    for i, stamp in enumerate(stamps):
+        data = stamp.pixel_values
+        im, grad = make_image(scene, stamp, Theta=vals)
+        resid = data - im
+        chi = resid * stamp.ierr.reshape(stamp.nx, stamp.ny)
+        ims = [data, im, resid, chi]
+        for j, ii in enumerate(ims):
+            ci = raxes[i, j].imshow(ii[x, y].T, origin='lower')
+            if (rfig is not None) & colorbars:
+                cb = rfig.colorbar(ci, ax=raxes[i,j], orientation='horizontal')
+                cb.ax.set_xticklabels(cb.ax.get_xticklabels(), rotation=-55)
+        text = "{}\n({}, {})".format(stamp.filtername, stamp.crval[0], stamp.crval[1])
+        ax = raxes[i, 1]
+        ax.text(0.6, 0.1, text, transform=ax.transAxes, fontsize=10)
+
+    labels = ['Data', 'Model', 'Data-Model', "$\chi$"]
+    [ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
+    return rfig, raxes
+
 
 def load_results(fn="sampler_demo_semi_v1.pkl"):
     with open(fn, "rb") as f:
@@ -124,32 +217,6 @@ def prettify_chains(axes, labels, fontsize=10, equal_axes=False,
     return axes
 
     
-def plot_model_images(pos, scene, stamps, axes=None,
-                      x=slice(None), y=slice(None)):
-    vals = pos
-    if axes is None:
-        rfig, raxes = pl.subplots(len(stamps), 3, figsize=(12, 3.3*len(stamps) + 0.5),
-                                  sharex=True, sharey=True)
-    else:
-        rfig, raxes = None, axes
-    raxes = np.atleast_2d(raxes)
-    for i, stamp in enumerate(stamps):
-        data = stamp.pixel_values
-        im, grad = make_image(scene, stamp, Theta=vals)
-        raxes[i, 0].imshow(data[x, y].T, origin='lower')
-        raxes[i, 1].imshow(im[x, y].T, origin='lower')
-        resid = raxes[i, 2].imshow((data-im)[x,y].T, origin='lower')
-        if rfig is not None:
-            rfig.colorbar(resid, ax=raxes[i,:].tolist())
-        text = "{}\n({}, {})".format(stamp.filtername, stamp.crval[0], stamp.crval[1])
-        ax = raxes[i, 1]
-        ax.text(0.6, 0.1, text, transform=ax.transAxes, fontsize=10)
-
-    labels = ['Data', 'Model', 'Data-Model']
-    [ax.set_title(labels[i]) for i, ax in enumerate(raxes[0,:])]
-    return rfig, raxes
-
-
 def plot_seds(sampler, start=0):
     truth = sampler.sourcepars
     filternames = sampler.filters
