@@ -15,6 +15,10 @@ class Scene(object):
         self.sources = sources
         self.identify_sources()
 
+    def __repr__(self):
+        ss = [str(s) for s in self.sources]
+        return "\n".join(ss)
+
     def param_indices(self, sid, filtername=None):
         """Get the indices of the relevant parameters in the giant Theta
         vector.  Assumes that the order of parameters for each source is
@@ -118,6 +122,13 @@ class Source(object):
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
+
+
+    def __repr__(self):
+        kk, vv = self.parameter_names, self.get_param_vector()
+        parstring = ["{}={}".format(k, v)
+                     for k, v in zip(kk, vv)]
+        return '{}\n\t({})'.format(self.__class__, ",\n\t".join(parstring))
 
     @property
     def nband(self):
