@@ -131,7 +131,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     return output
 
 
-def plot_model(results, outroot):
+def plot_model(results, outroot, log_resid=True):
     # set up the gaussian colorbar
     gcmap = get_cmap('viridis')
     Z = [[0,0],[0,0]]
@@ -152,7 +152,12 @@ def plot_model(results, outroot):
         ax.text(0.1, 0.9, 'Model', transform=ax.transAxes)
         ax = axes[1, 0]
 
-        r = ax.imshow((result['original_image'] - result['recon_image']), origin='lower')
+        # plot log of ratio?
+        if log_resid:
+            r = ax.imshow(np.log10((result['original_image'] / result['recon_image'])),
+                          origin='lower', vmin=-0.5, vmax=0.5)
+        else:
+            r = ax.imshow((result['original_image'] - result['recon_image']), origin='lower')
         fig.colorbar(r, ax=ax)
         ax.text(0.1, 0.9, 'Residual', transform=ax.transAxes)
         gax = axes[1, 1]
