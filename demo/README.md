@@ -2,9 +2,8 @@
 
 | Im Type | Source Type | Sources     | PSF      | Bands  |  Coords | Solvers      | Filename |
 | ------- | ----------- | ----------- | -------- | ------ | ------- | ------------ | -------- |
-| mock    | Gauss       | single      | gauss    | single | pixel   | opt          | `mock_one_gauss_single_gpsf.py` |
-| mock    | Gauss       | multi       | mixtures | multi  | pixel   | opt,hmc      | `mock_many_gauss_multi.py` |
-| mock    | Sersic      | single      | mixtures | single | pixel   | nest,hmc,hem | `mock_one_sersic_single.py` |
+| mock    | Point,Gauss | single      | gauss    | single | pixel   | opt,pymc     | `mock_one_gauss_single_gpsf.py` |
+| mock    | Gauss,Sersic| multi       | mixtures | multi  | pixel   | opt, pymc    | `mock_many_galaxy_multi.py` |
 | sim_cw  | Point       | single loop | mixtures | single | pixel   | opt          | `simcw_one_point_single.py` |
 | sim_cw  | Point       | single loop | mixtures | multi  | sky     | nest         | `simcw_one_point_multi.py` |
 | sim     | Point       | single loop | mixtures | single | sky     | nest,hmc,hem | `sim_one_point_single.py` |
@@ -15,11 +14,9 @@
 
 These demos run on _mock_ data, where the data is generated from the same model used to fit them.
 
-* `mock_one_gauss_single_gpsf.py` One single-Gaussian source and single-Gaussian PSF, one stamp, mock generated from model, noise optionally added.  Useful for checking gradients, basic functionality. Multiple backends possible.
+* `mock_one_gauss_single_gpsf.py` One single-Gaussian or Point source and a single-Gaussian PSF, one stamp, mock generated from model, noise optionally added.  Useful for checking gradients, basic functionality. Multiple backends possible.
 
-* `mock_many_gauss_multi.py` Same as above but with multiple single-Gaussian sources in multiple bands and/or stamps and Gaussian mixture PSFs.  Reads a scene + data initialization from `catalog_for_demo.dat`
-
-* `mock_one_sersic_single.py` One multi-gaussian Sersic source and gaussian mixture PSF, in one band/exposure.  Can be fit using either nested sampling or HMC.
+* `mock_many_galaxy_multi.py` Same as above but with multiple single-Gaussian or Sersic sources in multiple bands and/or stamps and Gaussian mixture PSFs.  Reads a scene + data initialization from `catalog_for_demo.dat`
 
 
 ## Simulated data
