@@ -138,7 +138,6 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
     stamp = PostageStamp()
     size = np.array(size).astype(int)
     stamp.nx, stamp.ny = size
-    stamp.npix = int(stamp.nx * stamp.ny)
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
 
@@ -218,7 +217,6 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     stamp.ierr = stamp.ierr.flatten()
 
     stamp.nx, stamp.ny = stamp.pixel_values.shape
-    stamp.npix = stamp.nx * stamp.ny
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
 

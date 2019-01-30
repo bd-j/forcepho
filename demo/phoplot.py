@@ -10,7 +10,7 @@ from forcepho.likelihood import make_image
 # code to force angular values to an interval
 # phim = np.mod((phi + np.pi / 2), np.pi) - np.pi / 2.
 
-def display(data, savedir="", show=False, root="xdf"):
+def display(data, savedir="", show=False, root="xdf", **imkwargs):
 
     if type(data) is str:
         fn = data
@@ -58,7 +58,8 @@ def display(data, savedir="", show=False, root="xdf"):
     except:
         best = result.chain[-1, :]
         print("using last position")
-    rfig, raxes = plot_model_images(best, result.scene, result.stamps, share=False)
+    rfig, raxes = plot_model_images(best, result.scene, result.stamps,
+                                    share=False, **imkwargs)
     if savedir != "":
         rfig.savefig(os.path.join(savedir, root + ".residual.pdf"))
 
@@ -73,8 +74,10 @@ def display(data, savedir="", show=False, root="xdf"):
 
 
 def plot_model_images(pos, scene, stamps, axes=None, colorbars=True,
-                      x=slice(None), y=slice(None), share=True):
+                      x=slice(None), y=slice(None), share=True,
+                      scale_model=False, scale_residuals=False):
     vals = pos
+    same_scale = [False, scale_model, scale_residuals, False]
     if axes is None:
         rfig, raxes = pl.subplots(len(stamps), 4, figsize=(14, 3.3*len(stamps) + 0.5),
                                   sharex=share, sharey=share)
@@ -87,8 +90,13 @@ def plot_model_images(pos, scene, stamps, axes=None, colorbars=True,
         resid = data - im
         chi = resid * stamp.ierr.reshape(stamp.nx, stamp.ny)
         ims = [data, im, resid, chi]
+        norm = None
         for j, ii in enumerate(ims):
-            ci = raxes[i, j].imshow(ii[x, y].T, origin='lower')
+            if same_scale[j] and colorbars:
+                vmin, vmax = cb.vmin, cb.vmax
+            else:
+                vmin = vmax = None
+            ci = raxes[i, j].imshow(ii[x, y].T, origin='lower', vmin=vmin, vmax=vmax)
             if (rfig is not None) & colorbars:
                 cb = rfig.colorbar(ci, ax=raxes[i,j], orientation='horizontal')
                 cb.ax.set_xticklabels(cb.ax.get_xticklabels(), rotation=-55)

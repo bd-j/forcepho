@@ -3,11 +3,12 @@ from functools import partial as argfix
 import numpy as np
 import matplotlib.pyplot as pl
 
-from .likelihood import lnlike_multi
+from .likelihood import lnlike_multi, negative_lnlike_multi
 from .posterior import Posterior, LogLikeWithGrad
 
 
-__all__ = ["Result", "run_hemcee", "run_dynesty", "run_hmc"]
+__all__ = ["Result", "run_pymc3", "run_opt",
+           "run_hemcee", "run_dynesty", "run_hmc"]
 
 
 class Result(object):
@@ -153,6 +154,32 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
     return result, dresults
 
 
+def run_opt(p0, scene, plans, jac=True, **extras):
+
+    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=jac)
+
+    from scipy.optimize import minimize
+    opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
+            'disp':True, 'iprint': 1, 'maxcor': 20}
+    def callback(x):
+        print(x, nll(x))
+
+    t0 = time.time()
+    scires = minimize(nll, p0.copy(), jac=jac,  method='BFGS',
+                      options=opts, bounds=None, callback=callback)
+    tsample = time.time() - t0
+    
+    result = Result()
+    result.ndim = len(p0)
+    result.chain = np.atleast_2d(scires.x)
+    result.lnp = -0.5 * scires.fun
+    result.wall_time = tsample
+    result.plans = plans
+    result.scene = scene
+
+    return result
+
+    
 def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
             nwarm=0, niter=500, length=20):
 
