@@ -470,6 +470,98 @@ class Galaxy(Source):
         # ngauss array of da/drh
         return np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines])
 
+
+class ConformalGalaxy(Galaxy):
+
+    """Parameters describing a source in the celestial plane, with the shape
+    parameterized by the conformal shear vector instead of traditional axis
+    ratio and position angle. For each galaxy there are 7 parameters:
+      * flux: total flux (possibly a vector)
+      * ra: right ascension (degrees)
+      * dec: declination (degrees)
+      * ep, ec: the eta vector defined by Bernstein & Jarvis 2002, eq 2.10
+      * n: sersic index
+      * r: half-light radius (arcsec)
+
+    Methods are provided to return the amplitudes and covariance matrices of
+    the constituent gaussians, as well as derivatives of the amplitudes with
+    respect to sersic index and half light radius.
+    """
+
+    
+    # Parameters
+    flux = 0.     # flux.  This will get rewritten on instantiation to have
+                  #        a length that is the number of bands
+    ra = 0.
+    dec = 0.
+    ep = 1.       # eta_+ (Bernstein & Jarvis) = \eta \cos(2\phi)
+    ec = 0.       # eta_x (Bernstein & Jarvis) = \eta \sin(2\phi)
+    sersic = 0.   # sersic index
+    rh = 0.       # half light radius
+
+
+    
+    def set_params(self, theta, filtername=None):
+        """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
+        theta array.  Assumes that the order of parameters in the theta vector
+        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rh]
+
+        :param theta:
+            The source parameter values that are to be set.  Sequence of length
+            either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
+            npos + nshape` (if a filter is specified)
+
+        :param filtername: (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (fluxI,
+            ra, dec, q, pa) where fluxI is the source flux through the filter
+            given by `filtername`.  If `None` then the theta vector is assumed
+            to be of length `Source().nband + 6`, where the first `nband`
+            elements correspond to the fluxes.
+        """
+        if filtername is not None:
+            nflux = 1
+            flux_inds = self.filter_index(filtername)
+        else:
+            nflux = self.nband
+            flux_inds = slice(None)
+        assert len(theta) == nflux + self.npos + self.nshape, "The length of the parameter vector is not appropriate for this source"
+        self.flux[flux_inds] = theta[:nflux]
+        self.ra  = theta[nflux]
+        self.dec = theta[nflux + 1]
+        self.ep   = theta[nflux + 2]
+        self.ec  = theta[nflux + 3]
+        if self.nshape > 2:
+            self.sersic = theta[nflux + 4]
+            self.rh = theta[nflux + 5]
+
+
+    @property
+    def q(self):
+        """(b/a)^0.5
+        """
+        eta = np.hypot(self.ep, self.ec)
+        return np.exp(eta / 2)
+
+    @property
+    def pa(self):
+        """Position angle
+        """
+        return np.arctan2(self.ec, self.ep) / 2.
+            
+
+    def ds_deta(self):
+        """The Jacobian for d(q, pa) / d(eta_+, eta_x).
+        I.e., multiply gradients with respect to q and pa by this to get
+        gradients with respect to eta_+, eta_x.
+        """
+        q = self.q
+        phi = self.pa
+        sin2phi = np.sin(2 * phi)
+        cos2phi = np.cos(2 * phi)
+        itlq = 1. / (2. * np.log(q))
+        return np.array([[-q * cos2phi, -q * sin2phi],
+                        [sin2phi * itlq, -cos2phi * itlq ]])
+
     
 def scale_matrix(q):
     #return np.array([[q**(-0.5), 0],
@@ -479,8 +571,10 @@ def scale_matrix(q):
 
 
 def rotation_matrix(theta):
-    return np.array([[np.cos(theta), -np.sin(theta)],
-                     [np.sin(theta), np.cos(theta)]])
+    costheta = np.cos(theta)
+    sintheta = np.sin(theta)
+    return np.array([[costheta, -sintheta],
+                     [sintheta, costheta]])
 
 
 def scale_matrix_deriv(q):
@@ -491,8 +585,10 @@ def scale_matrix_deriv(q):
 
 
 def rotation_matrix_deriv(theta):
-    return np.array([[-np.sin(theta), -np.cos(theta)],
-                     [np.cos(theta), -np.sin(theta)]])
+    costheta = np.cos(theta)
+    msintheta = -np.sin(theta)
+    return np.array([[msintheta, -costheta],
+                     [costheta, msintheta]])
 
 
 def dummy_spline(x, y, dx=0, dy=0):

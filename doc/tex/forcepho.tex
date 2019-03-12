@@ -1,4 +1,4 @@
-\documentclass[modern]{aastex6} 
+\documentclass[modern]{aastex62} 
 \setlength{\parskip}{\baselineskip}
 
 %\usepackage{graphicx}
@@ -8,7 +8,7 @@
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
 \newcommand{\given}{\,|\,}
 \renewcommand{\det}[1]{||{#1}||}
-\renewcommand{\abs}[1]{|{#1}|}
+\newcommand{\abs}[1]{|{#1}|}
 \DeclareMathOperator{\trace}{Tr}
 
 \newcommand{\counts}{C}
@@ -165,11 +165,11 @@ g     & = & -\frac{1}{2} \, (\dx \, V_{x} + \dy \, V_y) \nonumber \\
 h     & = & 1 + \frac{1}{24} \, (V_x^2 + V_y^2 - F_{xx} - F_{yy}) \nonumber \\
 V_x  & = & F_{xx} \, \dx + F_{xy} \, \dy  \nonumber \\
 V_y  & = & F_{yy} \, \dy + F_{xy} \, \dx \nonumber \\
-F & = & \Sigma^{-1}  \nonumber
+F & = & \Sigma^{-1} \nonumber \\
 \end{eqnarray}
 where
 \begin{eqnarray}
-F  & = & \begin{pmatrix} F_{xx} & F_{xy} \\ F_{xy} & F_{yy} \end{pmatrix}%\nonumber
+F  & = & \begin{pmatrix} F_{xx} & F_{xy} \\ F_{xy} & F_{yy} \end{pmatrix} \nonumber
 \end{eqnarray}
 
 
@@ -237,7 +237,10 @@ Now, we also need the transformation form celestial coordinates $c = (\alpha, de
 In general this is non-linear, as the transformation itself depends on the value of $c$.
 We will write
 \begin{eqnarray}
-W & = & \begin{pmatrix} \frac{\partial z_1}{\partial \alpha} & \frac{\partial z_1}{\partial \delta} \\ \frac{\partial z_2}{\partial \alpha} & \frac{\partial z_2}{\partial \delta }\end{pmatrix}
+  W & = &
+          \begin{pmatrix} \frac{\partial z_1}{\partial \alpha} & \frac{\partial z_1}{\partial \delta} \\
+            \frac{\partial z_2}{\partial \alpha} & \frac{\partial z_2}{\partial \delta }
+          \end{pmatrix} \\
 \end{eqnarray}
 and $W_0$ the value of this matrix at some reference position $c_0$, typically the center of a postage stamp.
 A good approximation is 
@@ -261,23 +264,37 @@ S & = & \begin{pmatrix} \frac{1}{\sqrt{q}} & 0 \\ 0 & \sqrt{q}\end{pmatrix}
 \end{eqnarray}
 where we have used $\sqrt{q}$ so that$\det{S}=1$.
 These transformations have the problem that the position angle becomes unconstrained as $q$ goes to 1 (or $\theta$ goes to zero).
-It is possible to reparameterize in terms of Cartesian coordinates of a normal vector in 3D space.
-Since we are not concerned in these transformations with the radius we can fix it at 1, yielding the following useful conversions.
+In terms of a posterior distribution, this leads to a funnel shape in the $q, \varphi$ space, which is difficult to sample from.
+
+The lensing community has explored alternative parameterizations to describe shear that do not suffer from this problem.
+In particular \citet{bernstein02} describes the following parameterization in terms of the \emph{conformal shear}  vector $\pmb{\eta}$
 \begin{eqnarray}
-\hat{n} & = & n_x\, \hat{x} + n_y\, \hat{y} + n_z \, \hat{z} \\
-n_x & = & \sin\theta \, \cos\phi \nonumber\\
-n_y & = & \sin\theta \, \sin\phi \nonumber\\
-n_z & = & \cos\theta \nonumber\\
-      & = & q \nonumber\\
-n_y & = & \sqrt{1 - n_x^2 - n_z^2} \nonumber\\
-r_{xy} & = & \sqrt{n_x^2 + n_y^2} \nonumber\\
-       & = & \sin \theta \nonumber\\
+  \pmb{s} & = & (q, \varphi) \\
+  q & = & e^{-\eta} \\
+  \eta_+ & = & \eta \, \cos (2\varphi) \\
+  \eta_\times & = & \eta \, \sin (2\varphi) \\
+  \pmb{\eta} & = &  ( \eta_+, \eta_\times) \\
 \end{eqnarray}
-The transformation matrix $R\, S$ then becomes
+The vector $\pmb{\eta}$ is a vector in a non-Euclidean space.  The vector $( \eta_+, 0)$ creates ellipses oriented to the $x$ or $y$ axes while the vector $ (0, \eta_\times)$ orients ellipses along axes rotated $45^{\deg}$ from the coordinate axes.
+For reasons that will become clear later, it will be useful to find the Jacobian of the transformation from $\pmb{s} = q, \varphi$ to $\pmb{\eta} = \eta_+, \eta_\times$.
+\begin{center}
+$
+\begin{array}{c|cc}
+ & q & \varphi \\
+\hline
+\eta_+           &  -\frac{\cos(2 \varphi)}{q} & 2 \, \ln q \, \sin(2 \varphi) \\
+\eta_\times   & -\frac{\sin(2 \varphi)}{q}  & -2 \, \ln q \, \cos(2 \varphi) \\
+\end{array}
+$
+\end{center}
+And in fact we will usually want the inverse of this matrix (which has determinant $\frac{2\ln q}{q}$)
+%\end{table}
 \begin{eqnarray}
-T & = & \frac{1}{r_{xy}}\begin{pmatrix} {n_x/\sqrt{n_z}} &  -n_y \, \sqrt{n_z}\\
-                                       {n_y/\sqrt{n_z}} & n_x \, \sqrt{n_z} \end{pmatrix} \\
-\end{eqnarray}
+  J  & =  & \begin{pmatrix} - q \, \cos(2\varphi) & - q \, \sin(2 \varphi) \\
+    \frac{\sin(2 \varphi)}{2\ln q} & -\frac{\cos(2 \varphi)}{2\ln q}
+    \end{pmatrix} \\
+d\pmb{s} & = & J \, d\pmb{\eta}    
+ \end{eqnarray}
 
 
 \subsection{Analytic convolutions and transformations to pixel space}
@@ -415,7 +432,7 @@ Fortunately the logistic function we are using has easy second derivatives.
 \begin{eqnarray}
   \frac{\ln \abs{\partial \det{J_b}}}{\partial z_i} & = & \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}} \frac{\partial \det{J_b}}{\partial z_i} \\
    & = &  \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}}  \frac{\det{J_b}}{J_{b,i}} \frac{\partial^2\theta_i}{\partial^2 z_i} \\
-   & = & \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}}  \frac{\det{J_b}}{J_{b,i}} \, J_{b,i} \, (1 - 2 \, g(z_i))
+   & = & \frac{1}{\abs{\det{J_b}}} \frac{\det{J_b}}{\abs{\det{J_b}}}  \frac{\det{J_b}}{J_{b,i}} \, J_{b,i} \, (1 - 2 \, g(z_i)) \\
    & = & (1 - 2 \, g(z_i))
 \end{eqnarray}
 assuming the determinant is always real.
