@@ -45,7 +45,7 @@ class GaussianImageGalaxy(object):
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
 
 
-def convert_to_gaussians(source, stamp):
+def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
     including PSF, and keeping track of the dGaussian_dScene.
 
@@ -119,6 +119,9 @@ def convert_to_gaussians(source, stamp):
 
             # And add to list of gaussians
             gig.gaussians[i, j] = gauss
+
+    if compute_deriv:
+        gig = get_gaussian_gradients(source, stamp, gig)
 
     return gig
 
@@ -350,6 +353,35 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
         return C, gradients
     else:
         return C
+
+
+def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
+    """A slow loop of compute_gaussian() over all ImageGaussians in a
+    GaussianImageGalaxy.
+    """
+    # Set up output
+    assert len(xpix) == len(ypix)
+    npix = len(xpix)
+    image = np.zeros(npix)
+    if compute_deriv:
+        nskypar, nimpar = gig.gaussians.flat[0].derivs.shape
+        gradients = np.zeros([nskypar, npix])
+    else:
+        gradients = None
+
+    # Loop over on-image gaussians, accumulating image values and gradients
+    for j, g in enumerate(gig.gaussians.flat):
+        out = compute_gaussian(g, xpix, ypix, compute_deriv=compute_deriv,
+                               **compute_keywords)
+        if compute_deriv:
+            I, dI_dphi = out
+            gradients += np.matmul(g.derivs, dI_dphi)
+        else:
+            I = out
+
+        image += I
+
+    return image, gradients
 
 
 def scale_matrix(q):
