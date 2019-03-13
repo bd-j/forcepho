@@ -6,7 +6,8 @@ import h5py
 from .gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
-           "Star", "SimpleGalaxy", "Galaxy"]
+           "Star",
+           "SimpleGalaxy", "Galaxy", "ConformalGalaxy"]
 
 
 class Scene(object):
@@ -214,7 +215,7 @@ class Source(object):
         :param stamp:
             A PostageStamp object
 
-        :param withgrad: (optional, default: True)
+        :param compute_deriv: (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
         """
@@ -604,7 +605,7 @@ class ConformalGalaxy(Galaxy):
         I.e., multiply gradients with respect to q and pa by this to get
         gradients with respect to eta_+, eta_x.
         """
-        sqrtq = self.q
+        sqrtq = self.q  #ugh
         q = (sqrtq)**2
         phi = self.pa
         sin2phi = np.sin(2 * phi)

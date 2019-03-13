@@ -8,7 +8,7 @@ import numpy as np
 #from astropy import wcs
 
 
-__all__ = ["PostageStamp", "SimpleWCS", "TanWCS"]
+__all__ = ["PostageStamp"]
 
 
 class PostageStamp(object):
@@ -24,10 +24,7 @@ class PostageStamp(object):
 
     id = 1
 
-    # Size of the stamp
-    nx = 100
-    ny = 100
-
+    # --- Required Attributes that must be set directly
     # The scale matrix D (pixels per arcsecond)
     scale = np.eye(2)
     # The matrix [dpix/dRA, dpix/dDec]
@@ -36,15 +33,17 @@ class PostageStamp(object):
     crval = np.zeros([2])
     # The pixel coordinates of the reference pixel
     crpix = np.zeros([2])
-
+    # photometric conversion, physical to counts
+    photocounts = 1.0
     # The point spread function
     #psf = PointSpreadFunction()
 
+    # --- Required Attributes set by __init__ ---
+    # Size of the stamp
+    nx = 100
+    ny = 100
     # The band name
     filtername = "dummy"
-
-    # photometric conversion, physical to counts
-    photocounts = 1.0
 
     def __init__(self, nx=100, ny=100, filtername="dummy"):
         self.nx = nx
@@ -81,6 +80,19 @@ class PostageStamp(object):
     @property
     def shape(self):
         return np.array([self.nx, self.ny])
+
+    def render(self, source, compute_deriv=True, **compute_keywords):
+        """Render a source on this PostageStamp.  Thin wrapper on Source.render()
+
+        :param source:
+            A Source object
+
+        :param compute_deriv: (optional, default: True)
+            If True, return the gradients of the image with respect to the
+            relevant free parameters for the source.
+        """
+        return source.render(self, compute_deriv=compute_deriv,
+                             **compute kywords)
 
 
 class SimpleWCS(object):
@@ -266,7 +278,8 @@ def scale_at_sky(sky, wcs):
 
 def extract_stamp(imname, center=(None, None), size=(None, None),
                   center_type='pixels'):
-    """Make a postage stamp around the given position using the given image name
+    """Make a postage stamp around the given position using the given image name.
+    This is more of an example than anything else.
     """
     im = fits.getdata(imname)
     hdr = fits.getheader(imname)

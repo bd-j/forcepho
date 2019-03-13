@@ -263,13 +263,15 @@ R & = & \begin{pmatrix} \cos (\varphi) & -\sin(\varphi)\\ \sin(\varphi) & \cos(\
 S & = & \begin{pmatrix} \frac{1}{\sqrt{q}} & 0 \\ 0 & \sqrt{q}\end{pmatrix}
 \end{eqnarray}
 where we have used $\sqrt{q}$ so that$\det{S}=1$.
-These transformations have the problem that the position angle becomes unconstrained as $q$ goes to 1 (or $\theta$ goes to zero).
-In terms of a posterior distribution, this leads to a funnel shape in the $q, \varphi$ space, which is difficult to sample from.
+(In fact, in the forcepho code we have redifined $q\equiv (b/a)^{1/2}$ when using this parameterization).
+These transformations have the problem that the position angle becomes unconstrained as $q$ goes to 1.
+In terms of a posterior distribution, this leads to a funnel shape in the $q, \varphi$ space, which can be difficult to sample from.
 
 The lensing community has explored alternative parameterizations to describe shear that do not suffer from this problem.
 In particular \citet{bernstein02} describes the following parameterization in terms of the \emph{conformal shear}  vector $\pmb{\eta}$
 \begin{eqnarray}
-  \pmb{s} & = & (q, \varphi) \\
+  q & = & \frac{b}{a} \\
+  \pmb{s} & = & (b/a, \varphi) \\
   q & = & e^{-\eta} \\
   \eta_+ & = & \eta \, \cos (2\varphi) \\
   \eta_\times & = & \eta \, \sin (2\varphi) \\
@@ -294,7 +296,8 @@ And in fact we will usually want the inverse of this matrix (which has determina
     \frac{\sin(2 \varphi)}{2\ln q} & -\frac{\cos(2 \varphi)}{2\ln q}
     \end{pmatrix} \\
 d\pmb{s} & = & J \, d\pmb{\eta}    
- \end{eqnarray}
+\end{eqnarray}
+This might need to be transposed.  Also an additional factor of $\frac{1}{2 \sqrt{q}$ is necessary in the code to account for the non-standard definition of $q$ in the code.
 
 
 \subsection{Analytic convolutions and transformations to pixel space}
@@ -636,6 +639,11 @@ Other codes that do all or some of generative modeling of exposure level images 
 
 
 \begin{thebibliography}{}\raggedright
+\bibitem[Bernstein, \& Jarvis(2002)]{bernstein02}
+Bernstein, G.~M., \& Jarvis, M.\ 2002, \aj, 123, 583.
+
+  \bibitem[Greisen et al.(2002)]{greisen02}
+Greisen et al. 2002, A\&A 395, 1061
 
 \bibitem[Hogg \& Lang(2013)]{hogg_mog}
 Hogg, D.~W. \& Lang, D. 2013, PASP 127, 719
@@ -643,8 +651,6 @@ Hogg, D.~W. \& Lang, D. 2013, PASP 127, 719
 \bibitem[Trujillo et al.(2001)]{trujillo01}
 Trujillo, I. et al. 2001, MNRAS 321, 269
 
-\bibitem[Greisen et al.(2002)]{greisen02}
-Greisen et al. 2002, A\&A 395, 1061
 
 \end{thebibliography}
 
