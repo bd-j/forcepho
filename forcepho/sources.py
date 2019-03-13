@@ -3,7 +3,7 @@ from scipy.interpolate import SmoothBivariateSpline
 import h5py
 
 # For rendering
-from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gig
+from .gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
            "Star", "SimpleGalaxy", "Galaxy"]
@@ -218,11 +218,7 @@ class Source(object):
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
         """
-        gig = convert_to_gaussians(self, stamp)
-        if compute_deriv:
-            gig = get_gaussian_gradients(self, stamp, gig)
-
-        # Do it!
+        gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
         image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
                                   compute_deriv=compute_deriv, **compute_keywords)
 
@@ -632,16 +628,13 @@ class ConformalGalaxy(Galaxy):
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
         """
-        gig = convert_to_gaussians(self, stamp)
-        if compute_deriv:
-            gig = get_gaussian_gradients(self, stamp, gig)
-
-        # Do it!
+        gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
         image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
                                   compute_deriv=compute_deriv, **compute_keywords)
 
         if compute_deriv:
             # convert d/dq, d/dphi to d/deta_+, d/deta_x
+            # FIXME: This is a brittle way to do this!
             grad[3:5, :] = np.matmul(self.ds_deta, grad[3:5, :])
             return image, grad[self.use_gradients]
         else:

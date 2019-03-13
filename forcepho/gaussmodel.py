@@ -45,7 +45,7 @@ class GaussianImageGalaxy(object):
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
 
 
-def convert_to_gaussians(source, stamp):
+def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
     including PSF, and keeping track of the dGaussian_dScene.
 
@@ -119,6 +119,9 @@ def convert_to_gaussians(source, stamp):
 
             # And add to list of gaussians
             gig.gaussians[i, j] = gauss
+
+    if compute_deriv:
+        gig = get_gaussian_gradients(source, stamp, gig)
 
     return gig
 
