@@ -2,6 +2,9 @@ import numpy as np
 from scipy.interpolate import SmoothBivariateSpline
 import h5py
 
+# For rendering
+from .gaussmodel import convert_to_gaussians, get_gaussian_gradients, compute_gig
+
 __all__ = ["Scene", "Source",
            "Star", "SimpleGalaxy", "Galaxy"]
 
@@ -203,6 +206,30 @@ class Source(object):
         """
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
+
+
+    def render(self, stamp, compute_deriv=True, **compute_keywords):
+        """Render a source on a PostageStamp.
+
+        :param stamp:
+            A PostageStamp object
+
+        :param withgrad: (optional, default: True)
+            If True, return the gradients of the image with respect to the
+            relevant free parameters for the source.
+        """
+        gig = convert_to_gaussians(self, stamp)
+        if compute_deriv:
+            gig = get_gaussian_gradients(self, stamp, gig)
+
+        # Do it!
+        image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+                                  compute_deriv=compute_deriv, **compute_keywords)
+
+        if compute_deriv:
+            return image, grad[self.use_gradients]
+        else:
+            return image, None
 
 
 class Star(Source):
@@ -494,17 +521,16 @@ class ConformalGalaxy(Galaxy):
                   #        a length that is the number of bands
     ra = 0.
     dec = 0.
-    ep = 1.       # eta_+ (Bernstein & Jarvis) = \eta \cos(2\phi)
+    ep = 0.       # eta_+ (Bernstein & Jarvis) = \eta \cos(2\phi)
     ec = 0.       # eta_x (Bernstein & Jarvis) = \eta \sin(2\phi)
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
 
-
     
     def set_params(self, theta, filtername=None):
-        """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
+        """Set the parameters (flux(es), ra, dec, ep, ec, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rh]
+        is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rh]
 
         :param theta:
             The source parameter values that are to be set.  Sequence of length
@@ -513,7 +539,7 @@ class ConformalGalaxy(Galaxy):
 
         :param filtername: (optional, default: None)
             If supplied, the theta vector is assumed to be 7-element (fluxI,
-            ra, dec, q, pa) where fluxI is the source flux through the filter
+            ra, dec, ep, ec) where fluxI is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
             to be of length `Source().nband + 6`, where the first `nband`
             elements correspond to the fluxes.
@@ -534,33 +560,92 @@ class ConformalGalaxy(Galaxy):
             self.sersic = theta[nflux + 4]
             self.rh = theta[nflux + 5]
 
+    def get_param_vector(self, filtername=None):
+        """Get the relevant source parameters as a simple 1-D ndarray.
+        """
+        if filtername is not None:
+            flux = [self.flux[self.filter_index(filtername)]]
+        else:
+            flux = self.flux
+        params = np.concatenate([flux, [self.ra, self.dec, self.ep, self.ec]])
+        if self.nshape > 2:
+            params = np.concatenate([params, [self.sersic, self.rh]])
+        return params
+
+    def etas_from_qphi(self, q, phi):
+        """Get eta vector from native shape units
+
+        :param q: (b/a)^0.5
+        :param phi: position angle (radians)
+        """
+        eta = -np.log(q**2)
+        eta_plus = eta * np.cos(phi * 2.)
+        eta_cross = eta * np.sin(phi * 2.)
+        return eta_plus, eta_cross
+
+    @property
+    def parameter_names(self):
+        names = self.filternames + ["ra", "dec"] + ["ep", "ec", "n", "r"][:self.nshape]
+        names = ["{}_{}".format(n, self.id) for n in names]
+        return names
 
     @property
     def q(self):
-        """(b/a)^0.5
+        """(b/a)^0.5 following conventions above
         """
         eta = np.hypot(self.ep, self.ec)
-        return np.exp(eta / 2)
+        return np.exp(-eta / 2.)
 
     @property
     def pa(self):
         """Position angle
         """
         return np.arctan2(self.ec, self.ep) / 2.
-            
 
+    @property
     def ds_deta(self):
         """The Jacobian for d(q, pa) / d(eta_+, eta_x).
         I.e., multiply gradients with respect to q and pa by this to get
         gradients with respect to eta_+, eta_x.
         """
-        q = self.q
+        sqrtq = self.q
+        q = (sqrtq)**2
         phi = self.pa
         sin2phi = np.sin(2 * phi)
         cos2phi = np.cos(2 * phi)
         itlq = 1. / (2. * np.log(q))
-        return np.array([[-q * cos2phi, -q * sin2phi],
-                        [sin2phi * itlq, -cos2phi * itlq ]])
+        ds_de = np.array([[-q * cos2phi, -q * sin2phi],
+                          [sin2phi * itlq, -cos2phi * itlq ]])
+        # account for sqrt in q = sqrt(b/a)
+        sq = np.array([[0.5 / sqrtq, 0.],
+                       [0., 1.]])
+
+        return np.dot(ds_de.T, sq)
+
+    def render(self, stamp, compute_deriv=True, **compute_keywords):
+        """Render a source on a PostageStamp.
+
+        :param stamp:
+            A PostageStamp object
+
+        :param withgrad: (optional, default: True)
+            If True, return the gradients of the image with respect to the
+            relevant free parameters for the source.
+        """
+        gig = convert_to_gaussians(self, stamp)
+        if compute_deriv:
+            gig = get_gaussian_gradients(self, stamp, gig)
+
+        # Do it!
+        image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+                                  compute_deriv=compute_deriv, **compute_keywords)
+
+        if compute_deriv:
+            # convert d/dq, d/dphi to d/deta_+, d/deta_x
+            grad[3:5, :] = np.matmul(self.ds_deta, grad[3:5, :])
+            return image, grad[self.use_gradients]
+        else:
+            return image, None
 
     
 def scale_matrix(q):

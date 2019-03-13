@@ -46,10 +46,18 @@ class PostageStamp(object):
     # photometric conversion, physical to counts
     photocounts = 1.0
 
-    # The pixel values and residuals
-    pixel_values = np.zeros([nx, ny])
-    residuals = np.zeros([nx * ny])
-    ierr = np.zeros_like(residuals)
+    def __init__(self, nx=100, ny=100, filtername="dummy"):
+        self.nx = nx
+        self.ny = ny
+        self.filtername = filtername
+
+        # The pixel values and residuals
+        pixel_values = np.zeros([nx, ny])
+        residuals = np.zeros([nx * ny])
+        ierr = np.zeros_like(residuals)
+
+        # Note inversion of meshgrid order
+        self.ypix, self.xpix = np.meshgrid(np.arange(ny), np.arange(nx))
 
     def sky_to_pix(self, sky):
         pix = np.dot(self.dpix_dsky, sky - self.crval) + self.crpix
