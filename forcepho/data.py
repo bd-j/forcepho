@@ -1,11 +1,8 @@
 # Classes and methods for dealing with image data as postage stamps
 
-# TODO: Make the scale matrix have units of pix/arcsec, while some other matrix is used to get dRA/dpix, dDEC/dpix
-
-
 import numpy as np
 
-#from astropy import wcs
+# from astropy import wcs
 
 
 __all__ = ["PostageStamp"]
@@ -16,9 +13,10 @@ class PostageStamp(object):
     and astrometry
 
       * The PSF is an instance of PointSpreadFunction()
-      * The `dpix_dsky` matrix D is defined such that :math:`p = D\, (c - c_0) + p_0`
-        where :math:`p` is the pixel position, :math:`c` are the celestial coordinates, and
-        :math:`c_0, p_0` indicate the CRVAL and CRPIX values.
+      * The `dpix_dsky` matrix D is defined such that :math:`p = D\, (c - c_0)
+        + p_0` where :math:`p` is the pixel position, :math:`c` are the
+        celestial coordinates, and :math:`c_0, p_0` indicate the CRVAL and
+        CRPIX values.
       * The `scale` matrix gives pixels per arcsec
     """
 
@@ -36,7 +34,7 @@ class PostageStamp(object):
     # photometric conversion, physical to counts
     photocounts = 1.0
     # The point spread function
-    #psf = PointSpreadFunction()
+    # psf = PointSpreadFunction()
 
     # --- Required Attributes set by __init__ ---
     # Size of the stamp
@@ -82,7 +80,8 @@ class PostageStamp(object):
         return np.array([self.nx, self.ny])
 
     def render(self, source, compute_deriv=True, **compute_keywords):
-        """Render a source on this PostageStamp.  Thin wrapper on Source.render()
+        """Render a source on this PostageStamp.  Thin wrapper on
+        Source.render()
 
         :param source:
             A Source object
@@ -112,7 +111,7 @@ class SimpleWCS(object):
     """
 
     def __init__(self, hdr):
-        
+
         self.crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
         self.crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
         self.CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
@@ -132,7 +131,8 @@ class SimpleWCS(object):
         return np.matmul(self.CDinv, intermediate)
 
     def sky_to_pix(self, sky):
-        return self.intermediate_to_pix(self.sky_to_intermediate(sky)) + self.crpix
+        pix = self.intermediate_to_pix(self.sky_to_intermediate(sky)) + self.crpix
+        return pix
 
     def pix_to_intermediate(self, pix):
         return np.matmul(self.CD, pix - self.crpix)
@@ -159,10 +159,9 @@ class TanWCS(object):
     This code appears to be broken, possibly for numerical reasons or a typo in
     the shperical transforms...?
     """
-    
 
     def __init__(self, hdr):
-        
+
         self.crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
         self.crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
         self.CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
@@ -172,7 +171,7 @@ class TanWCS(object):
         # Set up the spherical rotation matrix
         alpha_p, delta_p = np.deg2rad(self.crval)
         phi_0, theta_0, phi_p = 0, np.pi/2, np.pi
-        
+
         r11 = -np.cos(alpha_p) * np.sin(delta_p)
         r12 = -np.sin(alpha_p) * np.sin(delta_p)
         r13 = np.cos(delta_p)
@@ -192,10 +191,13 @@ class TanWCS(object):
         """Get intermediate coordinates given sky coordinates.
 
         :returns x:
-            The 'intermediate' coordinates corresponding to the celestial coordinates `sky`.
+            The 'intermediate' coordinates corresponding to the celestial
+            coordinates `sky`.
         """
         alpha, delta = np.deg2rad(sky)
-        ell = [np.cos(delta) * np.cos(alpha), np.cos(delta) * np.sin(alpha), np.sin(delta)]
+        ell = [np.cos(delta) * np.cos(alpha),
+               np.cos(delta) * np.sin(alpha),
+               np.sin(delta)]
         m = np.matmul(self.sphere_rot, np.array(ell).T)
 
         K = 180./np.pi
@@ -211,7 +213,7 @@ class TanWCS(object):
     def sky_to_pix(self, sky):
         pix = self.intermediate_to_pix(self.sky_to_intermediate(sky))
         return pix
-        
+
     def pix_to_intermediate(self, pix):
         intermediate = np.matmul(self.CD, pix - self.crpix)
         return intermediate
@@ -230,7 +232,7 @@ class TanWCS(object):
         denom = -np.cos(theta) * np.sin(phi - phi_p)
         alpha = alpha_p + np.arctan2(num, denom)
         delta = np.arcsin(np.sin(theta) * np.sin(delta_p) + np.cos(theta) * np.cos(delta_p) * np.cos(phi-phi_p))
-        
+
         m = [np.cos(theta) * np.cos(phi), np.cos(theta) * np.sin(phi), np.sin(theta)]
         ell = np.matmul(self.sphere_rot.T, np.array(m))
         delta = np.arcsin(ell[-1])
@@ -305,7 +307,7 @@ def extract_stamp(imname, center=(None, None), size=(None, None),
     crval_stamp = crpix_stamp + lo
     W = np.eye(2)
     if center_type == 'celestial':
-        crval_stamp = ast.wcs_pix2world(crval_stamp.append(0.)[None,:], 0)[0, :2]
+        crval_stamp = ast.wcs_pix2world(crval_stamp.append(0.)[None, :], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
     # --- Add image and uncertainty data to Stamp ----

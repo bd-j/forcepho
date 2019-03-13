@@ -86,7 +86,7 @@ class Source(object):
       * flux: total flux (possibly a vector)
       * ra: right ascension (degrees)
       * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
+      * q, pa: axis ratio squared and position angle
       * n: sersic index
       * r: half-light radius (arcsec)
 
@@ -98,7 +98,7 @@ class Source(object):
     id = 0
     fixed = False
     radii = np.zeros(1)
-    
+
     # Parameters
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
@@ -126,7 +126,6 @@ class Source(object):
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
-
 
     def __repr__(self):
         kk, vv = self.parameter_names, self.get_param_vector()
@@ -172,7 +171,8 @@ class Source(object):
         corresponds to the supplied `filtername`.
 
         :param filtername:
-            String giving the name of the filter for which you want the corresponding `flux` vector index.
+            String giving the name of the filter for which you want the
+            corresponding `flux` vector index.
 
         :returns index:
             An integer index that when used to subscript the `flux` attribute
@@ -208,7 +208,6 @@ class Source(object):
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
 
-
     def render(self, stamp, compute_deriv=True, **compute_keywords):
         """Render a source on a PostageStamp.
 
@@ -220,13 +219,13 @@ class Source(object):
             relevant free parameters for the source.
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
-        image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
-                                  compute_deriv=compute_deriv, **compute_keywords)
+        im, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+                               compute_deriv=compute_deriv, **compute_keywords)
 
         if compute_deriv:
-            return image, grad[self.use_gradients]
+            return im, grad[self.use_gradients]
         else:
-            return image, None
+            return im, None
 
 
 class Star(Source):
@@ -239,7 +238,7 @@ class Star(Source):
 
     radii = np.zeros(1)
 
-    # PointSources only have two position parameters and a single flux parameter
+    # PointSources only have two position parameters.
     npos = 2
     nshape = 0
 
@@ -265,9 +264,10 @@ class Star(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) == nflux + 2, "The length of the parameter vector is not appropriate for this source"
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + 2, msg
         self.flux[flux_inds] = theta[:nflux]
-        self.ra  = theta[nflux]
+        self.ra = theta[nflux]
         self.dec = theta[nflux + 1]
 
     def get_param_vector(self, filtername=None):
@@ -292,20 +292,22 @@ class Star(Source):
 
 
 class SimpleGalaxy(Source):
-    """Parameters describing a simple gaussian galaxy in the celestial plane (i.e. the Scene parameters)
-    Only 5 of the possible 7 Source parameters are relevant:
+    """Parameters describing a simple gaussian galaxy in the celestial plane
+    (i.e. the Scene parameters.) Only 5 of the possible 7 Source parameters are
+    relevant:
       * flux: total flux
       * ra: right ascension (degrees)
       * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
+      * q, pa: axis ratio squared and position angle
 
     The radial profile is assumed to be a sum of equally weighted gaussians
     with radii given by SimpleGalaxy.radii
     """
 
     radii = np.ones(1)
-    
-    # Galaxies have two position parameters, 2  or 4 shape parameters (pa and q) and nband flux parameters
+
+    # Galaxies have two position parameters, 2 or 4 shape parameters (pa and q)
+    # and nband flux parameters
     npos = 2
     nshape = 2
 
@@ -332,7 +334,8 @@ class SimpleGalaxy(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) == nflux + 4, "The length of the parameter vector is not appropriate for this source"
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + 4, msg
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
@@ -361,12 +364,12 @@ class SimpleGalaxy(Source):
 
 
 class Galaxy(Source):
-    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the Scene parameters)
-    All 7 Source parameters are relevant:
+    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the
+    Scene parameters) All 7 Source parameters are relevant:
       * flux: total flux
       * ra: right ascension (degrees)
       * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle (might be parameterized differently in future)
+      * q, pa: axis ratio squared and position angle
       * n: sersic index
       * r: half-light radius (arcsec)
 
@@ -379,7 +382,7 @@ class Galaxy(Source):
     """
 
     radii = np.ones(1)
-    
+
     # Galaxies have 2 position parameters,
     #    2 or 4 shape parameters (pa and q),
     #    and nband flux parameters
@@ -392,8 +395,7 @@ class Galaxy(Source):
         if radii is not None:
             self.radii = radii
         if splinedata is None:
-            raise ValueError, "Galaxies must have information to make A(r, n) bivariate splines"
-            #self.splines = [dummy_spline] * self.ngauss
+            raise(ValueError, "Galaxies must have information to make A(r, n) bivariate splines")
         else:
             self.initialize_splines(splinedata)
 
@@ -424,7 +426,8 @@ class Galaxy(Source):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) == nflux + self.npos + self.nshape, "The length of the parameter vector is not appropriate for this source"
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + self.npos + self.nshape, msg
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
@@ -460,7 +463,7 @@ class Galaxy(Source):
         self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing) for i in range(ng)]
         self.rh_range = (r.min(), r.max())
         self.sersic_range = (n.min(), n.max())
-        
+
     @property
     def covariances(self):
         """This just constructs a set of covariance matrices based on the fixed
@@ -512,7 +515,6 @@ class ConformalGalaxy(Galaxy):
     respect to sersic index and half light radius.
     """
 
-    
     # Parameters
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
@@ -523,7 +525,6 @@ class ConformalGalaxy(Galaxy):
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
 
-    
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, ep, ec, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
@@ -547,7 +548,8 @@ class ConformalGalaxy(Galaxy):
         else:
             nflux = self.nband
             flux_inds = slice(None)
-        assert len(theta) == nflux + self.npos + self.nshape, "The length of the parameter vector is not appropriate for this source"
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + self.npos + self.nshape, msg
         self.flux[flux_inds] = theta[:nflux]
         self.ra  = theta[nflux]
         self.dec = theta[nflux + 1]
@@ -605,14 +607,14 @@ class ConformalGalaxy(Galaxy):
         I.e., multiply gradients with respect to q and pa by this to get
         gradients with respect to eta_+, eta_x.
         """
-        sqrtq = self.q  #ugh
+        sqrtq = self.q  # ugh
         q = (sqrtq)**2
         phi = self.pa
         sin2phi = np.sin(2 * phi)
         cos2phi = np.cos(2 * phi)
         itlq = 1. / (2. * np.log(q))
         ds_de = np.array([[-q * cos2phi, -q * sin2phi],
-                          [sin2phi * itlq, -cos2phi * itlq ]])
+                          [sin2phi * itlq, -cos2phi * itlq]])
         # account for sqrt in q = sqrt(b/a)
         sq = np.array([[0.5 / sqrtq, 0.],
                        [0., 1.]])
@@ -630,22 +632,22 @@ class ConformalGalaxy(Galaxy):
             relevant free parameters for the source.
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
-        image, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
-                                  compute_deriv=compute_deriv, **compute_keywords)
+        im, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+                               compute_deriv=compute_deriv, **compute_keywords)
 
         if compute_deriv:
             # convert d/dq, d/dphi to d/deta_+, d/deta_x
             # FIXME: This is a brittle way to do this!
             grad[3:5, :] = np.matmul(self.ds_deta, grad[3:5, :])
-            return image, grad[self.use_gradients]
+            return im, grad[self.use_gradients]
         else:
-            return image, None
+            return im, None
 
-    
+
 def scale_matrix(q):
-    #return np.array([[q**(-0.5), 0],
-    #                [0, q**(0.5)]])
-    return np.array([[1./q, 0],  #use q=(b/a)^0.5
+    """q=(b/a)^0.5
+    """
+    return np.array([[1./q, 0],
                     [0, q]])
 
 
@@ -657,9 +659,9 @@ def rotation_matrix(theta):
 
 
 def scale_matrix_deriv(q):
-    #return np.array([[-0.5 * q**(-1.5), 0],
-    #                [0, 0.5 * q**(-0.5)]])
-    return np.array([[-1./q**2, 0], # use q=(b/a)**2
+    """q=(b/a)^0.5
+    """
+    return np.array([[-1./q**2, 0],
                     [0, 1]])
 
 
