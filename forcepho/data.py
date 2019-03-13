@@ -91,7 +91,7 @@ class PostageStamp(object):
             relevant free parameters for the source.
         """
         return source.render(self, compute_deriv=compute_deriv,
-                             **compute kywords)
+                             **compute_keywords)
 
 
 class SimpleWCS(object):
