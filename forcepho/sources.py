@@ -486,7 +486,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines])
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines]))
 
     @property
     def damplitude_drh(self):
@@ -494,7 +494,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines])
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines]))
 
 
 class ConformalGalaxy(Galaxy):

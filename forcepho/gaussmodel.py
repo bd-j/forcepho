@@ -205,6 +205,64 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
 
     return gig
 
+@numba.njit
+def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar, T, samps, pamps, flux, G, dT_dq, dT_dpa, da_dn, da_dr, CW):
+    '''
+    Wrap the core parts of `get_gaussian_gradients` in a form suitable for numba.
+    '''
+
+    derivs = np.empty((source_ngauss, stamp_psf_ngauss, 7, 6))
+
+    for i in range(source_ngauss):
+        scovar = scovars[i]
+        scovar_im = np.dot(T, np.dot(scovar, T.T))
+        for j in range(stamp_psf_ngauss):
+            #gaussid = (source.id, stamp.id, i, j)
+
+            # convolve the jth Source component with the ith PSF component
+            Sigma = scovar_im + pcovar[j]
+            F = fast_inv_2x2(Sigma)
+            detF = fast_det_2x2(F)
+            am, al = samps[i], pamps[j]
+            K = flux * G * am * al * detF**(0.5) / (2 * np.pi)
+
+            # Now get derivatives
+            # Of F
+            dSigma_dq = (np.dot(T, np.dot(scovar, dT_dq.T)) +
+                         np.dot(dT_dq, np.dot(scovar, T.T)))
+            dSigma_dpa = (np.dot(T, np.dot(scovar, dT_dpa.T)) +
+                          np.dot(dT_dpa, np.dot(scovar, T.T)))
+            dF_dq = -np.dot(F, np.dot(dSigma_dq, F))  # 3
+            dF_dpa = -np.dot(F, np.dot(dSigma_dpa, F))  # 3
+            ddetF_dq = detF * fast_trace_2x2(np.dot(Sigma, dF_dq))
+            ddetF_dpa = detF * fast_trace_2x2(np.dot(Sigma, dF_dpa))
+            # of Amplitude
+            dA_dq = K / (2 * detF) * ddetF_dq  # 1
+            dA_dpa = K / (2 * detF) * ddetF_dpa  # 1
+            dA_dflux = K / flux # 1
+            dA_dsersic = K / am * da_dn[i] # 1
+            dA_drh = K / am * da_dr[i] # 1
+
+            # Add derivatives to gaussians
+            # As a list of just nonzero
+            inds = [0, 3, 1] # slice into a flattened symmetric matrix to get unique components
+            #derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] +
+            #          CW.flatten().tolist() +
+            #          dF_dq.flat[inds].tolist() +
+            #          dF_dpa.flat[inds].tolist())
+            # as the 7 x 6 jacobian matrix
+            # each row is a different theta and has
+            # dA/dtheta, dx/dtheta, dy/dtheta, dFxx/dtheta, dFyy/dtheta, dFxy/dtheta
+            jac = [[dA_dflux, 0, 0, 0, 0, 0],  # d/dFlux
+                   [0, CW[0, 0], CW[1, 0], 0, 0, 0],  # d/dAlpha
+                   [0, CW[0, 1], CW[1, 1], 0, 0, 0],  # d/dDelta
+                   [dA_dq, 0, 0, dF_dq[0,0], dF_dq[1,1], dF_dq[1,0]],  # d/dQ
+                   [dA_dpa, 0, 0, dF_dpa[0,0], dF_dpa[1,1], dF_dpa[1,0]],  # d/dPA
+                   [dA_dsersic, 0, 0, 0, 0, 0],  # d/dSersic
+                   [dA_drh, 0, 0, 0, 0, 0]]  # d/dRh
+            derivs[i,j] = np.array(jac)
+    return derivs
+
 
 def get_gaussian_gradients(source, stamp, gig):
     """Compute the Jacobian for dphi_i/dtheta_j where phi are the parameters of
@@ -265,56 +323,12 @@ def get_gaussian_gradients(source, stamp, gig):
         pmeans = stamp.psf.means
         pamps = stamp.psf.amplitudes
 
+    derivs = _get_gaussian_gradients(source.ngauss, stamp.psf.ngauss, scovars, pcovar, T, samps, pamps, flux, G, dT_dq, dT_dpa, da_dn, da_dr, CW)
+
+    # Unpack the results array returned by `_get_gaussian_gradients`
     for i in range(source.ngauss):
-        scovar = scovars[i]
-        scovar_im = np.matmul(T, np.matmul(scovar, T.T))
         for j in range(stamp.psf.ngauss):
-            #gaussid = (source.id, stamp.id, i, j)
-
-            # convolve the jth Source component with the ith PSF component
-            Sigma = scovar_im + pcovar[j]
-            F = fast_inv_2x2(Sigma)
-            detF = fast_det_2x2(F)
-            am, al = samps[i], pamps[j]
-            K = flux * G * am * al * detF**(0.5) / (2 * np.pi)
-
-            # Now get derivatives
-            # Of F
-            dSigma_dq = (np.matmul(T, np.matmul(scovar, dT_dq.T)) +
-                         np.matmul(dT_dq, np.matmul(scovar, T.T)))
-            dSigma_dpa = (np.matmul(T, np.matmul(scovar, dT_dpa.T)) +
-                          np.matmul(dT_dpa, np.matmul(scovar, T.T)))
-            dF_dq = -np.matmul(F, np.matmul(dSigma_dq, F))  # 3
-            dF_dpa = -np.matmul(F, np.matmul(dSigma_dpa, F))  # 3
-            ddetF_dq = detF * fast_trace_2x2(np.matmul(Sigma, dF_dq))
-            ddetF_dpa = detF * fast_trace_2x2(np.matmul(Sigma, dF_dpa))
-            # of Amplitude
-            dA_dq = K / (2 * detF) * ddetF_dq  # 1
-            dA_dpa = K / (2 * detF) * ddetF_dpa  # 1
-            dA_dflux = K / flux # 1
-            dA_dsersic = K / am * da_dn[i] # 1
-            dA_drh = K / am * da_dr[i] # 1
-            
-
-            # Add derivatives to gaussians
-            # As a list of just nonzero
-            inds = [0, 3, 1] # slice into a flattened symmetric matrix to get unique components
-            derivs = ([dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh] +
-                      CW.flatten().tolist() +
-                      dF_dq.flat[inds].tolist() +
-                      dF_dpa.flat[inds].tolist())
-            # as the 7 x 6 jacobian matrix
-            # each row is a different theta and has
-            # dA/dtheta, dx/dtheta, dy/dtheta, dFxx/dtheta, dFyy/dtheta, dFxy/dtheta
-            jac = [[dA_dflux, 0, 0, 0, 0, 0],  # d/dFlux
-                   [0, CW[0, 0], CW[1, 0], 0, 0, 0],  # d/dAlpha
-                   [0, CW[0, 1], CW[1, 1], 0, 0, 0],  # d/dDelta
-                   [dA_dq, 0, 0, dF_dq[0,0], dF_dq[1,1], dF_dq[1,0]],  # d/dQ
-                   [dA_dpa, 0, 0, dF_dpa[0,0], dF_dpa[1,1], dF_dpa[1,0]],  # d/dPA
-                   [dA_dsersic, 0, 0, 0, 0, 0],  # d/dSersic
-                   [dA_drh, 0, 0, 0, 0, 0]]  # d/dRh
-            derivs = np.array(jac)
-            gig.gaussians[i, j].derivs = derivs
+            gig.gaussians[i,j].derivs = derivs[i,j]
 
     return gig
 
