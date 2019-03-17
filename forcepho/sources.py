@@ -44,7 +44,7 @@ class Scene(object):
         source = self.sources[sid]
         start = int(np.sum(npar_per_source))
         # indices of the shape and position parameters
-        inds = range(start + source.nband, start + source.nparam)
+        inds = list(range(start + source.nband, start + source.nparam))
         # put in the flux for this source in this band
         inds.insert(0, start + source.filter_index(filtername))
         return inds
@@ -77,7 +77,6 @@ class Scene(object):
         """
         for i, source in enumerate(self.sources):
             source.id = i
-
 
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy

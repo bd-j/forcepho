@@ -2,7 +2,7 @@
 
 
 import numpy as np
-
+import numba
 
 __all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
@@ -45,6 +45,88 @@ class GaussianImageGalaxy(object):
         self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
 
 
+@numba.njit
+def fast_inv_2x2(A):
+    '''
+    Fast inverse for a 2x2 matrix
+
+    >>> A = np.array([[0.1,-0.3],[1.5,0.9]])
+    >>> np.allclose(fast_inv(A), np.linalg.inv(A))
+    True
+    '''
+    assert A.shape == (2,2)
+    inv = np.empty_like(A)
+    
+    inv[0,0] = A[1,1]
+    inv[1,0] = -A[1,0]
+    inv[0,1] = -A[0,1]
+    inv[1,1] = A[0,0]
+    inv /= A[0,0]*A[1,1] - A[1,0]*A[0,1]
+    return inv
+
+
+@numba.njit
+def fast_det_2x2(A):
+    '''
+    Fast determinant for a 2x2 matrix.
+    
+    >>> A = np.array([[0.1,-0.3],[1.5,0.9]])
+    >>> np.allclose(fast_det_2x2(A), np.linalg.det(A))
+    True
+    '''
+    assert A.shape == (2,2)
+    return A[0,0]*A[1,1] - A[1,0]*A[0,1]
+
+
+@numba.njit
+def fast_trace_2x2(A):
+    '''
+    Fast trace for a 2x2 matrix.
+    
+    >>> A = np.array([[0.1,-0.3],[1.5,0.9]])
+    >>> np.allclose(fast_trace_2x2(A), np.trace(A))
+    True
+    '''
+    assert A.shape == (2,2)
+    return A[0,0] + A[1,1]
+
+
+@numba.njit
+def _convert_to_gaussians(gaussians, scovar, pcovar, smean, samps, pmeans, pamps, flux):
+    '''
+    This is a helper function to `convert_to_gaussians` that wraps the nested loops
+    in a form suitable for compilation by numba.
+    '''
+    #gaussians = np.empty((source_ngauss,stamp_psf_ngauss), dtype=object)
+    source_ngauss, stamp_psf_ngauss = gaussians.shape
+
+    for i in range(source_ngauss):
+        # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
+        for j in range(stamp_psf_ngauss):
+            #gauss = ImageGaussian()
+            gauss = gaussians[i,j]
+            #gauss.id = (source.id, stamp.id, i, j)
+
+            # Convolve the jth Source component with the ith PSF component
+
+            # Covariance matrix
+            covar = scovar[i] + pcovar[j]
+            f = fast_inv_2x2(covar)
+            gauss['f'][0] = f[0, 0]
+            gauss['f'][1] = f[1, 0]
+            gauss['f'][2] = f[1, 1]
+
+            # Now get centers and amplitudes
+            gauss['cen'][:] = smean + pmeans[j]
+            am, al = samps[i], pamps[j]
+            gauss['amp'] = flux * am * al * fast_det_2x2(f)**(0.5) / (2 * np.pi)
+
+            # And add to list of gaussians
+            #gaussians[i, j] = gauss
+
+    return gaussians
+
+
 def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
     including PSF, and keeping track of the dGaussian_dScene.
@@ -60,6 +142,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
        An instance of GaussianImageGalaxy, containing an array of
        ImageGaussians.
     """
+
     # Get the transformation matrix
     D = stamp.scale  # pix/arcsec
     R = rotation_matrix(source.pa)
@@ -95,30 +178,27 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     #amps = gamps[:, None] * pamps[None, :]
     #means = gmean[None, :] + pmeans[None, :, :]
 
+    # Create an array that the numba function can use to conveniently output many variables
+    gaussians_out = np.empty((source.ngauss,stamp.psf.ngauss),
+                    dtype=[('amp',np.float),('cen',np.float,2),('f',np.float,3)])
+
+    _convert_to_gaussians(gaussians_out, scovar, pcovar, smean, samps, pmeans, pamps, flux)
+
     gig = GaussianImageGalaxy(source.ngauss, stamp.psf.ngauss,
                               id=(source.id, stamp.id))
     for i in range(source.ngauss):
-        # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
         for j in range(stamp.psf.ngauss):
+            # Now unpack the array into the desired container object
+            # An alternative would be to make ImageGaussian a jitclass, but those can be less stable
+            go = gaussians_out[i,j]
             gauss = ImageGaussian()
             gauss.id = (source.id, stamp.id, i, j)
-
-            # Convolve the jth Source component with the ith PSF component
-
-            # Covariance matrix
-            covar = scovar[i] + pcovar[j]
-            f = np.linalg.inv(covar)
-            gauss.fxx = f[0, 0]
-            gauss.fxy = f[1, 0]
-            gauss.fyy = f[1, 1]
-
-            # Now get centers and amplitudes
-            gauss.xcen, gauss.ycen = smean + pmeans[j]
-            am, al = samps[i], pamps[j]
-            gauss.amp = flux * am * al * np.linalg.det(f)**(0.5) / (2 * np.pi)
-
-            # And add to list of gaussians
-            gig.gaussians[i, j] = gauss
+            gauss.amp = go['amp']
+            gauss.fxx, gauss.fxy, gauss.fyy = go['f']
+            gauss.xcen, gauss.ycen = go['cen']
+            
+            gig.gaussians[i,j] = gauss
+    
 
     if compute_deriv:
         gig = get_gaussian_gradients(source, stamp, gig)
@@ -193,8 +273,8 @@ def get_gaussian_gradients(source, stamp, gig):
 
             # convolve the jth Source component with the ith PSF component
             Sigma = scovar_im + pcovar[j]
-            F = np.linalg.inv(Sigma)
-            detF = np.linalg.det(F)
+            F = fast_inv_2x2(Sigma)
+            detF = fast_det_2x2(F)
             am, al = samps[i], pamps[j]
             K = flux * G * am * al * detF**(0.5) / (2 * np.pi)
 
@@ -206,14 +286,15 @@ def get_gaussian_gradients(source, stamp, gig):
                           np.matmul(dT_dpa, np.matmul(scovar, T.T)))
             dF_dq = -np.matmul(F, np.matmul(dSigma_dq, F))  # 3
             dF_dpa = -np.matmul(F, np.matmul(dSigma_dpa, F))  # 3
-            ddetF_dq = detF * np.trace(np.matmul(Sigma, dF_dq))
-            ddetF_dpa = detF * np.trace(np.matmul(Sigma, dF_dpa))
+            ddetF_dq = detF * fast_trace_2x2(np.matmul(Sigma, dF_dq))
+            ddetF_dpa = detF * fast_trace_2x2(np.matmul(Sigma, dF_dpa))
             # of Amplitude
             dA_dq = K / (2 * detF) * ddetF_dq  # 1
             dA_dpa = K / (2 * detF) * ddetF_dpa  # 1
             dA_dflux = K / flux # 1
             dA_dsersic = K / am * da_dn[i] # 1
             dA_drh = K / am * da_dr[i] # 1
+            
 
             # Add derivatives to gaussians
             # As a list of just nonzero
@@ -383,26 +464,26 @@ def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
 
     return image, gradients
 
-
+@numba.njit
 def scale_matrix(q):
     #return np.array([[q**(-0.5), 0],
     #                [0, q**(0.5)]])
     return np.array([[1./q, 0],  #use q=(b/a)^0.5
-                    [0, q]])
+                    [0., q]])
 
-
+@numba.njit
 def rotation_matrix(theta):
     return np.array([[np.cos(theta), -np.sin(theta)],
                      [np.sin(theta), np.cos(theta)]])
 
-
+@numba.njit
 def scale_matrix_deriv(q):
     #return np.array([[-0.5 * q**(-1.5), 0],
     #                [0, 0.5 * q**(-0.5)]])
-    return np.array([[-1./q**2, 0], # use q=(b/a)**2
-                    [0, 1]])
+    # use q=(b/a)**2
+    return np.array([[-1./q**2, 0], [0., 1]])
 
-
+@numba.njit
 def rotation_matrix_deriv(theta):
     return np.array([[-np.sin(theta), -np.cos(theta)],
                      [np.cos(theta), -np.sin(theta)]])
