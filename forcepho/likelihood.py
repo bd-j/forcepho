@@ -194,7 +194,7 @@ class WorkPlan(object):
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians.flat):
                 # get the image counts and gradients for each Gaussian in a GaussianGalaxy
-                I, dI_dphi = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
+                I, dI_dphi = compute_gaussian(g, self.stamp.xpix.reshape(-1), self.stamp.ypix.reshape(-1),
                                               **self.compute_keywords)
                 # Store the residual.  In reality we will want to sum over
                 # sources here (and divide by error) to compute chi directly

@@ -8,7 +8,10 @@ __all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
            "compute_gaussian"]
 
+image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'], [numba.float64,]*6)) \
+                                    + [('derivs',numba.float64[:,:])]
 
+@numba.jitclass(image_gaussian_numba_spec)
 class ImageGaussian(object):
     """This is description of one Gaussian, in pixel locations, as well as the
     derivatives of this Gaussian wrt to the Scene model parameters.
@@ -21,15 +24,18 @@ class ImageGaussian(object):
     In the Scene space there are 7 parameters, so the dgauss_dscene matrix is 6
     x 7 (mostly zeros)
     """
-    amp = 0.
-    xcen = 0.
-    ycen = 0.
-    fxx = 0.
-    fxy = 0.
-    fyy = 0.
 
-    # derivs = [dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh, D.flatten(), dF_dq.flat[inds], dF_dpa.flat[inds]]
-    derivs = None  # this is the dGaussian_dScene Jacobian matrix, possibly in a sparse format
+    def __init__(self):
+        self.amp = 0.
+        self.xcen = 0.
+        self.ycen = 0.
+        self.fxx = 0.
+        self.fxy = 0.
+        self.fyy = 0.
+
+        # derivs = [dA_dflux, dA_dq, dA_dpa, dA_dsersic, dA_drh, D.flatten(), dF_dq.flat[inds], dF_dpa.flat[inds]]
+        #self.derivs = None  # this is the dGaussian_dScene Jacobian matrix, possibly in a sparse format
+    
     #float dGaussian_dScene[NDERIV];
 
 
@@ -92,40 +98,53 @@ def fast_trace_2x2(A):
 
 
 @numba.njit
-def _convert_to_gaussians(gaussians, scovar, pcovar, smean, samps, pmeans, pamps, flux):
+def fast_dot_dot_2x2(a,b,c):
+    '''
+    Fast dot of three 2x2 matrices.
+
+    >>> A,B,C = np.random.rand(3,2,2)
+    >>> np.allclose(fast_dot_dot_2x2(A,B,C), np.dot(A, np.dot(B.C)))
+    True
+    '''
+    assert a.shape == (2,2)
+    assert b.shape == (2,2)
+    assert c.shape == (2,2)
+    
+    return np.array([[(a[0,0]*b[0,0] + a[0,1]*b[1,0])*c[0,0] + (a[0,0]*b[0,1] + a[0,1]*b[1,1])*c[1,0], (a[0,0]*b[0,0] + a[0,1]*b[1,0])*c[0,1] + (a[0,0]*b[0,1] + a[0,1]*b[1,1])*c[1,1]],
+                    [(a[1,0]*b[0,0] + a[1,1]*b[1,0])*c[0,0] + (a[1,0]*b[0,1] + a[1,1]*b[1,1])*c[1,0], (a[1,0]*b[0,0] + a[1,1]*b[1,0])*c[0,1] + (a[1,0]*b[0,1] + a[1,1]*b[1,1])*c[1,1]]])
+
+
+@numba.njit
+def _convert_to_gaussians(source_ngauss, stamp_psf_ngauss, scovar, pcovar, smean, samps, pmeans, pamps, flux):
     '''
     This is a helper function to `convert_to_gaussians` that wraps the nested loops
     in a form suitable for compilation by numba.
     '''
-    #gaussians = np.empty((source_ngauss,stamp_psf_ngauss), dtype=object)
-    source_ngauss, stamp_psf_ngauss = gaussians.shape
-
+    gaussians_out = [ImageGaussian()]  # bootstrap the list, so numba knows what type it will be
     for i in range(source_ngauss):
         # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
         for j in range(stamp_psf_ngauss):
-            #gauss = ImageGaussian()
-            gauss = gaussians[i,j]
-            #gauss.id = (source.id, stamp.id, i, j)
+            gauss = ImageGaussian()
+            #gauss.id = (source.id, stamp.id, i, j)  # is this needed or just debugging?  need to add `id` field to jitclass if needed
 
             # Convolve the jth Source component with the ith PSF component
 
             # Covariance matrix
             covar = scovar[i] + pcovar[j]
             f = fast_inv_2x2(covar)
-            gauss['f'][0] = f[0, 0]
-            gauss['f'][1] = f[1, 0]
-            gauss['f'][2] = f[1, 1]
+            gauss.fxx = f[0, 0]
+            gauss.fxy = f[1, 0]
+            gauss.fyy = f[1, 1]
 
             # Now get centers and amplitudes
-            gauss['cen'][:] = smean + pmeans[j]
+            gauss.xcen,gauss.ycen = smean + pmeans[j]
             am, al = samps[i], pamps[j]
-            gauss['amp'] = flux * am * al * fast_det_2x2(f)**(0.5) / (2 * np.pi)
+            gauss.amp = flux * am * al * fast_det_2x2(f)**(0.5) / (2 * np.pi)
 
             # And add to list of gaussians
-            #gaussians[i, j] = gauss
+            gaussians_out += [gauss]           
 
-    return gaussians
-
+    return gaussians_out[1:]
 
 def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
@@ -147,7 +166,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     D = stamp.scale  # pix/arcsec
     R = rotation_matrix(source.pa)
     S = scale_matrix(source.q)
-    T = np.dot(D, np.dot(R, S))
+    T = fast_dot_dot_2x2(D, R, S)
 
     # get source component means, covariances, and amplitudes in the pixel space
     scovar = np.matmul(T, np.matmul(source.covariances, T.T))
@@ -178,27 +197,15 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     #amps = gamps[:, None] * pamps[None, :]
     #means = gmean[None, :] + pmeans[None, :, :]
 
-    # Create an array that the numba function can use to conveniently output many variables
-    gaussians_out = np.empty((source.ngauss,stamp.psf.ngauss),
-                    dtype=[('amp',np.float),('cen',np.float,2),('f',np.float,3)])
-
-    _convert_to_gaussians(gaussians_out, scovar, pcovar, smean, samps, pmeans, pamps, flux)
-
     gig = GaussianImageGalaxy(source.ngauss, stamp.psf.ngauss,
                               id=(source.id, stamp.id))
+    gaussians_out = _convert_to_gaussians(source.ngauss, stamp.psf.ngauss, scovar, pcovar, smean, samps, pmeans, pamps, flux)
+
     for i in range(source.ngauss):
         for j in range(stamp.psf.ngauss):
-            # Now unpack the array into the desired container object
-            # An alternative would be to make ImageGaussian a jitclass, but those can be less stable
-            go = gaussians_out[i,j]
-            gauss = ImageGaussian()
-            gauss.id = (source.id, stamp.id, i, j)
-            gauss.amp = go['amp']
-            gauss.fxx, gauss.fxy, gauss.fyy = go['f']
-            gauss.xcen, gauss.ycen = go['cen']
-            
-            gig.gaussians[i,j] = gauss
-    
+            # Now unpack the list into the gig numpy object array
+            go = gaussians_out[i*stamp.psf.ngauss + j]
+            gig.gaussians[i,j] = go
 
     if compute_deriv:
         gig = get_gaussian_gradients(source, stamp, gig)
@@ -215,7 +222,7 @@ def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar, T,
 
     for i in range(source_ngauss):
         scovar = scovars[i]
-        scovar_im = np.dot(T, np.dot(scovar, T.T))
+        scovar_im = fast_dot_dot_2x2(T, scovar, T.T)
         for j in range(stamp_psf_ngauss):
             #gaussid = (source.id, stamp.id, i, j)
 
@@ -228,12 +235,12 @@ def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar, T,
 
             # Now get derivatives
             # Of F
-            dSigma_dq = (np.dot(T, np.dot(scovar, dT_dq.T)) +
-                         np.dot(dT_dq, np.dot(scovar, T.T)))
-            dSigma_dpa = (np.dot(T, np.dot(scovar, dT_dpa.T)) +
-                          np.dot(dT_dpa, np.dot(scovar, T.T)))
-            dF_dq = -np.dot(F, np.dot(dSigma_dq, F))  # 3
-            dF_dpa = -np.dot(F, np.dot(dSigma_dpa, F))  # 3
+            dSigma_dq = fast_dot_dot_2x2(T, scovar, dT_dq.T) + \
+                         fast_dot_dot_2x2(dT_dq,scovar, T.T)
+            dSigma_dpa = fast_dot_dot_2x2(T, scovar, dT_dpa.T) + \
+                          fast_dot_dot_2x2(dT_dpa, scovar, T.T)
+            dF_dq = -fast_dot_dot_2x2(F, dSigma_dq, F)  # 3
+            dF_dpa = -fast_dot_dot_2x2(F, dSigma_dpa, F)  # 3
             ddetF_dq = detF * fast_trace_2x2(np.dot(Sigma, dF_dq))
             ddetF_dpa = detF * fast_trace_2x2(np.dot(Sigma, dF_dpa))
             # of Amplitude
@@ -289,15 +296,15 @@ def get_gaussian_gradients(source, stamp, gig):
     D = stamp.scale  # pix/arcsec
     R = rotation_matrix(source.pa)
     S = scale_matrix(source.q)
-    T = np.dot(D, np.dot(R, S))
+    T = fast_dot_dot_2x2(D, R, S)
     CW = stamp.dpix_dsky  #dpix/dra, dpix/ddec
     G = stamp.photocounts  # physical to counts
 
     # And its derivatives with respect to scene parameters
     dS_dq = scale_matrix_deriv(source.q)
     dR_dpa = rotation_matrix_deriv(source.pa)
-    dT_dq = np.dot(D, np.dot(R, dS_dq))
-    dT_dpa = np.dot(D, np.dot(dR_dpa, S))
+    dT_dq = fast_dot_dot_2x2(D, R, dS_dq)
+    dT_dpa = fast_dot_dot_2x2(D, dR_dpa, S)
 
     # get source spline and derivatives
     scovars = source.covariances
@@ -332,9 +339,26 @@ def get_gaussian_gradients(source, stamp, gig):
 
     return gig
 
+def compute_gaussian(*args,**kwargs):
+    '''
+    Thin wrapper function that supplies all kwargs.
+    Workaround for https://github.com/numba/numba/issues/3875
+    '''
+    defaults = dict(second_order=True, compute_deriv=True,
+                         use_det=False, oversample=False)
+    defaults.update(kwargs)
+    C, gradients = _compute_gaussian(*args, **defaults)
 
-def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
-                     use_det=False, oversample=False):
+
+    if defaults['compute_deriv']:
+        return C, gradients
+    else:
+        return C
+
+
+@numba.njit
+def _compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
+                         use_det=False, oversample=False):
     """Calculate the counts and gradient for one pixel, one gaussian.  This
     basically amounts to evalutating the gaussian (plus second order term) and
     the gradients with respect to the 6 input terms.  Like `computeGaussian`
@@ -383,17 +407,20 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
     # All transformations should keep the determinant of the covariance matrix
     # the same, so that it can be folded into the amplitude, making the
     # following uninportant
-    # inv_det = fxx*fyy + 2*fxy
+    # inv_det = g.fxx*g.fyy + 2*g.fxy
     # norm = np.sqrt((inv_det / 2*np.pi))
 
-    if oversample:
-        xoff = np.array([0.25, -0.25, -0.25, 0.25])
-        yoff = np.array([0.25, 0.25, -0.25, -0.25])
-        xp = np.array(xpix)[..., None] + xoff[..., :]
-        yp = np.array(ypix)[..., None] + yoff[..., :]
-    else:
-        xp = xpix
-        yp = ypix
+    # Oversampling adds an extra dimension to xp; not Numba friendly
+    # To enable this, one would also have to do the non-oversampled version with the extra dimension
+    #if oversample:
+    #    xoff = np.array([0.25, -0.25, -0.25, 0.25])
+    #    yoff = np.array([0.25, 0.25, -0.25, -0.25])
+    #    xp = np.atleast_1d(xpix).reshape(-1,1) + xoff[..., :]
+    #    yp = np.atleast_1d(ypix).reshape(-1,1) + yoff[..., :]
+    #else:
+    
+    xp = xpix
+    yp = ypix
 
     # --- Calculate useful variables ---
     dx = xp - g.xcen
@@ -401,16 +428,17 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
     vx = g.fxx * dx + g.fxy * dy
     vy = g.fyy * dy + g.fxy * dx
     Gp = np.exp(-0.5 * (dx*vx + dy*vy))
-    # G = np.exp(-0.5 * (dx*dx*fxx + 2*dx*dy*fxy + dy*dy*fyy))
-    H = 1.0
-    root_det = 1.0
-
+    # G = np.exp(-0.5 * (dx*dx*g.fxx + 2*dx*dy*g.fxy + dy*dy*g.fyy))
+    H = np.ones_like(vx)
+    root_det = 1.
+    
     # --- Calculate counts ---
     if second_order:
         H = 1 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.
     if use_det:
         root_det = np.sqrt(g.fxx * g.fyy - g.fxy * g.fxy)
     C = g.amp * Gp * H * root_det
+
 
     # --- Calculate derivatives ---
     if compute_deriv:
@@ -435,19 +463,22 @@ def compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
         dC_dfy += 0.5 * c_d * g.fxx
         dC_dfxy -= c_d * g.fxy
 
-    C = np.array(C)
-    gradients = np.zeros(1)
+    gradients = np.empty((6,len(C)))
     if compute_deriv:
-        gradients = np.array([dC_dA, dC_dx, dC_dy, dC_dfx, dC_dfy, dC_dfxy])
+        gradients[0][:] = dC_dA[:]
+        gradients[1][:] = dC_dx[:]
+        gradients[2][:] = dC_dy[:]
+        gradients[3][:] = dC_dfx[:]
+        gradients[4][:] = dC_dfy[:]
+        gradients[5][:] = dC_dfxy[:]
 
-    if oversample:
-        C = C.sum(axis=-1) / 4.0
-        gradients = gradients.sum(axis=-1) / 4.0
+    #if oversample:
+    #    C = C.sum(axis=-1) / 4.0
+    #    if compute_deriv:
+    #       gradients = gradients.sum(axis=-1) / 4.0
 
-    if compute_deriv:
-        return C, gradients
-    else:
-        return C
+    # numba needs a consistent number of return args
+    return C, gradients
 
 
 def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
