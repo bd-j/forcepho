@@ -44,7 +44,7 @@ class Scene(object):
         source = self.sources[sid]
         start = int(np.sum(npar_per_source))
         # indices of the shape and position parameters
-        inds = range(start + source.nband, start + source.nparam)
+        inds = list(range(start + source.nband, start + source.nparam))
         # put in the flux for this source in this band
         inds.insert(0, start + source.filter_index(filtername))
         return inds
@@ -77,7 +77,6 @@ class Scene(object):
         """
         for i, source in enumerate(self.sources):
             source.id = i
-
 
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
@@ -487,7 +486,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines])
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines]))
 
     @property
     def damplitude_drh(self):
@@ -495,7 +494,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines])
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines]))
 
 
 class ConformalGalaxy(Galaxy):
