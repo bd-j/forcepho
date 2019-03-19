@@ -1,5 +1,4 @@
-numpy
-scipy
-matplotlib
-h5py
-astropy
+numpy >= 1.14
+numba >= 0.43.0
+scipy >= 1.10
+h5py >= 2.8.0
