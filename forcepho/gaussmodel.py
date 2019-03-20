@@ -48,8 +48,7 @@ class GaussianImageGalaxy(object):
 
     def __init__(self, ngalaxy, npsf, id=None):
         self.id = id
-        self.gaussians = np.zeros([ngalaxy, npsf], dtype=object)
-
+        self.gaussians = []  # length [ngalaxy*npsf]
 
 def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
@@ -74,7 +73,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     T = fast_dot_dot_2x2(D, R, S)
 
     # get source component means, covariances, and amplitudes in the pixel space
-    scovar = np.matmul(T, np.matmul(source.covariances, T.T))
+    scovar = fast_matmul_matmul_2x2(T, source.covariances, T.T)
     samps = source.amplitudes
     smean = stamp.sky_to_pix([source.ra, source.dec])
     flux = np.atleast_1d(source.flux)
@@ -88,7 +87,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
 
     # get PSF component means and covariances in the pixel space
     if stamp.psf.units == 'arcsec':
-        pcovar = np.matmul(D, np.matmul(stamp.psf.covariances, D.T))
+        pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
         pmean = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
@@ -104,14 +103,9 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
 
     gig = GaussianImageGalaxy(source.ngauss, stamp.psf.ngauss,
                               id=(source.id, stamp.id))
-    gaussians_out = _convert_to_gaussians(source.ngauss, stamp.psf.ngauss, scovar, pcovar,
+    
+    gig.gaussians = _convert_to_gaussians(source.ngauss, stamp.psf.ngauss, scovar, pcovar,
                                           smean, samps, pmeans, pamps, flux)
-
-    for i in range(source.ngauss):
-        for j in range(stamp.psf.ngauss):
-            # Now unpack the list into the gig numpy object array
-            go = gaussians_out[i*stamp.psf.ngauss + j]
-            gig.gaussians[i,j] = go
 
     if compute_deriv:
         gig = get_gaussian_gradients(source, stamp, gig)
@@ -203,7 +197,7 @@ def get_gaussian_gradients(source, stamp, gig):
 
     # get PSF component means and covariances in the pixel space
     if stamp.psf.units == 'arcsec':
-        pcovar = np.matmul(D, np.matmul(stamp.psf.covariances, D.T))
+        pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
         pmean = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
@@ -218,7 +212,7 @@ def get_gaussian_gradients(source, stamp, gig):
     # Unpack the results array returned by `_get_gaussian_gradients`
     for i in range(source.ngauss):
         for j in range(stamp.psf.ngauss):
-            gig.gaussians[i,j].derivs = derivs[i,j]
+            gig.gaussians[i*stamp.psf.ngauss + j].derivs = derivs[i,j]
 
     return gig
 
@@ -434,13 +428,13 @@ def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
     npix = len(xpix)
     image = np.zeros(npix)
     if compute_deriv:
-        nskypar, nimpar = gig.gaussians.flat[0].derivs.shape
+        nskypar, nimpar = gig.gaussians[0].derivs.shape
         gradients = np.zeros([nskypar, npix])
     else:
         gradients = None
 
     # Loop over on-image gaussians, accumulating image values and gradients
-    for j, g in enumerate(gig.gaussians.flat):
+    for j, g in enumerate(gig.gaussians):
         out = compute_gaussian(g, xpix, ypix, compute_deriv=compute_deriv,
                                **compute_keywords)
         if compute_deriv:
@@ -545,3 +539,28 @@ def fast_dot_dot_2x2(a,b,c):
                     [(a[1,0]*b[0,0] + a[1,1]*b[1,0])*c[0,0] + (a[1,0]*b[0,1] + a[1,1]*b[1,1])*c[1,0],
                      (a[1,0]*b[0,0] + a[1,1]*b[1,0])*c[0,1] + (a[1,0]*b[0,1] + a[1,1]*b[1,1])*c[1,1]]])
 
+
+@numba.guvectorize([(numba.float64[:,:],numba.float64[:,:],numba.float64[:,:],numba.float64[:,:]),
+                    (numba.float32[:,:],numba.float32[:,:],numba.float32[:,:],numba.float32[:,:])],
+                   '(n,n),(n,n),(n,n)->(n,n)', nopython=True)
+def fast_matmul_matmul_2x2(A, B, C, res):
+    '''
+    Fast matmul(A, matmul(B,C)) for 2x2 matrices.
+    Obeys np.matmul broadcasting semantics as long
+    as the last two dimensions are shape (2,2).
+    
+    This is implemented as a generalized ufunc on
+    fast_dot_dot_2x2, which automatically provides
+    the broadcasting.  It does mean that we have
+    to specify the type signatures manually, though.
+    
+    >>> A,B = np.random.rand(2,2,2)
+    >>> C = np.random.rand(9,2,2)
+    >>> np.allclose(fast_matmul_matmul_2x2(A,B,C), np.matmul(A, np.matmul(B,C)))
+    True
+    >>> np.allclose(fast_matmul_matmul_2x2(A,C,B), np.matmul(A, np.matmul(C,B)))
+    True
+    >>> np.allclose(fast_matmul_matmul_2x2(C,B,A), np.matmul(C, np.matmul(B,A)))
+    True
+    '''
+    res[:] = fast_dot_dot_2x2(A,B,C)
