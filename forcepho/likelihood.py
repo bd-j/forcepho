@@ -192,7 +192,7 @@ class WorkPlan(object):
         time (like on a GPU)
         """
         for i, gig in enumerate(self.active):
-            for j, g in enumerate(gig.gaussians.flat):
+            for j, g in enumerate(gig.gaussians):
                 # get the image counts and gradients for each Gaussian in a GaussianGalaxy
                 I, dI_dphi = compute_gaussian(g, self.stamp.xpix.reshape(-1), self.stamp.ypix.reshape(-1),
                                               **self.compute_keywords)
@@ -252,14 +252,14 @@ class FastWorkPlan(WorkPlan):
         """
         # Loop over active and fixed to get the residual image
         for i, gig in enumerate(self.active + self.fixed):
-            for j, g in enumerate(gig.gaussians.flat):
+            for j, g in enumerate(gig.gaussians):
                 # get the image counts for each Gaussian in a GaussianGalaxy
                 self.compute_keywords['compute_deriv'] = False
                 self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
                                                   **self.compute_keywords)
         # Loop only over active to get the chisq gradients
         for i, gig in enumerate(self.active):
-            for j, g in enumerate(gig.gaussians.flat):
+            for j, g in enumerate(gig.gaussians):
                 self.compute_keywords['compute_deriv'] = True
                 # get the image gradients for each Gaussian in a GaussianGalaxy
                 I, dI_dphi = compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
