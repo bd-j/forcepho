@@ -1,7 +1,6 @@
 import sys, os, time
 from functools import partial as argfix
 import numpy as np
-import matplotlib.pyplot as pl
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
 from .posterior import Posterior, LogLikeWithGrad

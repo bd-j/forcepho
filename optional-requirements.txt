@@ -1,0 +1,4 @@
+pymc3
+dynesty
+matplotlib
+astropy

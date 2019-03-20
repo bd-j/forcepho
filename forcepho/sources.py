@@ -218,7 +218,7 @@ class Source(object):
             relevant free parameters for the source.
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
-        im, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+        im, grad = compute_gig(gig, stamp.xpix.reshape(-1), stamp.ypix.reshape(-1),
                                compute_deriv=compute_deriv, **compute_keywords)
 
         if compute_deriv:
@@ -631,7 +631,7 @@ class ConformalGalaxy(Galaxy):
             relevant free parameters for the source.
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
-        im, grad = compute_gig(gig, stamp.xpix.flat, stamp.ypix.flat,
+        im, grad = compute_gig(gig, stamp.xpix.reshape(-1), stamp.ypix.reshape(-1),
                                compute_deriv=compute_deriv, **compute_keywords)
 
         if compute_deriv:
