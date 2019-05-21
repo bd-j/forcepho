@@ -164,6 +164,9 @@ class Source(object):
         names = self.filternames + ["ra", "dec"] + ["q", "pa", "n", "r"][:self.nshape]
         names = ["{}_{}".format(n, self.id) for n in names]
         return names
+    
+    def get_param_vector(self):
+        raise(NotImplementedError)
 
     def filter_index(self, filtername):
         """Returns the index of the element of the `flux` array that
