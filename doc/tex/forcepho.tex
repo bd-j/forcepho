@@ -42,13 +42,15 @@ Vector variables are \sout{bolded} lowercase.
 Matrices are \sout{bolded} uppercase.
 
 \section{Introduction}
-We want a generative model for the image(s) that can be plugged into a likelihood function and an MC sampling scheme.
-Therefore the goal is to go from the scene to counts in pixels.
-The basic function that we are trying to compute (efficiently) is:
+We want a generative model for the image(s) that can be plugged into a
+likelihood function and an MC sampling scheme. Therefore the goal is to go from
+the scene to counts in pixels. The basic function that we are trying to compute
+(efficiently) is:
 \begin{eqnarray}
 \countrate_n & = & F_n(\gamma, \beta)
 \end{eqnarray}
-where $\countrate_n$ is the expected counts in the $n$th pixel,
+where 
+$\countrate_n$ is the expected counts in the $n$th pixel,
 there are $n=1,2,...N$ pixels,
 $\gamma$ are the parameters describing the instrument (PSF, PRF, distortions, etc.),
 and ${\bf \beta}$ are the parameters describing the scene (i.e. source positions and shapes).
@@ -57,22 +59,37 @@ In the end we will want to calculate
 \like(\{\counts_n\} \given \{\exptime \, \countrate_n\}) & = & \prod_n \, \frac{e^{-\exptime \, \countrate_n} \, (\exptime \, \countrate_n)^{\counts_n}} {\counts_n !}
 \end{eqnarray}
 (or probably the Gaussian likelihood since there will be plenty of counts.)
-Ideally we will also be able to efficiently calculate (analytically) the gradients of the ln-likelihood with respect to any of the source (and perhaps even instrument) parameters.
-Analytic gradients can vastly accelerate both optimization and MCMC bayesian inference.
+Ideally we will also be able to efficiently calculate (analytically) the
+gradients of the ln-likelihood with respect to any of the source (and perhaps
+even instrument) parameters. Analytic gradients can vastly accelerate both
+optimization and MCMC bayesian inference.
 
+Here's the Gaussian likelihood and its derivatives
+\begin{eqnarray}
+R_n & = & C_n - I_n(\theta) \nonumber \\
+\chi_n & = & R_n / \sigma_n \nonumber \\
+\ln \like(C \given \theta) & = & -\frac{1}{2} \sum_n \chi_n^2 \nonumber \\
+\frac{\partial \ln \like}{\partial \theta_k} & = & \sum_n \frac{R_n}{\sigma_n^2} \frac{\partial I_n}{\partial \theta_k} 
+\end{eqnarray}
+where $\theta = \{\beta, \gamma\}$
 
 \section{Full Problem}
-What's really happening from a photon's point of view (sort of)?
-First it comes from a distribution $\scene(\alpha, \delta [, \nu] \given \beta)$ which we take to be the intensity distribution on the sky, or the \emph{scene},
-parameterized by $\beta$.
-It then travels through the the atmosphere (if there is one), then the telescope optics, finally reaching the detector plane.
-During this travel the photon is diffracted, so that its position is now in iteself a PDF (called the point spread function, $\psf$).
-Upon striking the detector the wavefunction is collapsed and the detector position is drawn from this PDF, 
-with some probability related to the quantum efficiency of the detector at that position (and the reflectivity of the optics, etc.).
-One must also consider gaps in the detector, and intrapixel sensitivity variations, which might be folded into a spatially dependent QE or pixel response function, 
-or alternatively combined with the PSF somehow.
-The mapping from the celestial position to the detector plane depends on the distortion of the optics and the aforemention probabilistic draw from $\psf$.
-This can all be represented by 
+
+What's really happening from a photon's point of view (sort of)? First it comes
+from a distribution $\scene(\alpha, \delta [, \nu] \given \beta)$ which we take
+to be the intensity distribution on the sky, or the \emph{scene}, parameterized
+by $\beta$. It then travels through the the atmosphere (if there is one), then
+the telescope optics, finally reaching the detector plane. During this travel
+the photon is diffracted and refracted, so that its position is now in iteself a
+PDF (called the point spread function, $\psf$). Upon striking the detector the
+wavefunction is collapsed and the detector position is drawn from this PDF, with
+some probability related to the quantum efficiency of the detector at that
+position (and the reflectivity of the optics, etc.). One must also consider gaps
+in the detector, and intrapixel sensitivity variations, which might be folded
+into a spatially dependent QE or pixel response function, or alternatively
+combined with the PSF somehow. The mapping from the celestial position to the
+detector plane depends on the distortion of the optics and the aforemention
+probabilistic draw from $\psf$. This can all be represented by 
 \begin{eqnarray}
 \label{eqn:photon}
 \alpha_j, \delta_j [, \nu_j] & \sim & \scene(\beta)\\
@@ -88,11 +105,14 @@ $\psf$ is the point-spread-function in detector coordinates and depends on param
 $\Delta x_j, \Delta y_j$ are draws from $\psf$,
 $\qe_n(x, y)$ is the detector quantum efficiency of the $n$th pixel at location $(x, y)$ (usually something close to a bivariate boxcar),
 and $\countrate_n$ is the expected countrate in pixel $n$ per unit time and total number of photons due to celestial sources (i.e. excluding detector background.)
-The scene can be expressed as a sum of individual source distributions $\scene = \sum_{m=1}^M \scene_m$.
-In what follows we will drop $\nu$ from consideration, assuming that $\qe(\nu)$ is a constant that can be factored out.
+The scene can be expressed as a sum of individual source distributions $\scene =
+\sum_{m=1}^M \scene_m$. In what follows we will drop $\nu$ from consideration,
+assuming that $\qe(\nu)$ is a constant that can be factored out.
 
 
-In the limit of infinite exposure time (or very many photons), we can replace the sum of a large dumber of draws with integrals to obtain the expected count rate.
+In the limit of infinite exposure time (or very many photons), we can replace
+the sum of a large number of draws with integrals to obtain the expected count
+rate.
 \begin{eqnarray}
 \label{eqn:psf_convolve}
 \model(x, y \given \gamma, \beta) & = & \iint \, dx' \, dy' \, \psf(x - x', y-y' \given \gamma, x', y') \, \scene( D^{-1}(x', y') \given \beta) \\
@@ -102,28 +122,36 @@ where $A_n$ is the region of the $n$th pixel,
 $\model$ is the PSF-convolved scene,
 $\psf$ is the point-spread function (which depends on the input position of the photon),
 and $D$ is the mapping from sky coordinates to detector coordinates, including distortions.
-One question is whether it makes more sense to think of the pixels as rectangles in detector coordinates and project the scene into these coordinates as we have done above, 
-or to project the pixel boundaries (and $\psf$ and $\qe$) into celestial coordinates.
-This probably depends on the form of $D$ and on how the $\qe$ and $\psf$ functions are determined.
-Nevertheless, by switching the order of integration we can write
+
+One question is whether it makes more sense to think of the pixels as rectangles
+in detector coordinates and project the scene into these coordinates as we have
+done above, or to project the pixel boundaries (and $\psf$ and $\qe$) into
+celestial coordinates. This probably depends on the form of $D$ and on how the
+$\qe$ and $\psf$ functions are determined. Nevertheless, by switching the order
+of integration we can write
 \begin{eqnarray}
 \label{eqn:prf_integral}
 \prf_n(x', y' \given \gamma) & = & \iint_{A_n} \, dx \, dy \, \qe_n(x, y) \, \psf(x' - x, y' - y \given \gamma, x, y) \\
 \countrate_n & = & \iint \, dx' \, dy' \, \prf_n(x', y' \given \gamma) \, \scene( D^{-1}(x', y') \given \beta) \nonumber
 \end{eqnarray}
 where $\prf_n(x', y')$ gives the response of a pixel to a point source at detector coordinates $(x', y')$ including the effect of the pixel-averaged PSF.
-This form can be easier to compute, since this pixel response function (PRF) can be specified beforehand, or at least once approximated includes the annoying integral over $A_n$.
+This form can be easier to compute, since this pixel response function (PRF) can
+be specified beforehand, or at least once approximated includes the annoying
+integral over $A_n$.
 
-These convolutions and integrals can be analytically intractable, or time consuming.
-This is especially true the case of complicated forms for $\psf$, $\prf$, $\scene$ or the function $D$.
-Much of the guts of any forward modeling algorithm will be concerned with approximating this integral,
- especially in a way that yields analytic gradients.
+These convolutions and integrals can be analytically intractable, or time
+consuming. This is especially true the case of complicated forms for $\psf$,
+$\prf$, $\scene$ or the function $D$. Much of the guts of any forward modeling
+algorithm will be concerned with approximating this integral, especially in a
+way that yields analytic gradients.
 
 
 \section{Approximation by Gaussian Mixtures (and Subgridding)}
-One method to make the integrals more tractable is to calculate $\prf$ and $\scene$ on fine grids and calculate \ref{eqn:prf_integral} directly on this grid.
-The grid has to be fine enough that the integral can be approximated by a sum; 
-  that is, the grid must fully sample the PRF and the scene.
+
+One method to make the integrals more tractable is to calculate $\prf$ and
+$\scene$ on fine grids and calculate \ref{eqn:prf_integral} directly on this
+grid. The grid has to be fine enough that the integral can be approximated by a
+sum; that is, the grid must fully sample the PRF and the scene.
 \begin{eqnarray}
 \label{eqn:prf_grid}
 \countrate_{n'} & \approx & \sum_{i,j} \prf_{n'}(x_i, y_j \given \gamma) \, \scene( D^{-1}(x_i, y_j) \given \beta) \nonumber

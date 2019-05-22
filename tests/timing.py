@@ -134,8 +134,8 @@ def compute_test(npsf=1, nx=16, **extras):
     scene = get_scene(1, nx, nband=1)
     stamps = get_stamps(1, nx, npsf, nband=1)
     gig = convert_to_gaussians(scene.sources[0], stamps[0])
-    t = time_call('compute_gaussian(gig.gaussians[0,0], stamps[0].xpix.reshape(-1), stamps[0].ypix.reshape(-1), **extras)')
-    return t * np.prod(gig.gaussians.shape)
+    t = time_call('compute_gaussian(gig.gaussians[0], stamps[0].xpix.reshape(-1), stamps[0].ypix.reshape(-1), **extras)')
+    return t * len(gig.gaussians)
 
 
 if __name__ == "__main__":
@@ -162,6 +162,7 @@ if __name__ == "__main__":
     #gradtimes = [time_test.convert_grad_test(nx=32, npsf=i) for i in npsf]
 
     conv, tunit = 1e3, "ms"
+    now = time.strftime("%Y.%m%d_%H.%M")
     
     import matplotlib.pyplot as pl
     os.makedirs('figures', exist_ok=True)
@@ -180,7 +181,7 @@ if __name__ == "__main__":
                     alpha=0.5, label="libprofit (R17)", color="tomato")
     nax.set_ylim(1e-1, 2e2)
     nax.legend()
-    nfig.savefig(pjoin("figures","timing_npix.pdf"))
+    nfig.savefig(pjoin("figures","timing_npix_{}.pdf".format(now)))
 
     t0 = np.mean([t[0] for t in [stimes, gtimes, ptimes]])
     N = np.linspace(1., 16., 100)
@@ -197,8 +198,9 @@ if __name__ == "__main__":
     sax.set_title("N$_{{pix}} / stamp = ${:.0f}".format(32**2))
     sax.set_ylim(1, 2e2)
     sax.legend()
-    sfig.savefig(pjoin("figures", "timing_ngauss.pdf"))
+    sfig.savefig(pjoin("figures", "timing_ngauss_{}.pdf".format(now)))
 
+    sys.exit()
 
     # compare analytic to numerical derivative times
     npsf = 4

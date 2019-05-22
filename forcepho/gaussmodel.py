@@ -88,7 +88,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     # get PSF component means and covariances in the pixel space
     if stamp.psf.units == 'arcsec':
         pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
-        pmean = np.matmul(D, stamp.psf.means)
+        pmeans = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
     elif stamp.psf.units == 'pixels':
@@ -198,12 +198,12 @@ def get_gaussian_gradients(source, stamp, gig):
     # get PSF component means and covariances in the pixel space
     if stamp.psf.units == 'arcsec':
         pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
-        pmean = np.matmul(D, stamp.psf.means)
+        #pmeans = np.matmul(D, stamp.psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
         pamps = stamp.psf.amplitudes
     elif stamp.psf.units == 'pixels':
         pcovar = stamp.psf.covariances
-        pmeans = stamp.psf.means
+        #pmeans = stamp.psf.means
         pamps = stamp.psf.amplitudes
 
     derivs = _get_gaussian_gradients(source.ngauss, stamp.psf.ngauss, scovars, pcovar, samps, pamps,
