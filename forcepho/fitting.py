@@ -3,7 +3,11 @@ from functools import partial as argfix
 import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
-from .posterior import Posterior, LogLikeWithGrad
+from .posterior import Posterior
+try:
+    from .posterior import  LogLikeWithGrad
+except(ImportError):
+    HAS_PYMC3 = False
 
 
 __all__ = ["Result", "run_pymc3", "run_opt",
