@@ -20,7 +20,7 @@ splinedata = 'test_data/sersic_mog_model.smooth=0.0150.h5'
 rapadding = EXPOSURE_SIZE[0] - PATCH_SIZE[0]
 SCENE_DEC = EXPOSURE_SIZE[1]/2
 SCENE_RA_RANGE = (rapadding / 2., rapadding /2. + PATCH_SIZE[0])
-SCENE_DEC_RANGE = (SCENE_DEC - PATCH_SIZE[1]/2., scene_dec + PATCH_SIZE[1]/2.)
+SCENE_DEC_RANGE = (SCENE_DEC - PATCH_SIZE[1]/2., SCENE_DEC + PATCH_SIZE[1]/2.)
 
 
 # --- Utilities ---
@@ -32,12 +32,12 @@ def make_test_dataset():
     write_exposures(exposures)
     
     maxcounts = np.max([s.pixel_values.max() for s in exposures])
+    vmin = None # 0
+    vmax = None #maxcounts/1.5
     
     import matplotlib.pyplot as pl
     fig, axes = pl.subplots(NFILTER, NEXPOSURE)
     fig.subplots_adjust(wspace=0.02, hspace=0.02)
-    vmin = None # 0
-    vmax = None #maxcounts/1.5
     [ax.imshow(ex.pixel_values.T, origin="lower", vmin=vmin, vmax=vmax) for ax, ex in zip(axes.flat, exposures)]
     return scene
 

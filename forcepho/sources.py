@@ -99,6 +99,7 @@ class Source(object):
     radii = np.zeros(1)
 
     # Parameters
+    npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
     ra = 0.
@@ -397,7 +398,7 @@ class Galaxy(Source):
         if radii is not None:
             self.radii = radii
         if splinedata is None:
-            raise(ValueError, "Galaxies must have information to make A(r, n) bivariate splines")
+            raise ValueError("Galaxies must have `splinedata` information to make A(r, n) bivariate splines")
         else:
             self.initialize_splines(splinedata)
 

@@ -33,7 +33,7 @@ def priors(scene, stamps, npix=2.0):
              [s.ra - npix * plate_scale[0], s.dec - npix * plate_scale[1],
               0.3, -np.pi/1.5, sersic_range[0], rh_range[0]]
              for s in scene.sources]
-    upper = [(np.array(g.flux) * 10).tolist() +
+    upper = [(np.array(s.flux) * 10).tolist() +
              [s.ra + npix * plate_scale[0], s.dec + npix * plate_scale[1],
               1.0, np.pi/1.5, sersic_range[-1], rh_range[-1]]
              for s in scene.sources]
@@ -189,9 +189,9 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     # -- hmc ---
     from hmc import BasicHMC
     model = Posterior(scene, plans, upper=upper, lower=lower, verbose=True)
-    hsampler = BasicHMC(model, verbose=False)
-    hsampler.ndim = len(p0)
-    hsampler.set_mass_matrix(1/scales**2)
+    sampler = BasicHMC(model, verbose=False)
+    sampler.ndim = len(p0)
+    sampler.set_mass_matrix(1/scales**2)
 
     result = Result()
     result.pinitial = p0.copy()
@@ -202,7 +202,7 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     result.metric = scales**2
 
     if nwarm > 0:
-        pos, prob, grad = sampler.sample(pos, iterations=nwarm, mass_matrix=1/scales**2,
+        pos, prob, grad = sampler.sample(p0, iterations=nwarm, mass_matrix=1/scales**2,
                                         epsilon=use_eps, length=length, sigma_length=int(length/4),
                                         store_trajectories=True)
         use_eps = sampler.find_reasonable_stepsize(pos)
@@ -223,5 +223,6 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     result.upper = upper
     result.trajectories = sampler.trajectories
     result.accepted = sampler.accepted
+    result.ncall = (ncwarm, np.copy(model.ncall))
 
     return result
