@@ -1,6 +1,8 @@
 * **Band** (see **filter**)
 
-* **Basic Assumed Input**   See:
+* **Basic Assumed Input**   
+  
+  See:
     * **Exposure**
     * **Peak**
     * Point Spread Function (**`PointSpreadFunction`**)
@@ -18,6 +20,7 @@
   Data through a given filter may also be split by time; for example, ``F200W_A`` and ``F200W_B`` for data taken early and late in the observation.  Such a split will aid in the identificaion of temporal variability, including that due to spurious unmodeled features in the data.
 
 * **`ImageGaussian`**
+  
   A collection of on-image parameters describing a Gaussian that is one part of the representation of `Source`. 
 
 * **`GaussianImageGalaxy`**
@@ -25,7 +28,8 @@
   A collection of `ImageGaussians` describing a single `Source` in a single Stamp, after convolution with the PSF (see **`PointSpreadFunction`**).
 
 * **Likelihood Call**
-  A function call with a vector argument corresponding to the parameters of all (non-boundary) sources within a patch.  It returns the likelihood of the patch data given the parameters of the `Source`s in that patch (the **``Scene``**), as well as the gradients of that likeihood with respect to the ``Scene`` parameters.
+  
+  A function call with a vector argument corresponding to the on-sky parameters of all (non-boundary) sources within a patch.  It returns the likelihood of the patch data given the parameters of the `Source`s in that patch (the **``Scene``**), as well as the gradients of that likeihood with respect to the ``Scene`` parameters.
 
 * **Passband**  (see **filter**)
 
@@ -51,7 +55,7 @@
 
 * **`Scene`**
   
-  A list of sources (including in-active boundary sources) within a patch.
+  A list of sources (including inactive boundary sources) within a patch.
 
 * **`Source`**
   
@@ -69,4 +73,5 @@
   - sharing a single, approximately constant, assumed known point spread function.
 
 * **Super Pixel**
+  
   A set of N pixels in an exposure that share metadata and that can be completely described by their fluxes, uncertainties, and offset from a central reference pixel.  should be well matched to GPU data model, like say 32 or 128 pixels per superpixel.
