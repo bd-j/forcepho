@@ -89,7 +89,7 @@ class CPUPatch(Patch):
         """
         for expID, ex in enumerate(exposures):
             for s in self.scene.sources:
-                # Do this for CRVAL, CRPIX, dpix_dsky, scale, and psf info.
+                # Do this for ZP, CRVAL, CRPIX, dpix_dsky, scale, and psf info.
                 s.metadata[expID] = ex.metadata
 
     def get_valid_pixels(self, exposure):
