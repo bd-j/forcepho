@@ -4,10 +4,6 @@ import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
 from .posterior import Posterior
-try:
-    from .posterior import  LogLikeWithGrad
-except(ImportError):
-    HAS_PYMC3 = False
 
 
 __all__ = ["Result", "run_pymc3", "run_opt",
@@ -51,6 +47,9 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
 
     import pymc3 as pm
     import theano.tensor as tt
+    import theano
+    theano.gof.compilelock.set_lock_status(False)
+    from .posterior import  LogLikeWithGrad
 
     model = Posterior(scene, plans)
     logl = LogLikeWithGrad(model)
@@ -87,10 +86,9 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
 
 def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
     
-    # --- hemcee ---
-
     from hemcee import NoUTurnSampler
     from hemcee.metric import DiagonalMetric
+
     metric = DiagonalMetric(scales**2)
     model = Posterior(scene, plans, upper=np.inf, lower=-np.inf)
     sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
@@ -123,7 +121,8 @@ def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
 
 def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
 
-    # --- nested ---
+    import dynesty
+    
     lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
     theta_width = (upper - lower)
     ndim = len(lower)
@@ -133,7 +132,6 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
         theta = lower + theta_width * unit_coords
         return theta
 
-    import dynesty
     sampler = dynesty.DynamicNestedSampler(lnlike, prior_transform, ndim, nlive=nlive,
                                            bound="multi", method="slice", bootstrap=0)
     t0 = time.time()
@@ -159,13 +157,13 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
 
 def run_opt(p0, scene, plans, jac=True, **extras):
 
+    from scipy.optimize import minimize
+    
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=jac)
 
-    from scipy.optimize import minimize
     opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
             'disp':True, 'iprint': 1, 'maxcor': 20}
-    def callback(x):
-        print(x, nll(x))
+    callback = None
 
     t0 = time.time()
     scires = minimize(nll, p0.copy(), jac=jac,  method='BFGS',
@@ -186,8 +184,8 @@ def run_opt(p0, scene, plans, jac=True, **extras):
 def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
             nwarm=0, niter=500, length=20):
 
-    # -- hmc ---
     from hmc import BasicHMC
+
     model = Posterior(scene, plans, upper=upper, lower=lower, verbose=True)
     sampler = BasicHMC(model, verbose=False)
     sampler.ndim = len(p0)
