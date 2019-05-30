@@ -14,12 +14,12 @@ class Patch(object):
     
 
     # Sizes of things
-    NBAND   = 1         # Number of bands/filters
-    NEXP    = 1         # Number of exposures covering the patch
-    NSOURCE = 1         # Number of sources in the patch
-    NACTIVE = 1         # number of active sources in the patch
+    NBAND   = 30         # Number of bands/filters
+    NEXP    = 10         # Number of exposures covering the patch
+    NSOURCE = 12         # Number of sources in the patch
+    NACTIVE = 12         # number of active sources in the patch
     NGMAX   = 20        # Maximum number of gaussians per galaxy in any exposure
-    NSUPER  = 1         # Number of superpixels total (all exposures)
+    NSUPER  = 1         # Number of superpixels
     SuperPixelSize = 1  # Number of pixels in each superpixel
     NPHI    = 6         # Number of on-image parameters per ImageGaussian
     NTHETA  = NBAND + 6 # Number of on-sky parameters per source
@@ -35,8 +35,9 @@ class Patch(object):
     vpix = np.empty(pixel_data_shape, dtype=np.float32)  # value (i.e. flux) in pixel.
     ierr = np.empty(pixel_data_shape, dtype=np.float32)  # 1/sigma
 
-    # Here are arrays that tell you which pixels belong to which exposures.
+    # Here are arrays that tell you which pixels belong to which bands & exposures.
     exposureIDs = np.empty(NEXP, dtype=np.int16)
+    bandIDs = np.empty(NBAND, dtype=int16)
     exposure_nsuper = np.empty(NEXP, dtype=np.int64)
     exposure_start = np.cumsum(exposure_nsuper)
     
@@ -79,7 +80,7 @@ class CPUPatch(Patch):
         self.NEXP = len(exposures)
         # for expID, ex in enumerate(exposures):
         #   mask based on region
-        #   calculate & store lengths
+        #   calculate & store number of superpixels
         #   concatenate (with padding and reshape if necessary)
         self.NSUPER = len(self.xpix)
         self.NBAND = 15 # determine this from the list of filter names
@@ -114,6 +115,10 @@ class CPUPatch(Patch):
 
 class GPUPatch(Patch):
 
+
+    """This runs on a set of MPs on the GPU side.  Each band goes into an MP, 
+    each exposure goes into a block, threads loop over superpixels
+    """
     def convert_to_gaussians(self, blockID):
         expID = self.exposureIDs[blockID]
         for sourceID in range(self.NSOURCES):
@@ -166,7 +171,7 @@ class GPUPatch(Patch):
 
     def lnlike(self):
         self.CHISQ = 0
-        self.DCHISQ_DSCENE = np.zeros([self.NACTIVE, self.NBAND + 6])
+        self.DCHISQ_DSCENE = np.zeros([self.NACTIVE, self.NTHETA])
         self.convert_to_gaussians()
         self.process_pixel()
         
