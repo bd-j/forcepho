@@ -27,12 +27,13 @@ For each exposure:
 */
 
 
+#define MAX_EXP_ARG 36.0
+
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
 {
+	PixFloat residual = data;
 	
-	
-	residual = 0.0; 
-	
+	// TODO: Need to loop over Active and Fixed galaxies
 	//loop over all image gaussians g. 
 	for (int i = 0; i < galaxy.nGauss; i ++){ //NAM TODO nGauss may be derived from Patch class properties. 
 		ImageGaussian g = galaxy.Gaussians[i]
@@ -40,25 +41,21 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patc
 		float dy = yp - g.ycen; 
 		float vx = g.fxx * dx + g.fxy * dy;
 		float vy = g.fyy * dy + g.fxy * dx;
-		float Gp = exp(-0.5 * (dx*vx + dy*vy));
-		float H = 1.0; 
-		float root_det = 1.0; 			
+		float exparg = dx*vx+dy*vy;
+		if (exparg>MAX_EXP_ARG) continue;
+		float Gp = exp(-0.5 * exparg);
+
+		// Here are the second-order corrections to the pixel integral
+		float H = 1.0 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.0; 
+		float C = g.amp * Gp * H; //count in this pixel. 
 		
-		H = 1.0 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.0; 
-		float C = g.amp * Gp * H * root_det; //count in this pixel. 
-		
-		residual += data - C; 
+		residual -= C; 
 	}
 	return residual;
-	
-	
 }
 
-__device__ void ComputeGaussianDerivative(pix, residual, gal, gauss, float * dchi2_dp) //NAM why are we passing in residual? it's been accumulated over ImageGaussians earlier... we need to repeat work here to get isolated Image Gaussian
+__device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, float * dchi2_dp) //NAM why are we passing in residual? it's been accumulated over ImageGaussians earlier... we need to repeat work here to get isolated Image Gaussian
 {
-	float xp = patch.xpix[pix];
-	float yp = patch.ypic[pix];
-	
 	float dx = xp - gauss.xcen; 
 	float dy = yp - gauss.ycen; 
 	float vx = gauss.fxx * dx + gauss.fxy * dy;
@@ -85,12 +82,14 @@ __device__ void ComputeGaussianDerivative(pix, residual, gal, gauss, float * dch
     dC_dfxy += c_h * (dy*vx + dx*vy) / 12.0;
 	
 
-    dchi2_dp[0] += residual * dC_dA; //NAM TODO ??  is this right? 
-    dchi2_dp[1] += residual * dC_dx;
-    dchi2_dp[2] += residual * dC_dy;
-    dchi2_dp[3] += residual * dC_dfx;
-    dchi2_dp[4] += residual * dC_dfy;
-    dchi2_dp[5] += residual * dC_dfxy;
+    dchi2_dpim[0] += residual * dC_dA; //NAM TODO ??  is this right? 
+    dchi2_dpim[1] += residual * dC_dx;
+    dchi2_dpim[2] += residual * dC_dy;
+    dchi2_dpim[3] += residual * dC_dfx;
+    dchi2_dpim[4] += residual * dC_dfy;
+    dchi2_dpim[5] += residual * dC_dfxy;
+
+    // TODO: Multiply by Jacobian and add to dchi2_dp
 }
 
 class Patch {
@@ -106,6 +105,9 @@ class Patch {
 	PixFloat * xpix; 
 	PixFloat * ypix; 
 	//..astrometry? 
+	PSFGaussian * psfgauss;
+	int * nPSFGauss;   // Indexed by exposure
+	int * startPSFGauss;   // Indexed by exposure
 };
 
 class SkyGalaxy {
@@ -136,6 +138,7 @@ typedef struct {
 	float fxx; 
 	float fyy;
 	float fxy; 
+	// TODO: Consider whether a dummy float will help with shared memory
 } ImageGaussian;
 
 typedef struct {
@@ -173,20 +176,41 @@ class Accumulator {
     float dchi2_dp[NPARAM*NACTIVE]; //TODO: Need to figure out how to make this not compile time.
 
     Accumulator() {
-		chi2 = 0.0;
-		for (int j=0; j<NPARAM*NACTIVE; j++) dchi2_dp[j] = 0.0;
+	chi2 = 0.0;
+	for (int j=0; j<NPARAM*NACTIVE; j++) dchi2_dp[j] = 0.0;
     }
     ~Accumulator() { }
     
     // Could put the Reduction code in here
     void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
-    void SumDChi2dp(float *_dchi2_dp) { 
-	for (int j=0; NPARAM*NACTIVE; j++) 
-	    warpReduceSum(dchi2_dp+j, _dchi2_dp[j]); 
+    void SumDChi2dp(float *_dchi2_dp, int gal) { 
+	for (int j=0; j<NPARAM; j++) 
+	    warpReduceSum(dchi2_dp+j+NPARAM*gal, _dchi2_dp[j]); 
     }
 };
 
-void Kernel() {
+__device__ void CreateImageGaussians() {
+    for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
+        if (threadIdx.x==0) {
+	    // Do the setup of the transformations
+	}
+
+
+        for (int s=0; s<patch->nSersicGauss; s++) 
+	    for (int p=0; p<nPSFGauss; p++) {
+		imageGauss[gal*nGalGauss+s*nPSFGauss+p] = 
+		    ConstructImageGaussian(s,p,gal);
+		if (gal<nActiveGals) {
+		    imageJacob[gal*nGalGauss+s*nPSFGauss+p] = 
+		    ConstructImageJacobian(s,p,gal);
+		}
+	    }
+    }
+}
+
+// Shared memory is arranged in 32 banks of 4 byte stagger
+
+__global__ void Kernel() {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	
     Patch * patch;  // We should be given this pointer
@@ -199,13 +223,23 @@ void Kernel() {
     // Loop over Exposures
     for (e = 0; e < patch->NumExposures[band]; e++) {
         int exposure = patch->StartExposures[band] + e;
+	int nPSFGauss = patch->nPSFGauss[exposure];
+	int startPSFGauss = patch->startPSFGauss[exposure];
+	int nGalGauss = nPSFGauss*patch->nSersicGauss;
+
+	__shared__ ImageGaussians imageGauss[nGalGauss*(nActiveGals+nFixedGals)];
+		// Convention is Active first, then Fixed.
+	__shared__ ImageGaussiansJacobians imageJacob[nGalGauss*(nActiveGals)];
+		// We only need the Active galaxies
         CreateImageGaussians(patch, exposure);
+
+	__syncthreads();
 
 		for (p = tid ; p < patch->NumPixels[exposure]; p += blockDim.x) {
 		    int pix = patch->StartPixels[exposure] + p;
 
 		    float xp = patch.xpix[pix];
-		    float yp = patch.ypic[pix];
+		    float yp = patch.ypix[pix];
 		    PixFloat data = patch.data[pix];
 		    PixFloat ierr = patch.ierr[pix];
 		    PixFloat residual = ComputeResidualImage(xp, yp, data); 
@@ -217,16 +251,19 @@ void Kernel() {
 		    accum[warp].SumChi2(chi2);
 		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
 	    
-		    // Now we loop over Galaxies and compute the derivatives
-		    for (gal = 0; ) {
+		    // Now we loop over Active Galaxies and compute the derivatives
+		    for (gal = 0; gal < patch.nActiveGals; gal++) {
+		    		float dchi2_dp[NPARAM];
+				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
 				for (gauss = 0; ) {
 				    ComputeGaussianDerivative(pix, residual, gal, gauss, dchi2_dp); 
 				}
 			
-				accum[warp].SumDChi2dp(dchi2_dp);
+				accum[warp].SumDChi2dp(dchi2_dp, gal);
 
 				///ReduceWarp_Add(dchi2_dp, accum[warp].dchi2_dp);
 		    }
 		}
+	__syncthreads();
     }
 }
