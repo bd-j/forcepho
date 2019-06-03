@@ -10,46 +10,74 @@ import h5py
 from .gaussmodel import convert_to_gaussians, compute_gaussian
 from .sources import Scene
 
-class Patch(object):
-    
+class Patch:
 
-    # Sizes of things
-    NBAND   = 30         # Number of bands/filters
-    NEXP    = 10         # Number of exposures covering the patch
-    NSOURCE = 12         # Number of sources in the patch
-    NACTIVE = 12         # number of active sources in the patch
-    NGMAX   = 20        # Maximum number of gaussians per galaxy in any exposure
-    NSUPER  = 1         # Number of superpixels
-    SuperPixelSize = 1  # Number of pixels in each superpixel
-    NPHI    = 6         # Number of on-image parameters per ImageGaussian
-    NTHETA  = NBAND + 6 # Number of on-sky parameters per source
-    NDERIV  = 15        # Number of non-zero Jacobian elements per ImageGaussian
+    def __init__(self,
+        stamps,            # A list of PostageStamp objects (exposure data) from FITS files
+        miniscene,         # All peaks identified in this patch region
+        SuperPixelSize=1,  # Number of pixels in each superpixel
+        dtype=np.float32   # data type precision for pixel and flux data
+        ):
+        '''
+        Constructs a Patch from PostageStamps (exposures) and a MiniScene
+        (a list of pre-identified peaks/sources).  The Patch packs the
+        exposures and sources in a manner suitable for sending to the GPU.
+        This includes rearranging the data into (padded) super-pixel order.
 
-    # Pixel Data
-    # These are arrays of pixel data for *all* pixels in a patch (i.e.
-    # multiple exposures)
-    pixel_data_shape = [NSUPER, SuperPixelSize]
+        The Patch object contains methods for sending the patch data to
+        the GPU with PyCUDA.  It also serves as the entry point for sending
+        new parameter proposals to the GPU and getting back the results.
+        '''
 
-    xpix = np.empty(pixel_data_shape, dtype=np.float32)
-    ypix = np.empty(pixel_data_shape, dtype=np.float32)
-    vpix = np.empty(pixel_data_shape, dtype=np.float32)  # value (i.e. flux) in pixel.
-    ierr = np.empty(pixel_data_shape, dtype=np.float32)  # 1/sigma
+        # Use the stamps and miniscene to populate these
+        NBAND =           # Number of bands/filters
+        NEXP =            # Number of exposures covering the patch
+        NSOURCE =          # Number of sources in the patch
+        NACTIVE =          # number of active sources in the patch
+        NGMAX =           # Maximum number of gaussians per galaxy in any exposure
+        NSUPER =          # Number of superpixels
+        NPHI =            # Number of on-image parameters per ImageGaussian
+        NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
+        NTHETA = NBAND + 6, # Number of on-sky parameters per source
 
-    # Here are arrays that tell you which pixels belong to which bands & exposures.
-    exposureIDs = np.empty(NEXP, dtype=np.int16)
-    bandIDs = np.empty(NBAND, dtype=int16)
-    exposure_nsuper = np.empty(NEXP, dtype=np.int64)
-    exposure_start = np.cumsum(exposure_nsuper)
-    
-    # Here is the on-sky and on-image source information
-    gaussian_params = np.empty([NEXP, NSOURCE, NGMAX, NPHI], dtype=np.float64)
-    gaussian_jacobians = np.empty([NEXP, NSOURCE, NGMAX, NDERIV], dtype=np.float64)
-    source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
-    source_metadata = np.empty([NSOURCE, NEXP, MANY], dtype=np.float64)
+        # Pixel Data
+        # These are arrays of pixel data for *all* pixels in a patch (i.e.
+        # multiple exposures)
+        pixel_data_shape = [total_padded_size]
 
-    # Here are the actual on-image and on-sky objects
-    gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
-    sources = np.empty([NSOURCE], dtype=object)
+        xpix = np.empty(pixel_data_shape, dtype=dtype)
+        ypix = np.empty(pixel_data_shape, dtype=dtype)
+        vpix = np.empty(pixel_data_shape, dtype=dtype)  # value (i.e. flux) in pixel.
+        ierr = np.empty(pixel_data_shape, dtype=dtype)  # 1/sigma
+
+        # Here are arrays that tell you which pixels belong to which bands & exposures.
+        exposureIDs = np.empty(NEXP, dtype=np.int16)
+        bandIDs = np.empty(NBAND, dtype=np.int16)
+        exposure_nsuper = np.empty(NEXP, dtype=np.int64)
+        exposure_start = np.cumsum(exposure_nsuper)
+        
+        # Here is the on-sky and on-image source information
+        source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
+        source_metadata = np.empty([NSOURCE, NEXP, MANY], dtype=np.float64)
+
+        # Here are the actual on-image and on-sky objects
+        gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
+        sources = np.empty([NSOURCE], dtype=object)
+
+    @classmethod
+    def make_example():
+        example = Patch(
+                    NBAND   = 30,
+                    NEXP    = 10,
+                    NSOURCE = 12,
+                    NACTIVE = 12,
+                    NGMAX   = 20,
+                    NSUPER  = 1, 
+                    SuperPixelSize = 1,
+                    NPHI    = 6,
+                    NDERIV  = 15,
+                    )
+        return example
 
 
 class CPUPatch(Patch):
@@ -111,85 +139,6 @@ class CPUPatch(Patch):
         if Theta is not None:
             self.scene.set_all_parameters(Theta)
         # send self.scene.sources
-
-
-class GPUPatch(Patch):
-
-
-    """This runs on a set of MPs on the GPU side.  Each band goes into an MP, 
-    each exposure goes into a block, threads loop over superpixels
-    """
-    def convert_to_gaussians(self, blockID):
-        expID = self.exposureIDs[blockID]
-        for sourceID in range(self.NSOURCES):
-            activeID = self.ActiveSourceIDs[sourceID]
-            gig = convert_to_gaussians(self.sources[sourceID], expID, 
-                                        compute_deriv=(activeID >= 0))
-            self.gaussians[expID, sourceID, :] = gig.gaussians
-
-    def process_pixel(self, blockID=slice(None), threadID=0):
-
-        xpix = self.xpix[blockID, threadID]
-        ypix = self.ypix[blockID, threadID]
-        isig = self.ierr[blockID, threadID]
-        delt = self.vpix[blockID, threadID]
-        
-        # get the exposure ID for the pixels in this block
-        ind = np.searchsorted(self.exposure_start, blockID)
-        expID = self.exposureIDs[ind]
-    
-        # Get the residual
-        for sourceID in range(self.NSOURCES):
-            for gaussID in range(self.NGMAX):
-                g = self.gaussians[expID, sourceID, gaussID]
-                if g is None:
-                    continue
-                delt -= compute_gaussian(g, xpix, ypix, compute_deriv=False)
-        
-        # compute the chi value and accumulate chi^2
-        chi = delt * ierr
-        self.CHISQ += chi * chi
-
-        # Get the gradients    
-        for sourceID in range(self.nsources):
-            # which active source (with varied parameters) is this?
-            activeID = self.ActiveSourcesID[sourceID]
-            if activeID < 0:
-                # skip inactive sources
-                continue
-            for gaussID in range(self.ngmax):
-                g = gaussians[expID, sourceID, gaussID]
-                if g is None:
-                    continue
-                # get the vector of 6 image gradients w/r/t image params
-                _, dI_dphi = compute_gaussian(g, xpix, ypix, compute_deriv=True)
-                # convert to gradients w/r/t scene params
-                dI_dtheta = apply_jacobian(g, dI_dphi)
-                # accumulate
-                self.DCHISQ_DSCENE[activeID, g.bandID] += chi * ierr *dI_dtheta[0]
-                self.DCHISQ_DSCENE[activeID, self.NBANDS:] += chi * ierr *dI_dtheta[1:]
-
-    def lnlike(self):
-        self.CHISQ = 0
-        self.DCHISQ_DSCENE = np.zeros([self.NACTIVE, self.NTHETA])
-        self.convert_to_gaussians()
-        self.process_pixel()
-        
-        return self.CHISQ, self.DCHISQ_DSCENE.reshape(-1)
-
-
-def apply_jacobian(g, dI_dphi):
-    """Apply the jacobian for a given image gaussian to convert from gradients
-     with respect to on-image parameters to gradients with respect to on-scene
-     parameters.  Generically this is a matrix multiply, but there are many
-     zeros in the Jacobian that we don't necessarily want to carry around so the
-     matrix maultiply might be done more explicitly.
-    """
-    return np.matmul(g.derivs, dI_dphi)
-
-
-
-
 
 
 class SquarePatch(Patch):
