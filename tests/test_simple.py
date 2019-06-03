@@ -185,3 +185,8 @@ def pixelcoords_to_skycoords(stamp):
     pix = np.array([stamp.xpix.reshape(-1), stamp.ypix.reshape(-1)])
     sky = np.dot(np.linalg.inv(stamp.dpix_dsky), (pix.T - stamp.crpix).T).T + stamp.crval
     return sky.T
+
+
+if __name__ == "__main__":
+    
+    test_lnlike_and_grads()
