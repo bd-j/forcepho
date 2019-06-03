@@ -1,6 +1,6 @@
 import numpy as np
 
-__all__ = ["PoinstSpreadFunction", "get_psf", "make_psf", "params_to_gauss"]
+__all__ = ["PointSpreadFunction", "get_psf", "make_psf", "params_to_gauss"]
 
 
 class PointSpreadFunction(object):
@@ -54,7 +54,6 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
     :returns psf:
         An instance of PointSpreadFunction
     """
-    from forcepho.psf import make_psf, PointSpreadFunction
     if psfname is not None:
         # oldstyle
         try:
@@ -152,7 +151,7 @@ def mvn_pdf_2d(params, x_max, y_max):  # 0,1,...,x_max-1
 def mvn_pdf_2d_mix_fn(num_mix, x_max, y_max):
     def ret_func(params):
         ans = np.zeros([x_max, y_max])
-        for i in xrange(num_mix):
+        for i in range(num_mix):
             ans += mvn_pdf_2d(params[(6*i):(6*i+6)], x_max, y_max)
         return ans
     return ret_func

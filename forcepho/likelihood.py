@@ -245,6 +245,7 @@ class FastWorkPlan(WorkPlan):
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
         self.gradients = np.zeros([self.nactive, self.nparam])
+        self.chi = None
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
@@ -257,6 +258,8 @@ class FastWorkPlan(WorkPlan):
                 self.compute_keywords['compute_deriv'] = False
                 self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
                                                   **self.compute_keywords)
+        self.chi = self.residual * self.ierr
+        self.chivar = self.chi * self.ierr
         # Loop only over active to get the chisq gradients
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians):
@@ -266,7 +269,7 @@ class FastWorkPlan(WorkPlan):
                                               **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                self.gradients[i, :] += np.matmul(g.derivs, np.matmul(dI_dphi, self.residual * self.ierr))
+                self.gradients[i, :] += np.matmul(g.derivs, np.matmul(dI_dphi, self.chivar))
 
     def lnlike(self, active=None, fixed=None):
         if active is not None:
@@ -275,6 +278,5 @@ class FastWorkPlan(WorkPlan):
             self.fixed = fixed
         self.reset()
         self.process_pixels()
-        chi = self.residual * self.ierr
 
-        return -0.5 * np.dot(chi*chi.T), self.gradients
+        return -0.5 * np.dot(self.chi, self.chi.T), self.gradients

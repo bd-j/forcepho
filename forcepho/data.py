@@ -49,9 +49,9 @@ class PostageStamp(object):
         self.filtername = filtername
 
         # The pixel values and residuals
-        pixel_values = np.zeros([nx, ny])
-        residuals = np.zeros([nx * ny])
-        ierr = np.zeros_like(residuals)
+        self.pixel_values = np.zeros([nx, ny])
+        self.residuals = np.zeros([nx * ny])
+        self.ierr = np.zeros_like(self.residuals)
 
         # Note inversion of meshgrid order
         self.ypix, self.xpix = np.meshgrid(np.arange(ny), np.arange(nx))
@@ -278,13 +278,17 @@ def scale_at_sky(sky, wcs):
     pass
 
 
-def extract_stamp(imname, center=(None, None), size=(None, None),
+def extract_stamp(imname, errname, center=(None, None), size=(None, None),
                   center_type='pixels'):
     """Make a postage stamp around the given position using the given image name.
     This is more of an example than anything else.
     """
+    from astropy.io import fits
+    from astropy import wcs as apy_wcs
+    
     im = fits.getdata(imname)
     hdr = fits.getheader(imname)
+    err = fits.getdata(errname)
     crpix = np.array([hdr['CRPIX1'], hdr['CRPIX2']])
     crval = np.array([hdr['CRVAL1'], hdr['CRVAL2']])
     CD = np.array([[hdr['CD1_1'], hdr['CD1_2']],
@@ -336,7 +340,7 @@ def test_astrometry():
     from astropy.io import fits
     imname = '/Users/bjohnson/Projects/nircam/mocks/image/star/sim_cube_F090W_487_001.slp.fits'
     hdr = fits.getheader(imname)
-    wcs = data.SimpleWCS(hdr)
+    wcs = SimpleWCS(hdr)
     awcs = apy_wcs.WCS(hdr)
     pix = np.array([924., 924.])
 
