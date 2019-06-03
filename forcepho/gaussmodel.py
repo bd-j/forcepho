@@ -76,7 +76,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         G = source.stamp_zps[stamp]
     else:
         D = stamp.scale  # pix/arcsec
-        psf = stamp.psfs
+        psf = stamp.psf
         CW = stamp.dpix_dsky
         crpix = stamp.crpix
         crval = stamp.crval
@@ -191,7 +191,7 @@ def get_gaussian_gradients(source, stamp, gig):
         filter_index = source.stamp_filternum[stamp]
     else:
         D = stamp.scale  # pix/arcsec
-        psf = stamp.psfs
+        psf = stamp.psf
         CW = stamp.dpix_dsky
         #crpix = stamp.crpix
         #crval = stamp.crval
