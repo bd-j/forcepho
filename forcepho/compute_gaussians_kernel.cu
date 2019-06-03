@@ -27,15 +27,11 @@ For each exposure:
 */
 
 
-__device__ void ComputeResidualImage(pix, data, ierr, residual, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
+__device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
 {
 	
-	float xp = patch.xpix[pix];
-	float yp = patch.ypic[pix];
 	
 	residual = 0.0; 
-	
-	//NAM TODO load data and ierr! ..why do we need ierr? 
 	
 	//loop over all image gaussians g. 
 	for (int i = 0; i < galaxy.nGauss; i ++){ //NAM TODO nGauss may be derived from Patch class properties. 
@@ -53,6 +49,7 @@ __device__ void ComputeResidualImage(pix, data, ierr, residual, Patch patch, Gal
 		
 		residual += data - C; 
 	}
+	return residual;
 	
 	
 }
@@ -100,7 +97,9 @@ class Patch {
     // Exposure data[], ierr[], xpix[], ypix[], astrometry
     // List of FixedGalaxy
     // Number of SkyGalaxy
-	int nSkyGals; 
+	int nActiveGals; 
+	int nFixedGals;
+	SkyGalaxy * FixedGals;
 	//..list of fixed galaxies? 
 	PixFloat * data;
 	PixFloat * ierr;
@@ -126,8 +125,7 @@ class SkyGalaxy {
 	float r; 
 };
 class Proposal {
-	int nSkyGals; 
-	SkyGalaxy * skyGals;     // List of SkyGalaxy, input for this HMC likelihood
+	SkyGalaxy * ActiveGals;     // List of SkyGalaxy, input for this HMC likelihood
 };
 
 typedef struct {
@@ -138,8 +136,11 @@ typedef struct {
 	float fxx; 
 	float fyy;
 	float fxy; 
-    // 15 Jacobian elements (Image -> Sky)
 } ImageGaussian;
+
+typedef struct {
+    // 15 Jacobian elements (Image -> Sky)
+} ImageGaussianJacobian;
 
 typedef struct{
 	int nGauss; 
@@ -151,14 +152,25 @@ typedef struct{
 
 
 typedef float PixFloat;
-define NPARAM 7;	// Number of Parameters per Galaxy, in one band --- NAM 6 or 7? 
-define MAXACTIVE 30;	// Max number of active Galaxies in a patch
-define WARPSIZE 32;
+#define NPARAM 7	// Number of Parameters per Galaxy, in one band 
+#define MAXACTIVE 30	// Max number of active Galaxies in a patch
+#define WARPSIZE 32
+
+#define NACTIVE MAXACTIVE   // Hack for now
+
+void warpReduceSum(float *answer, float input) {
+    input += __shfl_down(input, 16);
+    input += __shfl_down(input,  8);
+    input += __shfl_down(input,  4);
+    input += __shfl_down(input,  2);
+    input += __shfl_down(input,  1);
+    if (threadIdx.x&31==0) *answer = input;
+}
 
 class Accumulator {
   public:
     float chi2;
-    float dchi2_dp[NPARAM*NACTIVE]; //NAM where is NACTIVE defined? 
+    float dchi2_dp[NPARAM*NACTIVE]; //TODO: Need to figure out how to make this not compile time.
 
     Accumulator() {
 		chi2 = 0.0;
@@ -167,15 +179,11 @@ class Accumulator {
     ~Accumulator() { }
     
     // Could put the Reduction code in here
-	
-	
-	// void warpReduce(volatile float *sdata, unsigned int tid) {
-// 		sdata[tid] += sdata[tid + 16];
-// 		sdata[tid] += sdata[tid +  8];
-// 		sdata[tid] += sdata[tid +  4];
-// 		sdata[tid] += sdata[tid +  2];
-// 		sdata[tid] += sdata[tid +  1];
-// 	}
+    void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
+    void SumDChi2dp(float *_dchi2_dp) { 
+	for (int j=0; NPARAM*NACTIVE; j++) 
+	    warpReduceSum(dchi2_dp+j, _dchi2_dp[j]); 
+    }
 };
 
 void Kernel() {
@@ -191,19 +199,23 @@ void Kernel() {
     // Loop over Exposures
     for (e = 0; e < patch->NumExposures[band]; e++) {
         int exposure = patch->StartExposures[band] + e;
-        CreateImageGaussians(exposure);
+        CreateImageGaussians(patch, exposure);
 
 		for (p = tid ; p < patch->NumPixels[exposure]; p += blockDim.x) {
 		    int pix = patch->StartPixels[exposure] + p;
 
-		    PixFloat data, ierr, residual; 
-		    ComputeResidualImage(pix, data, ierr, residual); 
+		    float xp = patch.xpix[pix];
+		    float yp = patch.ypic[pix];
+		    PixFloat data = patch.data[pix];
+		    PixFloat ierr = patch.ierr[pix];
+		    PixFloat residual = ComputeResidualImage(xp, yp, data); 
 		    // This loads data and ierr, then subtracts the active
 		    // and fixed Gaussians to make the residual
 
 		    float chi2 = residual*ierr;
 		    chi2 *= chi2;
-		    ReduceWarp_Add(chi2, accum[warp].chi2));
+		    accum[warp].SumChi2(chi2);
+		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
 	    
 		    // Now we loop over Galaxies and compute the derivatives
 		    for (gal = 0; ) {
@@ -211,7 +223,9 @@ void Kernel() {
 				    ComputeGaussianDerivative(pix, residual, gal, gauss, dchi2_dp); 
 				}
 			
-				ReduceWarp_Add(dchi2_dp, accum[warp].dchi2_dp);
+				accum[warp].SumDChi2dp(dchi2_dp);
+
+				///ReduceWarp_Add(dchi2_dp, accum[warp].dchi2_dp);
 		    }
 		}
     }
