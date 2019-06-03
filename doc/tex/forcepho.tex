@@ -472,13 +472,31 @@ assuming the determinant is always real.
 \section{Translation into code}
 There are two main kinds of classes.
 One is PostageStamps, which contain the image data and information about the image.
-This includes the distortion matrix and the PSF (as a set of gaussians).
+This includes the affine WCS matrix and the PSF (as a set of gaussians).
 PostageStamps are assumed to have a single constant PSF and a linear coordinate transformation.
  The other is Sources, which can be PointSources or Sersic profiles, and contain information about the source parameters.
 There is then code which translates the Sources and PostageStamp properties into on-image collections of Gaussians and the associated Jacobians, 
 and another set of code that computes and accumulates the pixel counts and gradients thereof.
 
+\subsection{Likelihood Revisited}
+We can now write the total ln-likelihood and it's gradients
 
+\begin{eqnarray}
+  \ln \like & = & -\frac{1}{2} \, \sum_m \sum_n \frac{\Delta^2_{nm}}{\sigma^2_{nm}} \nonumber \\
+  \Delta_{nm} & = & D_{nm} - \sum_g \sum_h I_{nm} (\{\phi_{mgh}\}_j) \nonumber \\
+  \frac{\partial \ln \like}{\partial \theta_{gk}} & = & \sum_m \sum_h \sum_j J_{mghjk} \, \frac{\partial \ln \like}{\partial \phi_{mghj}} \nonumber \\
+   & = & \sum_m \sum_h \sum_j J_{mghjk} \sum_n \frac{\Delta_{nm}}{\sigma^2_{nm}} \frac{\partial I_{nm}}{\partial \phi_{mghj}} \nonumber \\
+   J_{mghjk} & = & \frac{\partial \phi_{mghj}}{\partial \theta_{mgk}}
+\end{eqnarray}
+where the sums run over
+\begin{itemize}
+  \item $m=1 \ldots M$ stamps
+  \item $g=1 \ldots G$ galaxies,
+  \item $h=1 \ldots H$ image gaussians per galaxy,
+  \item $j=1 \ldots 6$ on-image parameters per image gaussian,
+  \item $k=1 \ldots 7$ on-sky parameters per galaxy,
+  \item $n=1 \ldots N_m$ pixels per stamp
+\end{itemize}
 
 \subsection{Accumulation}
 We need to accumulate the on-image gradients correctly into the vector of all parameters. 

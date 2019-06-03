@@ -1,7 +1,10 @@
 import numpy as np
 from scipy.interpolate import SmoothBivariateSpline
-import h5py
-
+try:
+    import h5py
+except(ImportError):
+    import warnings
+    warnings.warn("h5py could not be imported")
 # For rendering
 from .gaussmodel import convert_to_gaussians, compute_gig
 

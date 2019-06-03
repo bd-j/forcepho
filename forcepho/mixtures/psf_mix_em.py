@@ -176,27 +176,27 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
 
                 # Warnings and progress
                 if np.isnan(new_log_likelihood):
-                    print 'WARNING log likelihood is np.nan'
-                    print 'curr params', curr_params.reshape([num_mix,6])
-                    print 'new params', new_params.reshape([num_mix,6])
+                    print('WARNING log likelihood is np.nan')
+                    print('curr params', curr_params.reshape([num_mix,6]))
+                    print('new params', new_params.reshape([num_mix,6]))
                     # create answer with the param right before log likelihood is nan
                     ans_repeat.append(create_ans(curr_params,
                             {'loop_count':loop_count, 'final_log_likelihood':new_log_likelihood}))
                     break
                 if printint and (loop_count+1) % 5000 == 0:
-                    print 'loop count', loop_count
-                    print 'curr log likelihood', curr_log_likelihood
-                    print 'new log likelihood:', new_log_likelihood
-                    print 'curr params', curr_params.reshape([num_mix, 6])
-                    print 'new params', new_params.reshape([num_mix, 6])
-                    print 'diff', np.abs(new_log_likelihood - curr_log_likelihood)
+                    print('loop count', loop_count)
+                    print('curr log likelihood', curr_log_likelihood)
+                    print('new log likelihood:', new_log_likelihood)
+                    print('curr params', curr_params.reshape([num_mix, 6]))
+                    print('new params', new_params.reshape([num_mix, 6]))
+                    print('diff', np.abs(new_log_likelihood - curr_log_likelihood))
                 if np.abs(new_log_likelihood - curr_log_likelihood) < dlnlike_thresh:
                     ans_repeat.append(create_ans(new_params,
                             {'loop_count':loop_count, 'final_log_likelihood':new_log_likelihood}))
                     if printfinal:
-                        print 'total loop count', loop_count
-                        print 'final log likelihood', new_log_likelihood
-                        print 'final params', new_params.reshape([num_mix, 6])
+                        print('total loop count', loop_count)
+                        print('final log likelihood', new_log_likelihood)
+                        print('final params', new_params.reshape([num_mix, 6]))
                     break 
                 curr_params = new_params
                 curr_log_likelihood = new_log_likelihood 

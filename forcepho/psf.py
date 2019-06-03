@@ -54,7 +54,6 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
     :returns psf:
         An instance of PointSpreadFunction
     """
-    from forcepho.psf import make_psf, PointSpreadFunction
     if psfname is not None:
         # oldstyle
         try:
