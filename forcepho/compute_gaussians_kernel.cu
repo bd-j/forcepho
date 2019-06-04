@@ -26,6 +26,87 @@ For each exposure:
 	    	
 */
 
+/*
+class Patch {
+    // Exposure data[], ierr[], xpix[], ypix[], astrometry
+    // List of FixedGalaxy
+    // Number of SkyGalaxy
+	int nActiveGals; 
+	int nFixedGals;
+	SkyGalaxy * FixedGals;
+	//..list of fixed galaxies? 
+	PixFloat * data;
+	PixFloat * ierr;
+	PixFloat * xpix; 
+	PixFloat * ypix; 
+	//..astrometry? 
+	PSFGaussian * psfgauss;
+	int * nPSFGauss;   // Indexed by exposure
+	int * startPSFGauss;   // Indexed by exposure
+};
+
+class SkyGalaxy {
+    // On-sky galaxy parameters
+	// flux: total flux
+	// ra: right ascension (degrees)
+	// dec: declination (degrees)
+	// q, pa: axis ratio squared and position angle
+	// n: sersic index
+	// r: half-light radius (arcsec)
+	float flux; 
+	float ra; 
+	float dec;
+	float q; 
+	float pa; 
+	float n;
+	float r; 
+};
+class Proposal {
+	SkyGalaxy * ActiveGals;     // List of SkyGalaxy, input for this HMC likelihood
+};
+
+typedef struct{
+	int nGauss; 
+	ImageGaussian * gaussians; //List of ImageGaussians
+    // TODO: May not need this to be explicit
+} Galaxy;
+*/  
+//=================== ABOVE THIS LINE IS DEPRECATED ============
+
+typedef float PixFloat;
+#define NPARAM 7	// Number of Parameters per Galaxy, in one band 
+#define MAXACTIVE 30	// Max number of active Galaxies in a patch
+
+typedef struct {
+    // 6 Gaussian parameters
+	float amp;
+	float xcen; 
+	float ycen;
+	float fxx; 
+	float fyy;
+	float fxy; 
+	// TODO: Consider whether a dummy float will help with shared memory bank constraints
+} ImageGaussian;
+
+typedef struct {
+    // 15 Jacobian elements (Image -> Sky)
+    float dA_dFlux;
+    float dx_dAlpha;
+    float dy_dAlpha;
+    float dx_dDelta;
+    float dy_dDelta;
+    float dA_dQ;
+    float dFxx_dQ;
+    float dFyy_dQ;
+    float dFxy_dQ;
+    float dA_dPA;
+    float dFxx_dPA;
+    float dFyy_dPA;
+    float dFxy_dPA;
+    float dA_dSersic;
+    float dA_drh;
+} ImageGaussianJacobian;
+
 
 #define MAX_EXP_ARG 36.0
 
@@ -92,72 +173,9 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
     // TODO: Multiply by Jacobian and add to dchi2_dp
 }
 
-class Patch {
-    // Exposure data[], ierr[], xpix[], ypix[], astrometry
-    // List of FixedGalaxy
-    // Number of SkyGalaxy
-	int nActiveGals; 
-	int nFixedGals;
-	SkyGalaxy * FixedGals;
-	//..list of fixed galaxies? 
-	PixFloat * data;
-	PixFloat * ierr;
-	PixFloat * xpix; 
-	PixFloat * ypix; 
-	//..astrometry? 
-	PSFGaussian * psfgauss;
-	int * nPSFGauss;   // Indexed by exposure
-	int * startPSFGauss;   // Indexed by exposure
-};
-
-class SkyGalaxy {
-    // On-sky galaxy parameters
-	// flux: total flux
-	// ra: right ascension (degrees)
-	// dec: declination (degrees)
-	// q, pa: axis ratio squared and position angle
-	// n: sersic index
-	// r: half-light radius (arcsec)
-	float flux; 
-	float ra; 
-	float dec;
-	float q; 
-	float pa; 
-	float n;
-	float r; 
-};
-class Proposal {
-	SkyGalaxy * ActiveGals;     // List of SkyGalaxy, input for this HMC likelihood
-};
-
-typedef struct {
-    // 6 Gaussian parameters
-	float xcen; 
-	float ycen;
-	float amp;
-	float fxx; 
-	float fyy;
-	float fxy; 
-	// TODO: Consider whether a dummy float will help with shared memory
-} ImageGaussian;
-
-typedef struct {
-    // 15 Jacobian elements (Image -> Sky)
-} ImageGaussianJacobian;
-
-typedef struct{
-	int nGauss; 
-	ImageGaussian * gaussians; //List of ImageGaussians
-    // TODO: May not need this to be explicit
-} Galaxy;
 
 
 
-
-typedef float PixFloat;
-#define NPARAM 7	// Number of Parameters per Galaxy, in one band 
-#define MAXACTIVE 30	// Max number of active Galaxies in a patch
-#define WARPSIZE 32
 
 #define NACTIVE MAXACTIVE   // Hack for now
 
@@ -207,6 +225,8 @@ class Accumulator {
     }
 };
 
+
+
 __device__ void CreateImageGaussians() {
     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
         if (threadIdx.x==0) {
@@ -226,11 +246,15 @@ __device__ void CreateImageGaussians() {
     }
 }
 
+
+// ================= Primary Proposal Kernel ========================
+
 // Shared memory is arranged in 32 banks of 4 byte stagger
+#define WARPSIZE 32
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 /// a scalar chi2 response, and a vector dchi2_dp response
-__global__ void Kernel(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {
+__global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	
     Patch * patch;  // We should be given this pointer
