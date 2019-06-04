@@ -24,12 +24,14 @@ class matrix22 {
 
     /// The identity matrix
     inline matrix22 eye() { return matrix22(1.0, 1.0); }
+
     /// The zero matrix
     inline matrix22 zero() { return matrix22(0.0, 0.0); }
+
     /// A rotation matrix, with input angle in radians
     inline matrix22 rot(float theta) {
 	float c = cos(theta); float s = sin(theta);
-	return matrix22(c,s,-s,c);
+	return matrix22(c,-s,s,c);
     }
 
     /// The transpose
@@ -37,7 +39,10 @@ class matrix22 {
 	return matrix22(A.v11, A.v21, A.v12, A.v22); }
 
     /// The determinant
-    inline float det(matrix22& A) { return A.v11*A.v12-A.v12*A.v21; }
+    inline float det(matrix22& A) { return A.v11*A.v22-A.v12*A.v21; }
+
+    /// The trace
+    inline float trace(matrix22& A) { return A.v11+A.v22; }
 
     /// The inverse
     inline matrix22 inv(matrix22& A) {
