@@ -191,21 +191,58 @@ class Accumulator {
 
 __device__ void CreateImageGaussians() {
     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
-        if (threadIdx.x==0) {
-	    // Do the setup of the transformations
+		Patch patch = ;//NAM TODO
+        
+	    // Do the setup of the transformations		
+		//Get the transformation matrix and other conversions
+		D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
+		R = rot(galaxy.pa); 
+		S = scale(galaxy.q); 
+		matrix22 T = D * R * S; 
+		CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
+		float G = patch.photocounts; 
+		
+		//And its derivatives with respect to scene parameters
+		matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
+		matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
+		matrix22 dT_dq = D * R * dS_dq; 
+		matrix22 dT_dpa = D * dR_dpa * S; 	
+		
+        for (int s=0; s<patch->nSersicGauss; s++) {
+			//get source spline and derivatives
+			scovar = matrix22(galaxy.covariances[s][0], galaxy.covariances[s][1]); //diagonal elements of this gaussian's covariance matrix for sersic index s. 
+			float samp = galaxy.amplitudes[s]; 
+			float da_dn = galaxy.damplitude_dsersic[s];
+			float da_dr = galaxy.damplitude_drh[s] ; 
+			
+			//pull the correct flux from the multiband array
+			float flux = patch.flux[blockId.x]; //NAM TODO is this right? 
+			
+			//get PSF component means and covariances in the pixel space
+			if (patch. )
+
+
+# get PSF component means and covariances in the pixel space
+if stamp.psf.units == 'arcsec':
+    pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
+    #pmeans = np.matmul(D, stamp.psf.means)
+    # FIXME need to adjust amplitudes to still sum to one?
+    pamps = stamp.psf.amplitudes
+elif stamp.psf.units == 'pixels':
+    pcovar = stamp.psf.covariances
+    #pmeans = stamp.psf.means
+    pamps = stamp.psf.amplitudes
+			
+	    	for (int p=0; p<nPSFGauss; p++) {
+				imageGauss[gal*nGalGauss+s*nPSFGauss+p] = 
+		    		ConstructImageGaussian(s,p,gal);
+				if (gal<nActiveGals) {
+		    		imageJacob[gal*nGalGauss+s*nPSFGauss+p] = 
+		    			ConstructImageJacobian(s,p,gal);
+				}
+	    	}
+    	}
 	}
-
-
-        for (int s=0; s<patch->nSersicGauss; s++) 
-	    for (int p=0; p<nPSFGauss; p++) {
-		imageGauss[gal*nGalGauss+s*nPSFGauss+p] = 
-		    ConstructImageGaussian(s,p,gal);
-		if (gal<nActiveGals) {
-		    imageJacob[gal*nGalGauss+s*nPSFGauss+p] = 
-		    ConstructImageJacobian(s,p,gal);
-		}
-	    }
-    }
 }
 
 // Shared memory is arranged in 32 banks of 4 byte stagger

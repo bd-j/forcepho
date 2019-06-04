@@ -33,7 +33,20 @@ class matrix22 {
 	float c = cos(theta); float s = sin(theta);
 	return matrix22(c,-s,s,c);
     }
-
+	
+	inline matrix22 scale(float q) {
+		return matrix22(1.0/q, q);
+	}
+	
+	inline matrix22 scale_matrix_deriv(float q){
+		return matrix22(-1.0/(q*q), 1.0);
+	}
+	
+	inline matrix22 rotation_matrix_deriv(float theta){
+		float c = cos(theta); float s = sin(theta);
+		return matrix22( -s, -c, c, -s);
+	}
+	
     /// The transpose
     inline matrix22 T(matrix22& A) {
 	return matrix22(A.v11, A.v21, A.v12, A.v22); }
