@@ -297,31 +297,67 @@ __device__ void CreateImageGaussians() {
 	
 	int tid = threadIdx.x; 
 	
-	int totGals = nActiveGals+nFixedGals; 
+	int totGals = nActiveGals + nFixedGals; 
 	int nSersic = patch->nSersicGauss; 
 	
 	while (tid < totGals * nSersicGauss * nPSFGauss){
-		int p = tid / (nSersicGauss * totGals); 
+        int g = tid /( nPSFGauss * nSersic)
+        int s = (tid - g * nPSFGauss * nSersic)  / nPSFGauss
+        int p = tid - (g * nSersic - s) * nPSFGauss
 		
-		int tmp = (tid - p * nSersicGauss * totGals); 
+			
+		Patch patch = ;//NAM TODO
+    
+	    // Do the setup of the transformations		
+		//Get the transformation matrix and other conversions
+		matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
+		matrix22 R = rot(galaxy.pa); 
+		matrix22 S = scale(galaxy.q); 
+		matrix22 T = D * R * S; 
+		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
+		float G = patch.photocounts; 
+	
+		//And its derivatives with respect to scene parameters
+		matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
+		matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
+		matrix22 dT_dq = D * R * dS_dq; 
+		matrix22 dT_dpa = D * dR_dpa * S; 	
+	
+	
+		//get source spline and derivatives
+	    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers... 
+		
+		matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s. 
+		float samp = galaxy.amplitudes[s]; 
+		float da_dn = galaxy.damplitude_dsersic[s];
+		float da_dr = galaxy.damplitude_drh[s] ; 
 
-		int s = tmp/totGals; 
-		int g = tmp%totGals; 
-		
+		//pull the correct flux from the multiband array
+		float flux = patch.flux[blockId.x]; //NAM TODO is this right? 
+		float pamp = patch.psf.amplitudes[p]; 
+
+		//get PSF component means and covariances in the pixel space
+		if (patch.psf.units[p] == 'arcsec'){
+			matrix22 pcovar = D * patch.psf.covariances[p] * D.T();
+			matrix22 pmean = D * patch.psf.means[p];  //these don't have to be matrix22s. just two numbers... 
+		}
+		else if (patch.psf.units == 'pixels'){
+			matrix22 pcovar = patch.psf.covariances[p]; 
+	        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers... 
+		}
+
+    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*nGalGauss+s*nPSFGauss+p]);
+
+		if (gal<nActiveGals) {
+    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*nGalGauss+s*nPSFGauss+p]);
+		}
+			
+
 		tid += blockDim.x; 
 	}
 	
 	
-	
-	public int[] to3D( int idx ) {
-	    final int z = idx / (xMax * yMax);
-	    idx -= (z * xMax * yMax);
-	    final int y = idx / xMax;
-	    final int x = idx % xMax;
-	    return new int[]{ x, y, z };
-	}
-	
-	
+
 	
 	
 	
