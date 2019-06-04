@@ -298,13 +298,28 @@ __device__ void CreateImageGaussians() {
 	int tid = threadIdx.x; 
 	
 	int totGals = nActiveGals+nFixedGals; 
-	int tmp = (tid - p * patch->nSersicGauss * totGals); 
+	int nSersic = patch->nSersicGauss; 
+	
+	while (tid < totGals * nSersicGauss * nPSFGauss){
+		int p = tid / (nSersicGauss * totGals); 
+		
+		int tmp = (tid - p * nSersicGauss * totGals); 
 
-	int p = tid / patch->nSersicGauss * totGals; 
-	int s = tmp/totGals; 
-	int g = tmp%totGals; 
+		int s = tmp/totGals; 
+		int g = tmp%totGals; 
+		
+		tid += blockDim.x; 
+	}
 	
 	
+	
+	public int[] to3D( int idx ) {
+	    final int z = idx / (xMax * yMax);
+	    idx -= (z * xMax * yMax);
+	    final int y = idx / xMax;
+	    final int x = idx % xMax;
+	    return new int[]{ x, y, z };
+	}
 	
 	
 	
