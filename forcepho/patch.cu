@@ -114,6 +114,8 @@ public:
 
     // The index of the sersic radius bin this Gaussian applies to
     int sersic_radius_bin;
+	
+	
 };
 
 #endif
