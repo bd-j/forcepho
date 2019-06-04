@@ -87,15 +87,9 @@ public:
     // Indexing is:  TODO: Fix below
     //      psfgauss[exposure*n_psf_per_source[band]*nsource + n_psf_per_source[band]*source + psf]
     // The exposure indices for a band can be found from band_start and band_N
-<<<<<<< HEAD
-    PSFSourceGaussian *psfgauss;   //[expnum][source][psfgauss_per_source]
-    int *psfgauss_start;    //[expnum]
-    // psfgauss_N = n_psf_per_source*n_active
-=======
     PSFSourceGaussian *psfgauss;   [expnum][source][psfgauss_per_source]
     int *psfgauss_start;    [expnum]
     // psfgauss_N = n_psf_per_source*n_sources
->>>>>>> 1eac57d8bc391e32148fc22a7835c2c422cfbe3f
 };
 
 
