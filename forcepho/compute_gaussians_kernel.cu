@@ -73,9 +73,10 @@ typedef struct{
 */  
 //=================== ABOVE THIS LINE IS DEPRECATED ============
 
-typedef float PixFloat;
-#define NPARAM 7	// Number of Parameters per Galaxy, in one band 
-#define MAXACTIVE 30	// Max number of active Galaxies in a patch
+
+#include "header.hh"
+#include "patch.cu"
+#include "proposal.cu"
 
 typedef struct {
     // 6 Gaussian parameters
@@ -107,8 +108,6 @@ typedef struct {
     float dA_drh;
 } ImageGaussianJacobian;
 
-
-#define MAX_EXP_ARG 36.0
 
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
 {
@@ -185,7 +184,7 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
 }
 
 
-#define NACTIVE MAXACTIVE   // Hack for now
+#define NACTIVE MAXSOURCES   // Hack for now
 
 void warpReduceSum(float *answer, float input) {
     input += __shfl_down(input, 16);
@@ -425,7 +424,6 @@ __device__ void CreateImageGaussians(Patch * patch, Proposal * proposal, int exp
 // ================= Primary Proposal Kernel ========================
 
 // Shared memory is arranged in 32 banks of 4 byte stagger
-#define WARPSIZE 32
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 
