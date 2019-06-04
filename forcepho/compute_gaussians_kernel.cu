@@ -187,6 +187,24 @@ class Accumulator {
 	for (int j=0; j<NPARAM; j++) 
 	    warpReduceSum(dchi2_dp+j+NPARAM*gal, _dchi2_dp[j]); 
     }
+
+    /// This copies this Accumulator into another memory buffer
+    inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
+        if (threadIdx.x==0) *pchi2 = chi2;
+	for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+	    pdchi2_dp[j] = dchi2_dp[j];
+    }
+
+    inline void addto(Accumulator &A) {
+        if (threadIdx.x==0) chi2 += A.chi2;
+	for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+	    dchi2_dp[j] += A.dchi2_dp[j];
+    }
+
+    void coadd_and_sync(Accumulator *A, int nAcc) {
+        for (int n=1; n<nAcc; n++) addto(A[n]);
+	__syncthreads();
+    }
 };
 
 __device__ void CreateImageGaussians() {
@@ -210,7 +228,9 @@ __device__ void CreateImageGaussians() {
 
 // Shared memory is arranged in 32 banks of 4 byte stagger
 
-__global__ void Kernel() {
+/// We are being handed pointers to a Patch structure, a Proposal structure,
+/// a scalar chi2 response, and a vector dchi2_dp response
+__global__ void Kernel(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	
     Patch * patch;  // We should be given this pointer
@@ -266,4 +286,10 @@ __global__ void Kernel() {
 		}
 	__syncthreads();
     }
+
+    // Now we're done with all exposures, but we need to sum the Accumulators
+    // over all warps.
+    accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
+    accum[0].store((float *)pchi2, (float *)pdchi2_dp, nActiveGals);
+    return;
 }
