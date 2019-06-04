@@ -428,9 +428,18 @@ __device__ void CreateImageGaussians(Patch * patch, Proposal * proposal, int exp
 #define WARPSIZE 32
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
-/// a scalar chi2 response, and a vector dchi2_dp response
-__global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {	
-	
+
+/// a scalar chi2 response, and a vector dchi2_dp response.
+/// The proposal is a pointer to Source[n_active] sources.
+/// The response is a pointer to [band][MaxSource] responses.
+
+__global__ void EvaluateProposal(void *_patch, void *_proposal, 
+                                 void *pchi2, void *pdchi2_dp) {
+    Patch *patch = (Patch *)_patch;  // We should be given this pointer
+
+    // The Proposal is a vector of Sources[n_active]
+    Source *sources = (Source *)_proposal;
+
     int band = blockIdx.x;   // This block is doing one band
 	int tid = threadIdx.x; //thread id within this block. 
     int warp = tid / WARPSIZE;  // We are accumulating in warps. NAM TODO this is a warp id within a block. I think this is right? 
