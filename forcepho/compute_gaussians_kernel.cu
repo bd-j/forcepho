@@ -82,6 +82,17 @@ typedef struct {
 	float amp;
 	float xcen; 
 	float ycen;
+	float Cxx; 
+	float Cyy;
+	float Cxy; 
+	// TODO: Consider whether a dummy float will help with shared memory bank constraints
+} PixGaussian;
+
+typedef struct {
+    // 6 Gaussian parameters
+	float amp;
+	float xcen; 
+	float ycen;
 	float fxx; 
 	float fyy;
 	float fxy; 
@@ -293,8 +304,9 @@ __device__ void CreateImageGaussians() {
         
 	    // Do the setup of the transformations		
 		//Get the transformation matrix and other conversions
+		// TODO: Probably not implementing the sky distortions in full
 		matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
-		matrix22 R = rot(galaxy.pa); 
+		matrix22 R = rot(galaxy.pa);   // TODO: fix calling syntax
 		matrix22 S = scale(galaxy.q); 
 		matrix22 T = D * R * S; 
 		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
@@ -350,14 +362,14 @@ __device__ void CreateImageGaussians() {
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 /// a scalar chi2 response, and a vector dchi2_dp response
-__global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {
-	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	
-    Patch * patch;  // We should be given this pointer
-    int band = blockIdx.x;   // This block is doing one band
-    int warp = tid / WARPSIZE;  // We are accumulating in warps.
+__global__ void EvaluateProposal(void *_patch, void *_proposal, void *pchi2, void *pdchi2_dp) {
+    Patch *patch = (Patch *)_patch;  // We should be given this pointer
+    Proposal *proposal = (Proposal *)_proposal;
 
-    // CreateAndZeroAccumulators();
+    int band = blockIdx.x;   // This block is doing one band
+    int warp = threadIdx.x / WARPSIZE;  // We are accumulating in warps.
+
+    // Create and Zero Accumulators();
     __shared__ Accumulator accum[blockDim.x/WARPSIZE]();
 
     // Loop over Exposures
@@ -375,35 +387,33 @@ __global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void 
 
 	__syncthreads();
 
-		for (p = tid ; p < patch->NumPixels[exposure]; p += blockDim.x) {
-		    int pix = patch->StartPixels[exposure] + p;
+	for (p = threadIdx.x ; p < patch->NumPixels[exposure]; p += blockDim.x) {
+	    int pix = patch->StartPixels[exposure] + p;
 
-		    float xp = patch.xpix[pix];
-		    float yp = patch.ypix[pix];
-		    PixFloat data = patch.data[pix];
-		    PixFloat ierr = patch.ierr[pix];
-		    PixFloat residual = ComputeResidualImage(xp, yp, data); 
-		    // This loads data and ierr, then subtracts the active
-		    // and fixed Gaussians to make the residual
+	    // Get the data for this pixel
+	    float xp = patch.xpix[pix];
+	    float yp = patch.ypix[pix];
+	    PixFloat data = patch.data[pix];
+	    PixFloat ierr = patch.ierr[pix];
 
-		    float chi2 = residual*ierr;
-		    chi2 *= chi2;
-		    accum[warp].SumChi2(chi2);
-		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
-	    
-		    // Now we loop over Active Galaxies and compute the derivatives
-		    for (gal = 0; gal < patch.nActiveGals; gal++) {
-		    		float dchi2_dp[NPARAM];
-				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
-				for (gauss = 0; ) {
-				    ComputeGaussianDerivative(pix, residual, gal, gauss, dchi2_dp); 
-				}
-			
-				accum[warp].SumDChi2dp(dchi2_dp, gal);
+	    // Subtracts the active and fixed Gaussians to make the residual
+	    PixFloat residual = ComputeResidualImage(xp, yp, data); 
 
-				///ReduceWarp_Add(dchi2_dp, accum[warp].dchi2_dp);
-		    }
+	    // Compute chi2 and accumulate it
+	    float chi2 = residual*ierr;
+	    chi2 *= chi2;
+	    accum[warp].SumChi2(chi2);
+	
+	    // Now we loop over Active Galaxies and compute the derivatives
+	    for (gal = 0; gal < patch.nActiveGals; gal++) {
+		float dchi2_dp[NPARAM];
+		for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
+		for (gauss = 0; ) {    // TODO: Finish this
+		    ComputeGaussianDerivative(pix, residual, gal, gauss, dchi2_dp); 
 		}
+		accum[warp].SumDChi2dp(dchi2_dp, gal);
+	    }
+	} // Done looping over pixels in this exposure
 	__syncthreads();
     }
 
@@ -411,5 +421,6 @@ __global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void 
     // over all warps.
     accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
     accum[0].store((float *)pchi2, (float *)pdchi2_dp, nActiveGals);
+    // TODO: This needs to offset the given vectors according to the Band!
     return;
 }
