@@ -32,6 +32,7 @@ class Patch:
         '''
 
         # Group stamps by band
+        # stamp.band must be an int identifier (does not need to be contiguous)
         stamps = sorted(stamps, key=lambda st: st.band)
 
         bands = [stamp.band for stamp in stamps]
@@ -42,8 +43,8 @@ class Patch:
 
         # Use the stamps and miniscene to populate these
         NBAND = len(uniq_bands)          # Number of bands/filters
-        NEXP = len(stamps)           # Number of exposures covering the patch
-        NSOURCE = len(miniscene)         # Number of sources in the patch
+        self.nexp = len(stamps)           # Number of exposures covering the patch
+        self.nsource = len(miniscene)         # Number of sources in the patch
         NACTIVE = miniscene.nactive         # number of active sources in the patch
         NPHI = 
         NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
@@ -55,6 +56,10 @@ class Patch:
         
         # Pack the 2D stamps into 1D arrays
         pack_pix(stamps, super_pixel_size, thread_block_size)
+
+        pack_astrometry(stamps)
+
+        pack_psf_source_gaussians()
         
         # Here is the on-sky and on-image source information
         source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
@@ -63,6 +68,43 @@ class Patch:
         # Here are the actual on-image and on-sky objects
         gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
         sources = np.empty([NSOURCE], dtype=object)
+
+        # miniscene sources know their affine transformation values
+
+
+    def pack_astrometry(self, sources, dtype=np.float32):
+        '''
+        The sources know their local astrometric transformation matrices
+        (this was previously populated from the stamps).  We need to send
+        this data to the GPU so it can apply the sky-to-pixel transformations
+        to compare with the image.
+
+        Fills in the following arrays:
+        - self.D
+        - self.CW
+        - self.crpix
+        - self.crval
+        - self.G
+        '''
+
+        # Each source need different astrometry for each exposure
+
+        self.D = np.empty((self.nexp, self.nsource), dtype=dtype)
+        self.CW = np.empty((self.nexp, self.nsource), dtype=dtype)
+        self.crpix = np.empty((self.nexp, self.nsource), dtype=dtype)
+        self.crval = np.empty((self.nexp, self.nsource), dtype=dtype)
+        self.G = np.empty((self.nexp, self.nsource), dtype=dtype)
+
+        # TODO: are the sources going to have their per-stamp info in the same order that we received the stamps?
+        # We already resorted the stamps
+        for i in range(self.nexp):
+            for s,source in enumerate(sources):
+                self.D[i,s] = source.stamp_scales[stamp]
+                self.CW[i,s] = source.stamp_cds[stamp] # dpix/dra, dpix/ddec
+                self.crpix[i,s] = source.stamp_crpixs[stamp]
+                self.crval[i,s] = source.stamp_crvals[stamp]
+                self.G[i,s] = source.stamp_zps[stamp]
+
 
 
     def pack_pix(self, stamps, super_pixel_size, thread_block_size):
@@ -73,6 +115,17 @@ class Patch:
 
         As we go, we want to build up the index arrays that
         allow us to find an exposure in the 1D arrays.
+
+        Fills the following arrays:
+        - self.xpix
+        - self.ypix
+        - self.vpix
+        - self.ierr
+        - self.band_start
+        - self.band_N
+        - self.exposure_start
+        - self.exposure_N
+
         '''
         
         # TODO: convert function to numba
@@ -91,20 +144,21 @@ class Patch:
 
         # These index the exposure_start and exposure_N arrays
         # bands are indexed sequentially, not by any band ID
-        self.band_start = np.zeros(self.NBAND, dtype=np.int16)
+        self.band_start = np.empty(self.NBAND, dtype=np.int16)
         self.band_N = np.zeros(self.NBAND, dtype=np.int16)
 
         # These index the pixel arrays (also sequential)
-        self.exposure_start = np.zeros(self.NEXP, dtype=np.int32)
-        self.exposure_N = np.zeros(self.NEXP, dtype=np.int32)
+        self.exposure_start = np.empty(self.NEXP, dtype=np.int32)
+        self.exposure_N = np.empty(self.NEXP, dtype=np.int32)
 
         i,b = 0,0
         for e,stamp in enumerate(stamps):
-            self.band_N[b] += 1
-            if(e > 0 and stamp.band != stamps[e-1].band)
+            if e > 0 and stamp.band != stamp.band[e-1]:
                 b += 1
+            self.band_N[b] += 1
 
             N = stamp.size
+            self.exposure_start[e] = i
             self.exposure_N[e] = N
 
             self.xpix[i:i+N] = stamp.xpix
@@ -115,13 +169,15 @@ class Patch:
             # Finished this exposure; pad the pixel array to the thread_block_size
             i += N + N%thread_block_size
 
-        # The start arrays are for convenience
+        assert i == total_padded_size
+
+        self.band_start[0] = 0
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
-        self.exposure_start[1:] = np.cumsum(self.exposure_N)[:-1]
+
 
     def send_to_gpu():
         '''
-        Transfer all the pixel data to GPU main memory.
+        Transfer the patch data to GPU main memory.
         '''
 
 
