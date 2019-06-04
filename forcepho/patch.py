@@ -15,7 +15,9 @@ class Patch:
     def __init__(self,
         stamps,            # A list of PostageStamp objects (exposure data) from FITS files
         miniscene,         # All peaks identified in this patch region
-        SuperPixelSize=1,  # Number of pixels in each superpixel
+        mask,              # The mask that defines the nominal patch
+        super_pixel_size=1,  # Number of pixels in each superpixel
+        thread_block_size=1024,  # Number of threads per GPU thread block
         dtype=np.float32   # data type precision for pixel and flux data
         ):
         '''
@@ -29,32 +31,30 @@ class Patch:
         new parameter proposals to the GPU and getting back the results.
         '''
 
+        # Group stamps by band
+        stamps = sorted(stamps, key=lambda st: st.band)
+
+        bands = [stamp.band for stamp in stamps]
+        uniq_bands, nexp_per_band = np.unique(bands, return_counts=True)
+
+        max_psf_ngauss = max(stamp.psf.ngauss for stamp in stamps)
+        max_gal_ngauss = max(source.ngauss for source in miniscene.sources)
+
         # Use the stamps and miniscene to populate these
-        NBAND =           # Number of bands/filters
-        NEXP =            # Number of exposures covering the patch
-        NSOURCE =          # Number of sources in the patch
-        NACTIVE =          # number of active sources in the patch
-        NGMAX =           # Maximum number of gaussians per galaxy in any exposure
-        NSUPER =          # Number of superpixels
-        NPHI =            # Number of on-image parameters per ImageGaussian
+        NBAND = len(uniq_bands)          # Number of bands/filters
+        NEXP = len(stamps)           # Number of exposures covering the patch
+        NSOURCE = len(miniscene)         # Number of sources in the patch
+        NACTIVE = miniscene.nactive         # number of active sources in the patch
+        NPHI = 
         NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
         NTHETA = NBAND + 6, # Number of on-sky parameters per source
 
         # Pixel Data
         # These are arrays of pixel data for *all* pixels in a patch (i.e.
         # multiple exposures)
-        pixel_data_shape = [total_padded_size]
-
-        xpix = np.empty(pixel_data_shape, dtype=dtype)
-        ypix = np.empty(pixel_data_shape, dtype=dtype)
-        vpix = np.empty(pixel_data_shape, dtype=dtype)  # value (i.e. flux) in pixel.
-        ierr = np.empty(pixel_data_shape, dtype=dtype)  # 1/sigma
-
-        # Here are arrays that tell you which pixels belong to which bands & exposures.
-        exposureIDs = np.empty(NEXP, dtype=np.int16)
-        bandIDs = np.empty(NBAND, dtype=np.int16)
-        exposure_nsuper = np.empty(NEXP, dtype=np.int64)
-        exposure_start = np.cumsum(exposure_nsuper)
+        
+        # Pack the 2D stamps into 1D arrays
+        pack_pix(stamps, super_pixel_size, thread_block_size)
         
         # Here is the on-sky and on-image source information
         source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
@@ -64,20 +64,65 @@ class Patch:
         gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
         sources = np.empty([NSOURCE], dtype=object)
 
-    @classmethod
-    def make_example():
-        example = Patch(
-                    NBAND   = 30,
-                    NEXP    = 10,
-                    NSOURCE = 12,
-                    NACTIVE = 12,
-                    NGMAX   = 20,
-                    NSUPER  = 1, 
-                    SuperPixelSize = 1,
-                    NPHI    = 6,
-                    NDERIV  = 15,
-                    )
-        return example
+
+    def pack_pix(self, stamps, super_pixel_size, thread_block_size):
+        '''
+        We have stamps of exposures that we want to pack into
+        concatenated 1D pixel arrays.  We want them to be in
+        super-pixel order, too.
+
+        As we go, we want to build up the index arrays that
+        allow us to find an exposure in the 1D arrays.
+        '''
+        
+        # TODO: convert function to numba
+
+        assert super_pixel_size == 1  # TODO: super-pixel ordering
+
+        shapes = np.array([stamp.shape for stamp in stamps])
+        sizes = np.array([stamp.size for stamp in stamps])
+
+        total_padded_size = (sizes + thread_block_size - 1)//thread_block_size*thread_block_size
+
+        self.xpix = np.empty(total_padded_size, dtype=dtype)
+        self.ypix = np.empty(total_padded_size, dtype=dtype)
+        self.vpix = np.empty(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        self.ierr = np.empty(total_padded_size, dtype=dtype)  # 1/sigma
+
+        # These index the exposure_start and exposure_N arrays
+        # bands are indexed sequentially, not by any band ID
+        self.band_start = np.zeros(self.NBAND, dtype=np.int16)
+        self.band_N = np.zeros(self.NBAND, dtype=np.int16)
+
+        # These index the pixel arrays (also sequential)
+        self.exposure_start = np.zeros(self.NEXP, dtype=np.int32)
+        self.exposure_N = np.zeros(self.NEXP, dtype=np.int32)
+
+        i,b = 0,0
+        for e,stamp in enumerate(stamps):
+            self.band_N[b] += 1
+            if(e > 0 and stamp.band != stamps[e-1].band)
+                b += 1
+
+            N = stamp.size
+            self.exposure_N[e] = N
+
+            self.xpix[i:i+N] = stamp.xpix
+            self.ypix[i:i+N] = stamp.ypix
+            self.vpix[i:i+N] = stamp.vpix
+            self.ierr[i:i+N] = stamp.ierr
+
+            # Finished this exposure; pad the pixel array to the thread_block_size
+            i += N + N%thread_block_size
+
+        # The start arrays are for convenience
+        self.band_start[1:] = np.cumsum(self.band_N)[:-1]
+        self.exposure_start[1:] = np.cumsum(self.exposure_N)[:-1]
+
+    def send_to_gpu():
+        '''
+        Transfer all the pixel data to GPU main memory.
+        '''
 
 
 class CPUPatch(Patch):
@@ -100,18 +145,6 @@ class CPUPatch(Patch):
         """Copy the parameters of the current scene into the Global scene.
         """
         pass
-
-    def load_pixeldata(self, exposures, SuperPixelSize=1):
-        """Populate the pixel data arrays and the pixel ID arrays for a set of
-        exposures. This method only keeps pixels that are within the patch.
-        """ 
-        self.NEXP = len(exposures)
-        # for expID, ex in enumerate(exposures):
-        #   mask based on region
-        #   calculate & store number of superpixels
-        #   concatenate (with padding and reshape if necessary)
-        self.NSUPER = len(self.xpix)
-        self.NBAND = 15 # determine this from the list of filter names
 
     def load_metadata(self, exposures):
         """Add metadata for each exposure to each source.
