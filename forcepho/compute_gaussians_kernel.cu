@@ -225,7 +225,67 @@ class Accumulator {
     }
 };
 
+__device__ ImageGaussian ConstructImageGaussian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
+												matrix22 smean, float samp, matrix22 pmean, float pamp, float flux){
+	ImageGaussian gauss; 
+	matrix22 covar = scovar + pcovar; 
+	matrix22 f = covar.inv(); 
+	
+	gauss.fxx = f.v11; 
+	gauss.fxy = f.v21; 
+	gauss.fyy = f.v22; 
+	
+	gauss.xcen = smean.v11 + pmean.v11; //NAM careful! 
+	gauss.ycen = smean.v22 + pmean.v22; 
+	
+	gauss.amp = flux * samp * pamp * pow(f.det(), 0.5) / (2.0 * math.pi) ;
 
+	return gauss; 
+}
+
+__device__ ImageGaussianJacobian ConstructImageJacobian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
+												float samp, float pamp, float flux, float G, matrix22 T, matrix22 dT_dq, matrix22 dT_dpa, float da_dn, float da_dr, matrix22 CW){
+	
+	ImageGaussianJacobian jacobian; 
+	
+	//convolve the s-th Source component with the p-th PSF component.
+	matrix22 Sigma = scovar + pcovar; 
+	matrix22 F = Sigma.inv(); 
+	float detF = F.det(); 
+	float K = flux * G * samp * pamp * pow(detF, 0.5) / (2.0 * math.pi); 
+	
+	//now get derivatives 
+	//of F
+	matrix22 dSigma_dq  = T * scovar * dT_dq.T() + dT_dq * scovar * T.T(); 
+	matrix22 dSigma_dpa = T * scovar * dT_dpa.T() + dT_dpa * scovar * T.T(); 
+	matrix22 dF_dq      = -F * dSigma_dq * F; 
+	matrix22 dF_dpa     = -F * dSigma_dpa * F; 
+	float ddetF_dq   = detF *  (Sigma * dF_dq).trace(); 
+	float ddetF_dpa  = detF * (Sigma * dF_dpa).trace(); 
+	
+	//of Amplitude
+    jacobian.dA_dQ = K / (2.0 * detF) * ddetF_dq;  
+    jacobian.dA_dpA = K / (2.0 * detF) * ddetF_dpa;  
+    jacobian.dA_dFlux = K / flux; 
+    jacobian.dA_dSersic = K / am * da_dn;
+    jacobian.dA_drh = K / am * da_dr;
+	
+	jacobian.dx_dAlpha = CW.v11; 
+	jacobian.dy_dAlpha = CW.v21; 
+	
+	jacobian.dx_dDelta = CW.v12;
+	jacobian.dy_dDelta = CW.v22; 
+	
+	jacobian.dFxx_dQ = dF_dq.v11;
+	jacobian.dFyy_dQ = dF_dq.v22;
+	jacobian.dFxy_dQ = dF_dq.v21; 
+
+	jacobian.dFxx_dPA = dF_dpa.v11;
+	jacobian.dFyy_dPA = dF_dpa.v22;
+	jacobian.dFxy_dPA = dF_dpa.v21; 
+
+    return jacobian;
+}
 
 __device__ void CreateImageGaussians() {
     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
@@ -233,11 +293,11 @@ __device__ void CreateImageGaussians() {
         
 	    // Do the setup of the transformations		
 		//Get the transformation matrix and other conversions
-		D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
-		R = rot(galaxy.pa); 
-		S = scale(galaxy.q); 
+		matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
+		matrix22 R = rot(galaxy.pa); 
+		matrix22 S = scale(galaxy.q); 
 		matrix22 T = D * R * S; 
-		CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
+		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
 		float G = patch.photocounts; 
 		
 		//And its derivatives with respect to scene parameters
@@ -248,7 +308,9 @@ __device__ void CreateImageGaussians() {
 		
         for (int s=0; s<patch->nSersicGauss; s++) {
 			//get source spline and derivatives
-			scovar = matrix22(galaxy.covariances[s][0], galaxy.covariances[s][1]); //diagonal elements of this gaussian's covariance matrix for sersic index s. 
+		    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers... 
+					
+			matrix22 scovar = T * matrix22(galaxy.covariances[s][0], galaxy.covariances[s][1]) * T.T(); //diagonal elements of this gaussian's covariance matrix for sersic index s. 
 			float samp = galaxy.amplitudes[s]; 
 			float da_dn = galaxy.damplitude_dsersic[s];
 			float da_dr = galaxy.damplitude_drh[s] ; 
@@ -256,27 +318,24 @@ __device__ void CreateImageGaussians() {
 			//pull the correct flux from the multiband array
 			float flux = patch.flux[blockId.x]; //NAM TODO is this right? 
 			
-			//get PSF component means and covariances in the pixel space
-			if (patch. )
-
-
-# get PSF component means and covariances in the pixel space
-if stamp.psf.units == 'arcsec':
-    pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
-    #pmeans = np.matmul(D, stamp.psf.means)
-    # FIXME need to adjust amplitudes to still sum to one?
-    pamps = stamp.psf.amplitudes
-elif stamp.psf.units == 'pixels':
-    pcovar = stamp.psf.covariances
-    #pmeans = stamp.psf.means
-    pamps = stamp.psf.amplitudes
-			
 	    	for (int p=0; p<nPSFGauss; p++) {
+				float pamp = patch.psf.amplitudes[p]; 
+				
+				//get PSF component means and covariances in the pixel space
+				if (patch.psf.units[p] == 'arcsec'){
+					matrix22 pcovar = D * patch.psf.covariances[p] * D.T();
+					matrix22 pmean = D * patch.psf.means[p];  //these don't have to be matrix22s. just two numbers... 
+				}
+				else if (patch.psf.units == 'pixels'){
+					matrix22 pcovar = patch.psf.covariances[p]; 
+			        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers... 
+				}
+				
 				imageGauss[gal*nGalGauss+s*nPSFGauss+p] = 
-		    		ConstructImageGaussian(s,p,gal);
+		    		ConstructImageGaussian(s,p,gal, scovar, pcovar, smean, samp, pmean, pamp, flux);
 				if (gal<nActiveGals) {
 		    		imageJacob[gal*nGalGauss+s*nPSFGauss+p] = 
-		    			ConstructImageJacobian(s,p,gal);
+		    			ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW);
 				}
 	    	}
     	}
