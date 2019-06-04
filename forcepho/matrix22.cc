@@ -46,8 +46,8 @@ class matrix22 {
 
     /// The inverse
     inline matrix22 inv(matrix22& A) {
-	float idet = 1.0/(A.v11*A.v12-A.v12*A.v21);
-	return matrix22(A.v22*idet, -A.v21*idet, -A.v12*idet, A.v11*idet);
+	float idet = 1.0/det(A);
+	return matrix22(A.v22*idet, -A.v12*idet, -A.v21*idet, A.v11*idet);
     }
 
     // matrix * scalar
@@ -73,7 +73,7 @@ class matrix22 {
     }
 
     /// matrix^T matrix matrix triple symmetric product
-    // TODO: Need to check this math!!
+    /// This assumes A is symmetric!
     inline matrix22 BtAB(const matrix22& A, const matrix& B) {
         matrix22 C = A*B;
 	float tmp = B.v11*C.v12+B.v21*C.v22,
@@ -81,8 +81,8 @@ class matrix22 {
     }
     inline matrix22 BABt(const matrix22& A, const matrix& B) {
         matrix22 C = B*A;
-	float tmp = C.v11*B.v12+C.v21*B.v22,
-	return matrix22( C.v11*B.v11+C.v21*B.v21, tmp, tmp, C.v12*B.v12+C.v22*B.v22);
+	float tmp = C.v11*B.v21+C.v12*B.v22,
+	return matrix22( C.v11*B.v11+C.v12*B.v12, tmp, tmp, C.v21*B.v21+C.v22*B.v22);
 
     /// A vector*matrix*vector compression to a float
     inline float vtAv(matrix22& A, float v1, float v2) {
