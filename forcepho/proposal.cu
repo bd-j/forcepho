@@ -6,6 +6,8 @@ This is the data model for the Source class on the GPU.  A proposal consists of 
 
 #include <cstdint>
 
+
+
 class Source {
     /*
     The on-sky parameters for a single Sersic source.

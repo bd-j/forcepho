@@ -123,6 +123,13 @@ class matrix22 {
     inline float vtAv(matrix22& A, float v1, float v2) {
         return v1*v1*A.v11 + v1*v2*(A.v12+A.v21) + v2*v2*A.v22;
     }
+	
+	/// A matrix * vector product
+    inline void Av(matrix22& A, float &v) {
+		float v1 = v[0]; float v2 = v[1];
+		v[0] = A.v11 * v1 + A.v21 * v2; 
+		v[1] = A.v12 * v1 + A.v22 * v2; 
+    }
 
     /// We are not currently providing a matrix * vector product
     /// Note that we are not providing *= either!

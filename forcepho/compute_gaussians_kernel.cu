@@ -293,48 +293,55 @@ __device__ void ConstructImageJacobian(int s, int p, Galaxy gal, matrix22 scovar
 	jacobian.dFxy_dPA = dF_dpa.v21; 
 }
 
-__device__ void CreateImageGaussians(Patch * patch, Proposal * proposal, int exposure) {
+__device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure) {
 	
 	int tid = threadIdx.x; 
     int band = blockIdx.x;   // This block is doing one band
 	
 	__shared__ float G = patch->G[exposure]; 
 	__shared__ float crpix[2], crval[2]; 
-	//NAM TODO ugly.... 
-	__shared__ matrix22 D = matrix22(patch->D[exposure][0], patch->D[exposure][1], patch->D[exposure][2], patch->D[exposure][3]);
 	
 	crpix[0] = patch->crpix[exposure][0];  crpix[1] = patch->crpix[exposure][1];  
 	crval[0] = patch->crval[exposure][0];  crval[1] = patch->crval[exposure][1]; 
 	
-	int n_psf_gauss = patch->n_psf_per_source[band]; //constant per band. 
-	int n_radii = patch->n_radii;
+	int n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
+	//int n_radii = patch->n_radii;
 	
-	while (tid < patch->n_sources * n_radii * n_psf_gauss){
-        int g = tid /( n_psf_gauss * n_radii);
-        int s = (tid - g * n_psf_gauss * n_radii)  / n_psf_gauss;
-        int p = tid - (g * n_radii - s) * n_psf_gauss;
+	while (tid < patch->n_sources * n_psf_per_source){
+        int g = tid / n_psf_per_source;
+        int p = tid - g * n_psf_per_source;
 			
-			
+		Source galaxy = sources[g]; 	
 
 	    // Do the setup of the transformations		
 		//Get the transformation matrix and other conversions
-		matrix22 R = rot(galaxy.pa); 
-		matrix22 S = scale(galaxy.q); 
+		matrix22 D, R, S, CW;
+		
+		int d_cw_start = 4 * patch->n_sources * exposure + 4 * g; 
+		D  = matrix22(patch->D[d_cw_start ], patch->D[d_cw_start  + 1], patch->D[d_cw_start  + 2], patch->D[d_cw_start  + 3]); // NAM yuck! 
+		CW = matrix22(patch->CW[d_cw_start], patch->CW[d_cw_start + 1], patch->CW[d_cw_start + 2], patch->CW[d_cw_start + 3]);
+		
+		R.rot(galaxy.pa); 
+		S.scale(galaxy.q); 
 		matrix22 T = D * R * S; 
-		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
 	
 		//And its derivatives with respect to scene parameters
-		matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
-		matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
-		matrix22 dT_dq = D * R * dS_dq; 
+		matrix22 dS_dq, dR_dpa;
+		dS_dq.scale_matrix_deriv(galaxy.q);
+		dR_dpa.rotation_matrix_deriv(galaxy.pa);
+		matrix22 dT_dq  = D * R * dS_dq; 
 		matrix22 dT_dpa = D * dR_dpa * S; 	
 	
-	
-		//get source spline and derivatives
-	    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers... 
+		//NAM  might benefit from a vector class. this is gross. 
+		float smean[2]; 
+		smean[0] = galaxy.ra  - patch->crval[exposure][0];
+		smean[1] = galaxy.dec - patch->crval[exposure][1]; 
+	    matrix22::Av(CW, *smean);
+		
+		smean[0] += patch->crpix[exposure][0]; smean[1] += patch->crpix[exposure][1];
 		
 		matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s. 
-		float samp = galaxy.amplitudes[s]; 
+		float samp  = galaxy.amplitudes[s]; 
 		float da_dn = galaxy.damplitude_dsersic[s];
 		float da_dr = galaxy.damplitude_drh[s] ; 
 
@@ -457,7 +464,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		// Convention is Active first, then Fixed.
 		__shared__ ImageGaussiansJacobians imageJacob[n_gal_gauss * patch->n_sources];
 		// We only need the Active galaxies
-        CreateImageGaussians(patch, proposal, exposure);
+        CreateImageGaussians(patch, sources, exposure);
 
 		__syncthreads();
 	
