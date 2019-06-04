@@ -494,6 +494,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
-    accum[0].store((float *)pchi2, (float *)pdchi2_dp, patch->n_sources);
+    Response *r = (Response *)pdchi2_dp;
+    accum[0].store((float *)pchi2, &(pdchi2_dp[blockIdx.x].dchi2_dparam), patch->n_sources);
     return;
 }
