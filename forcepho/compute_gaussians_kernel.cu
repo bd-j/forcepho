@@ -41,8 +41,8 @@ class Patch {
 	PixFloat * ypix; 
 	//..astrometry? 
 	PSFGaussian * psfgauss;
-	int * nPSFGauss;   // Indexed by exposure
-	int * startPSFGauss;   // Indexed by exposure
+	int * n_psf_gauss;   // Indexed by exposure
+	int * start_psf_gauss;   // Indexed by exposure
 };
 
 class SkyGalaxy {
@@ -293,29 +293,35 @@ __device__ void ConstructImageJacobian(int s, int p, Galaxy gal, matrix22 scovar
 	jacobian.dFxy_dPA = dF_dpa.v21; 
 }
 
-__device__ void CreateImageGaussians() {
+__device__ void CreateImageGaussians(Patch * patch, Proposal * proposal, int exposure) {
 	
 	int tid = threadIdx.x; 
+    int band = blockIdx.x;   // This block is doing one band
 	
-	int totGals = nActiveGals + nFixedGals; 
-	int nSersic = patch->nSersicGauss; 
+	__shared__ float G = patch->G[exposure]; 
+	__shared__ float crpix[2], crval[2]; 
+	//NAM TODO ugly.... 
+	__shared__ matrix22 D = matrix22(patch->D[exposure][0], patch->D[exposure][1], patch->D[exposure][2], patch->D[exposure][3]);
 	
-	while (tid < totGals * nSersicGauss * nPSFGauss){
-        int g = tid /( nPSFGauss * nSersic)
-        int s = (tid - g * nPSFGauss * nSersic)  / nPSFGauss
-        int p = tid - (g * nSersic - s) * nPSFGauss
-		
+	crpix[0] = patch->crpix[exposure][0];  crpix[1] = patch->crpix[exposure][1];  
+	crval[0] = patch->crval[exposure][0];  crval[1] = patch->crval[exposure][1]; 
+	
+	int n_psf_gauss = patch->n_psf_per_source[band]; //constant per band. 
+	int n_radii = patch->n_radii;
+	
+	while (tid < patch->n_sources * n_radii * n_psf_gauss){
+        int g = tid /( n_psf_gauss * n_radii);
+        int s = (tid - g * n_psf_gauss * n_radii)  / n_psf_gauss;
+        int p = tid - (g * n_radii - s) * n_psf_gauss;
 			
-		Patch patch = ;//NAM TODO
-    
+			
+
 	    // Do the setup of the transformations		
 		//Get the transformation matrix and other conversions
-		matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
 		matrix22 R = rot(galaxy.pa); 
 		matrix22 S = scale(galaxy.q); 
 		matrix22 T = D * R * S; 
 		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
-		float G = patch.photocounts; 
 	
 		//And its derivatives with respect to scene parameters
 		matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
@@ -346,10 +352,10 @@ __device__ void CreateImageGaussians() {
 	        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers... 
 		}
 
-    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*nGalGauss+s*nPSFGauss+p]);
+    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*n_gal_gauss+s*n_psf_gauss+p]);
 
 		if (gal<nActiveGals) {
-    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*nGalGauss+s*nPSFGauss+p]);
+    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*n_gal_gauss+s*n_psf_gauss+p]);
 		}
 			
 
@@ -361,58 +367,58 @@ __device__ void CreateImageGaussians() {
 	
 	
 	
-    for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
-		Patch patch = ;//NAM TODO
-        
-	    // Do the setup of the transformations		
-		//Get the transformation matrix and other conversions
-		matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix. 
-		matrix22 R = rot(galaxy.pa); 
-		matrix22 S = scale(galaxy.q); 
-		matrix22 T = D * R * S; 
-		matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
-		float G = patch.photocounts; 
-		
-		//And its derivatives with respect to scene parameters
-		matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
-		matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
-		matrix22 dT_dq = D * R * dS_dq; 
-		matrix22 dT_dpa = D * dR_dpa * S; 	
-		
-		
-        for (int s=0; s<patch->nSersicGauss; s++) {
-			//get source spline and derivatives
-		    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers... 
-					
-			matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s. 
-			float samp = galaxy.amplitudes[s]; 
-			float da_dn = galaxy.damplitude_dsersic[s];
-			float da_dr = galaxy.damplitude_drh[s] ; 
-			
-			//pull the correct flux from the multiband array
-			float flux = patch.flux[blockId.x]; //NAM TODO is this right? 
-			
-	    	for (int p=0; p<nPSFGauss; p++) {
-				float pamp = patch.psf.amplitudes[p]; 
-				
-				//get PSF component means and covariances in the pixel space
-				if (patch.psf.units[p] == 'arcsec'){
-					matrix22 pcovar = D * patch.psf.covariances[p] * D.T();
-					matrix22 pmean = D * patch.psf.means[p];  //these don't have to be matrix22s. just two numbers... 
-				}
-				else if (patch.psf.units == 'pixels'){
-					matrix22 pcovar = patch.psf.covariances[p]; 
-			        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers... 
-				}
-				
-		    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*nGalGauss+s*nPSFGauss+p]);
-				
-				if (gal<nActiveGals) {
-		    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*nGalGauss+s*nPSFGauss+p]);
-				}
-	    	}
-    	}
-	}
+	//     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
+	// 	Patch patch = ;//NAM TODO
+	//
+	//     // Do the setup of the transformations
+	// 	//Get the transformation matrix and other conversions
+	// 	matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix.
+	// 	matrix22 R = rot(galaxy.pa);
+	// 	matrix22 S = scale(galaxy.q);
+	// 	matrix22 T = D * R * S;
+	// 	matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
+	// 	float G = patch.photocounts;
+	//
+	// 	//And its derivatives with respect to scene parameters
+	// 	matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
+	// 	matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
+	// 	matrix22 dT_dq = D * R * dS_dq;
+	// 	matrix22 dT_dpa = D * dR_dpa * S;
+	//
+	//
+	//         for (int s=0; s<patch->nSersicGauss; s++) {
+	// 		//get source spline and derivatives
+	// 	    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers...
+	//
+	// 		matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s.
+	// 		float samp = galaxy.amplitudes[s];
+	// 		float da_dn = galaxy.damplitude_dsersic[s];
+	// 		float da_dr = galaxy.damplitude_drh[s] ;
+	//
+	// 		//pull the correct flux from the multiband array
+	// 		float flux = patch.flux[blockId.x]; //NAM TODO is this right?
+	//
+	//     	for (int p=0; p<n_psf_gauss; p++) {
+	// 			float pamp = patch.psf.amplitudes[p];
+	//
+	// 			//get PSF component means and covariances in the pixel space
+	// 			if (patch.psf.units[p] == 'arcsec'){
+	// 				matrix22 pcovar = D * patch.psf.covariances[p] * D.T();
+	// 				matrix22 pmean = D * patch.psf.means[p];  //these don't have to be matrix22s. just two numbers...
+	// 			}
+	// 			else if (patch.psf.units == 'pixels'){
+	// 				matrix22 pcovar = patch.psf.covariances[p];
+	// 		        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers...
+	// 			}
+	//
+	// 	    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*n_gal_gauss+s*n_psf_gauss+p]);
+	//
+	// 			if (gal<nActiveGals) {
+	// 	    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*n_gal_gauss+s*n_psf_gauss+p]);
+	// 			}
+	//     	}
+	//     	}
+	// }
 }
 
 
@@ -423,38 +429,36 @@ __device__ void CreateImageGaussians() {
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 /// a scalar chi2 response, and a vector dchi2_dp response
-__global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {
-	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void *pdchi2_dp) {	
 	
-    Patch * patch;  // We should be given this pointer
     int band = blockIdx.x;   // This block is doing one band
-    int warp = tid / WARPSIZE;  // We are accumulating in warps.
+	int tid = threadIdx.x; //thread id within this block. 
+    int warp = tid / WARPSIZE;  // We are accumulating in warps. NAM TODO this is a warp id within a block. I think this is right? 
 
     // CreateAndZeroAccumulators();
     __shared__ Accumulator accum[blockDim.x/WARPSIZE]();
-
+	
     // Loop over Exposures
-    for (e = 0; e < patch->NumExposures[band]; e++) {
-        int exposure = patch->StartExposures[band] + e;
-	int nPSFGauss = patch->nPSFGauss[exposure];
-	int startPSFGauss = patch->startPSFGauss[exposure];
-	int nGalGauss = nPSFGauss*patch->nSersicGauss;
+    for (e = 0; e < patch->band_N[band]; e++) {
+        int exposure = patch->band_start[band] + e;
+		int start_psf_gauss = patch->psfgauss_start[exposure];
+		int n_gal_gauss = patch->n_psf_per_source[band] * patch->n_radii;
 
-	__shared__ ImageGaussians imageGauss[nGalGauss*(nActiveGals+nFixedGals)];
+		__shared__ ImageGaussians imageGauss[n_gal_gauss * patch->n_sources];
 		// Convention is Active first, then Fixed.
-	__shared__ ImageGaussiansJacobians imageJacob[nGalGauss*(nActiveGals)];
+		__shared__ ImageGaussiansJacobians imageJacob[n_gal_gauss * patch->n_sources];
 		// We only need the Active galaxies
-        CreateImageGaussians(patch, exposure);
+        CreateImageGaussians(patch, proposal, exposure);
 
-	__syncthreads();
+		__syncthreads();
+	
+		for (p = tid ; p < patch->exposure_N[exposure]; p += blockDim.x) {
+		    int pix = patch->exposure_start[exposure] + p;
 
-		for (p = tid ; p < patch->NumPixels[exposure]; p += blockDim.x) {
-		    int pix = patch->StartPixels[exposure] + p;
-
-		    float xp = patch.xpix[pix];
-		    float yp = patch.ypix[pix];
-		    PixFloat data = patch.data[pix];
-		    PixFloat ierr = patch.ierr[pix];
+		    float xp = patch->xpix[pix];
+		    float yp = patch->ypix[pix];
+		    PixFloat data = patch->data[pix];
+		    PixFloat ierr = patch->ierr[pix];
 		    PixFloat residual = ComputeResidualImage(xp, yp, data); 
 		    // This loads data and ierr, then subtracts the active
 		    // and fixed Gaussians to make the residual
@@ -465,7 +469,7 @@ __global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void 
 		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
 	    
 		    // Now we loop over Active Galaxies and compute the derivatives
-		    for (gal = 0; gal < patch.nActiveGals; gal++) {
+		    for (gal = 0; gal < patch.n_sources; gal++) {
 		    		float dchi2_dp[NPARAM];
 				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
 				for (gauss = 0; ) {
@@ -483,6 +487,6 @@ __global__ void EvaluateProposal(void *patch, void *proposal, void *pchi2, void 
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
-    accum[0].store((float *)pchi2, (float *)pdchi2_dp, nActiveGals);
+    accum[0].store((float *)pchi2, (float *)pdchi2_dp, patch->n_sources);
     return;
 }
