@@ -53,7 +53,7 @@ public:
     int n_radii;
 
     // The square radii of the Sersic mixtures (in arcsec^2)
-    float *rad2;   [n_radii] 
+    float *rad2;   //[n_radii] 
 
     // ----------------------- Astrometry --------------------
     // Astrometry: scale, rotation matrices (and derivatives)
