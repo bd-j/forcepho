@@ -162,6 +162,17 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
     dC_dfy -= c_h * (1.0 - 2.0*dy*vy) / 24.0;
     dC_dfxy += c_h * (dy*vx + dx*vy) / 12.0;
 	
+	
+	 gradients += np.matmul(g.derivs, dI_dphi)
+         gradients[0][:] = dC_dA[:]
+         gradients[1][:] = dC_dx[:]
+         gradients[2][:] = dC_dy[:]
+         gradients[3][:] = dC_dfx[:]
+         gradients[4][:] = dC_dfy[:]
+         gradients[5][:] = dC_dfxy[:]
+			 
+			 
+			 
 
     dchi2_dpim[0] += residual * dC_dA; //NAM TODO ??  is this right? 
     dchi2_dpim[1] += residual * dC_dx;
@@ -172,9 +183,6 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
 
     // TODO: Multiply by Jacobian and add to dchi2_dp
 }
-
-
-
 
 
 #define NACTIVE MAXACTIVE   // Hack for now
@@ -225,9 +233,12 @@ class Accumulator {
     }
 };
 
-__device__ ImageGaussian ConstructImageGaussian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
-												matrix22 smean, float samp, matrix22 pmean, float pamp, float flux){
-	ImageGaussian gauss; 
+
+
+
+
+__device__ void ConstructImageGaussian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
+												matrix22 smean, float samp, matrix22 pmean, float pamp, float flux, ImageGaussian &gauss){
 	matrix22 covar = scovar + pcovar; 
 	matrix22 f = covar.inv(); 
 	
@@ -239,17 +250,14 @@ __device__ ImageGaussian ConstructImageGaussian(int s, int p, Galaxy gal, matrix
 	gauss.ycen = smean.v22 + pmean.v22; 
 	
 	gauss.amp = flux * samp * pamp * pow(f.det(), 0.5) / (2.0 * math.pi) ;
-
-	return gauss; 
 }
 
-__device__ ImageGaussianJacobian ConstructImageJacobian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
-												float samp, float pamp, float flux, float G, matrix22 T, matrix22 dT_dq, matrix22 dT_dpa, float da_dn, float da_dr, matrix22 CW){
-	
-	ImageGaussianJacobian jacobian; 
-	
+__device__ void ConstructImageJacobian(int s, int p, Galaxy gal, matrix22 scovar, matrix22 pcovar, 
+												float samp, float pamp, float flux, float G, matrix22 T, matrix22 dT_dq, matrix22 dT_dpa, float da_dn, float da_dr, matrix22 CW, ImageGaussianJacobian &jacobian){
+
 	//convolve the s-th Source component with the p-th PSF component.
-	matrix22 Sigma = scovar + pcovar; 
+	matrix22 scovar_im = T * scovar * T.T();
+	matrix22 Sigma = scovar_im + pcovar; 
 	matrix22 F = Sigma.inv(); 
 	float detF = F.det(); 
 	float K = flux * G * samp * pamp * pow(detF, 0.5) / (2.0 * math.pi); 
@@ -283,11 +291,25 @@ __device__ ImageGaussianJacobian ConstructImageJacobian(int s, int p, Galaxy gal
 	jacobian.dFxx_dPA = dF_dpa.v11;
 	jacobian.dFyy_dPA = dF_dpa.v22;
 	jacobian.dFxy_dPA = dF_dpa.v21; 
-
-    return jacobian;
 }
 
 __device__ void CreateImageGaussians() {
+	
+	int tid = threadIdx.x; 
+	
+	int totGals = nActiveGals+nFixedGals; 
+	int tmp = (tid - p * patch->nSersicGauss * totGals); 
+
+	int p = tid / patch->nSersicGauss * totGals; 
+	int s = tmp/totGals; 
+	int g = tmp%totGals; 
+	
+	
+	
+	
+	
+	
+	
     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
 		Patch patch = ;//NAM TODO
         
@@ -306,11 +328,12 @@ __device__ void CreateImageGaussians() {
 		matrix22 dT_dq = D * R * dS_dq; 
 		matrix22 dT_dpa = D * dR_dpa * S; 	
 		
+		
         for (int s=0; s<patch->nSersicGauss; s++) {
 			//get source spline and derivatives
 		    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers... 
 					
-			matrix22 scovar = T * matrix22(galaxy.covariances[s][0], galaxy.covariances[s][1]) * T.T(); //diagonal elements of this gaussian's covariance matrix for sersic index s. 
+			matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s. 
 			float samp = galaxy.amplitudes[s]; 
 			float da_dn = galaxy.damplitude_dsersic[s];
 			float da_dr = galaxy.damplitude_drh[s] ; 
@@ -331,11 +354,10 @@ __device__ void CreateImageGaussians() {
 			        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers... 
 				}
 				
-				imageGauss[gal*nGalGauss+s*nPSFGauss+p] = 
-		    		ConstructImageGaussian(s,p,gal, scovar, pcovar, smean, samp, pmean, pamp, flux);
+		    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*nGalGauss+s*nPSFGauss+p]);
+				
 				if (gal<nActiveGals) {
-		    		imageJacob[gal*nGalGauss+s*nPSFGauss+p] = 
-		    			ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW);
+		    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*nGalGauss+s*nPSFGauss+p]);
 				}
 	    	}
     	}
