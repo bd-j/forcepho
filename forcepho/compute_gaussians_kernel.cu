@@ -73,9 +73,10 @@ typedef struct{
 */  
 //=================== ABOVE THIS LINE IS DEPRECATED ============
 
-typedef float PixFloat;
-#define NPARAM 7	// Number of Parameters per Galaxy, in one band 
-#define MAXACTIVE 30	// Max number of active Galaxies in a patch
+
+#include "header.hh"
+#include "patch.cu"
+#include "proposal.cu"
 
 typedef struct {
     // 6 Gaussian parameters
@@ -107,8 +108,6 @@ typedef struct {
     float dA_drh;
 } ImageGaussianJacobian;
 
-
-#define MAX_EXP_ARG 36.0
 
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
 {
@@ -185,7 +184,7 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
 }
 
 
-#define NACTIVE MAXACTIVE   // Hack for now
+#define NACTIVE MAXSOURCES   // Hack for now
 
 void warpReduceSum(float *answer, float input) {
     input += __shfl_down(input, 16);
@@ -432,7 +431,6 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 // ================= Primary Proposal Kernel ========================
 
 // Shared memory is arranged in 32 banks of 4 byte stagger
-#define WARPSIZE 32
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 
@@ -442,33 +440,39 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
-    Patch *patch = (Patch *)_patch;  // We should be given this pointer
+    // Get the patch set up
+    Patch *patch = (Patch *)_patch;  
 
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
 
-    int band = blockIdx.x;   // This block is doing one band
-	int tid = threadIdx.x; //thread id within this block. 
-    int warp = tid / WARPSIZE;  // We are accumulating in warps. NAM TODO this is a warp id within a block. I think this is right? 
-
+    // TODO: THIS IS BROKEN.
+    // Need to define a shared pointer and then have one thread
+    // call malloc to allocate this shared memory.
     // CreateAndZeroAccumulators();
     __shared__ Accumulator accum[blockDim.x/WARPSIZE]();
+    int warp = threadIdx.x / WARPSIZE;  // We are accumulating each warp separately. 
 	
+    int band = blockIdx.x;   // This block is doing one band
+
     // Loop over Exposures
     for (e = 0; e < patch->band_N[band]; e++) {
         int exposure = patch->band_start[band] + e;
 		int start_psf_gauss = patch->psfgauss_start[exposure];
-		int n_gal_gauss = patch->n_psf_per_source[band] * patch->n_radii;
 
+        // TODO: THIS IS BROKEN.
+        // Need to define a shared pointer and then have one thread
+        // call malloc to allocate this shared memory.
+		int n_gal_gauss = patch->n_psf_per_source[band];
 		__shared__ ImageGaussians imageGauss[n_gal_gauss * patch->n_sources];
-		// Convention is Active first, then Fixed.
 		__shared__ ImageGaussiansJacobians imageJacob[n_gal_gauss * patch->n_sources];
 		// We only need the Active galaxies
+
         CreateImageGaussians(patch, sources, exposure);
 
 		__syncthreads();
 	
-		for (p = tid ; p < patch->exposure_N[exposure]; p += blockDim.x) {
+		for (p = threadIdx.x ; p < patch->exposure_N[exposure]; p += blockDim.x) {
 		    int pix = patch->exposure_start[exposure] + p;
 
 		    float xp = patch->xpix[pix];
@@ -503,6 +507,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
-    accum[0].store((float *)pchi2, (float *)pdchi2_dp, patch->n_sources);
+    Response *r = (Response *)pdchi2_dp;
+    accum[0].store((float *)pchi2, &(pdchi2_dp[blockIdx.x].dchi2_dparam), patch->n_sources);
     return;
 }
