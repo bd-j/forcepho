@@ -433,33 +433,37 @@ __device__ void CreateImageGaussians(Patch * patch, Proposal * proposal, int exp
 
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
-    Patch *patch = (Patch *)_patch;  // We should be given this pointer
+    // Get the patch set up
+    Patch *patch = (Patch *)_patch;  
 
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
 
-    int band = blockIdx.x;   // This block is doing one band
-	int tid = threadIdx.x; //thread id within this block. 
-    int warp = tid / WARPSIZE;  // We are accumulating in warps. NAM TODO this is a warp id within a block. I think this is right? 
-
+    // TODO: THIS IS BROKEN.
+    // Need to define a shared pointer and then have one thread
+    // call malloc to allocate this shared memory.
     // CreateAndZeroAccumulators();
     __shared__ Accumulator accum[blockDim.x/WARPSIZE]();
+    int warp = threadIdx.x / WARPSIZE;  // We are accumulating each warp separately. 
 	
+    int band = blockIdx.x;   // This block is doing one band
+
     // Loop over Exposures
     for (e = 0; e < patch->band_N[band]; e++) {
         int exposure = patch->band_start[band] + e;
 		int start_psf_gauss = patch->psfgauss_start[exposure];
-		int n_gal_gauss = patch->n_psf_per_source[band] * patch->n_radii;
 
+        // TODO: THIS IS BROKEN.
+        // Need to define a shared pointer and then have one thread
+        // call malloc to allocate this shared memory.
+		int n_gal_gauss = patch->n_psf_per_source[band];
 		__shared__ ImageGaussians imageGauss[n_gal_gauss * patch->n_sources];
-		// Convention is Active first, then Fixed.
 		__shared__ ImageGaussiansJacobians imageJacob[n_gal_gauss * patch->n_sources];
-		// We only need the Active galaxies
-        CreateImageGaussians(patch, proposal, exposure);
+        CreateImageGaussians(patch, sources, exposure);
 
 		__syncthreads();
 	
-		for (p = tid ; p < patch->exposure_N[exposure]; p += blockDim.x) {
+		for (p = threadIdx.x ; p < patch->exposure_N[exposure]; p += blockDim.x) {
 		    int pix = patch->exposure_start[exposure] + p;
 
 		    float xp = patch->xpix[pix];
