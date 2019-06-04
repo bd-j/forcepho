@@ -384,9 +384,12 @@ __device__ void CreateImageGaussians() {
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 /// a scalar chi2 response, and a vector dchi2_dp response
-__global__ void EvaluateProposal(void *_patch, void *_proposal, void *pchi2, void *pdchi2_dp) {
+__global__ void EvaluateProposal(void *_patch, void *_proposal, 
+                                 void *pchi2, void *pdchi2_dp) {
     Patch *patch = (Patch *)_patch;  // We should be given this pointer
-    Proposal *proposal = (Proposal *)_proposal;
+
+    // The Proposal is a vector of Sources[n_active]
+    Source *sources = (Source *)_proposal;
 
     int band = blockIdx.x;   // This block is doing one band
     int warp = threadIdx.x / WARPSIZE;  // We are accumulating in warps.
