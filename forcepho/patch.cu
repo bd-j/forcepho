@@ -48,7 +48,7 @@ public:
     // ------------------ Source data --------------------
     // Number of active sources
     // (GPU never knows about inactive sources)
-    int n_active;
+    int n_sources;
 
     // The number of radii we're using in our Sersic models
     int n_radii;   
@@ -89,7 +89,7 @@ public:
     // The exposure indices for a band can be found from band_start and band_N
     PSFSourceGaussian *psfgauss;   [expnum][source][psfgauss_per_source]
     int *psfgauss_start;    [expnum]
-    // psfgauss_N = n_psf_per_source*n_active
+    // psfgauss_N = n_psf_per_source*n_sources
 };
 
 
