@@ -17,7 +17,6 @@ class Patch:
         miniscene,         # All peaks identified in this patch region
         mask,              # The mask that defines the nominal patch
         super_pixel_size=1,  # Number of pixels in each superpixel
-        thread_block_size=1024,  # Number of threads per GPU thread block
         dtype=np.float32   # data type precision for pixel and flux data
         ):
         '''
@@ -36,16 +35,16 @@ class Patch:
         stamps = sorted(stamps, key=lambda st: st.band)
 
         bands = [stamp.band for stamp in stamps]
-        uniq_bands, nexp_per_band = np.unique(bands, return_counts=True)
+        uniq_bands, n_exp_per_band = np.unique(bands, return_counts=True)
 
-        max_psf_ngauss = max(stamp.psf.ngauss for stamp in stamps)
-        max_gal_ngauss = max(source.ngauss for source in miniscene.sources)
+        # number of gaussians in the sersic
+        # should be the same for all sources
+        self.n_radii = miniscene.n_radii
 
         # Use the stamps and miniscene to populate these
-        NBAND = len(uniq_bands)          # Number of bands/filters
-        self.nexp = len(stamps)           # Number of exposures covering the patch (all bands)
-        self.nsource = len(miniscene)         # Number of sources in the patch
-        NACTIVE = miniscene.nactive         # number of active sources in the patch
+        self.n_bands = len(uniq_bands)          # Number of bands/filters
+        self.n_exp = len(stamps)           # Number of exposures covering the patch (all bands)
+        self.n_active = miniscene.n_active         # Number of sources in the patch
         NPHI = 
         NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
         NTHETA = NBAND + 6, # Number of on-sky parameters per source
@@ -55,22 +54,34 @@ class Patch:
         # multiple exposures)
         
         # Pack the 2D stamps into 1D arrays
-        pack_pix(stamps, super_pixel_size, thread_block_size)
+        pack_pix(stamps, super_pixel_size)
 
         pack_astrometry(stamps)
 
-        pack_psf_source_gaussians()
+        pack_psf(miniscene)
         
         # Here is the on-sky and on-image source information
         # 
         # source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
-        # source_metadata = np.empty([NSOURCE, NEXP, MANY], dtype=np.float64)
+        # source_metadata = np.empty([NSOURCE, n_exp, MANY], dtype=np.float64)
 
         # Here are the actual on-image and on-sky objects
-        # gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
+        # gaussians = np.empty([n_exp, NSOURCE, NGMAX], dtype=object)
         # sources = np.empty([NSOURCE], dtype=object)
 
         # miniscene sources know their affine transformation values
+
+    def pack_psf(self, miniscene):
+        '''
+        Each Sersic radius bin has a number of Gaussians associated with it from the PSF.
+        The number of these will be constant in a given band, but the Gaussian parameters
+        vary with source and exposure.
+
+        We'll just track the total count across radius bins; the individual Gaussians
+        will know which bin they belong to.
+        '''
+
+        self.n_psf_per_source
 
 
     def pack_astrometry(self, sources, dtype=np.float32):
@@ -90,25 +101,28 @@ class Patch:
 
         # Each source need different astrometry for each exposure
 
-        self.D = np.empty((self.nexp, self.nsource), dtype=dtype)
-        self.CW = np.empty((self.nexp, self.nsource), dtype=dtype)
-        self.crpix = np.empty((self.nexp, self.nsource), dtype=dtype)
-        self.crval = np.empty((self.nexp, self.nsource), dtype=dtype)
-        self.G = np.empty((self.nexp, self.nsource), dtype=dtype)
+        self.D = np.empty((self.n_exp, self.n_active, 2, 2), dtype=dtype)
+        self.CW = np.empty((self.n_exp, self.n_active, 2, 2), dtype=dtype)
+        self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
+        self.crval = np.empty((self.n_exp, 2), dtype=dtype)
+        self.G = np.empty((self.n_exp), dtype=dtype)
 
         # TODO: are the sources going to have their per-stamp info in the same order that we received the stamps?
         # We already resorted the stamps
-        for i in range(self.nexp):
+        for i in range(self.n_exp):
+            # these values are per-exposure
+            # TODO: better way to get them than reading the first source?
+            self.crpix[i] = sources[0].stamp_crpixs[i]
+            self.crval[i] = sources[0].stamp_crvals[i]
+            self.G[i] = sources[0].stamp_zps[i]
+
             for s,source in enumerate(sources):
                 self.D[i,s] = source.stamp_scales[i]
                 self.CW[i,s] = source.stamp_cds[i] # dpix/dra, dpix/ddec
-                self.crpix[i,s] = source.stamp_crpixs[i]
-                self.crval[i,s] = source.stamp_crvals[i]
-                self.G[i,s] = source.stamp_zps[i]
 
 
 
-    def pack_pix(self, stamps, super_pixel_size, thread_block_size):
+    def pack_pix(self, stamps, super_pixel_size):
         '''
         We have stamps of exposures that we want to pack into
         concatenated 1D pixel arrays.  We want them to be in
@@ -120,7 +134,7 @@ class Patch:
         Fills the following arrays:
         - self.xpix
         - self.ypix
-        - self.vpix
+        - self.data
         - self.ierr
         - self.band_start
         - self.band_N
@@ -135,24 +149,25 @@ class Patch:
         shapes = np.array([stamp.shape for stamp in stamps])
         sizes = np.array([stamp.size for stamp in stamps])
 
-        total_padded_size = (sizes + thread_block_size - 1)//thread_block_size*thread_block_size
+        total_padded_size = np.sum(sizes)  # will have super-pixel padding
 
         self.xpix = np.empty(total_padded_size, dtype=dtype)
         self.ypix = np.empty(total_padded_size, dtype=dtype)
-        self.vpix = np.empty(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        self.data = np.empty(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
         self.ierr = np.empty(total_padded_size, dtype=dtype)  # 1/sigma
 
         # These index the exposure_start and exposure_N arrays
         # bands are indexed sequentially, not by any band ID
-        self.band_start = np.empty(self.NBAND, dtype=np.int16)
-        self.band_N = np.zeros(self.NBAND, dtype=np.int16)
+        self.band_start = np.empty(self.n_bands, dtype=np.int16)
+        self.band_N = np.zeros(self.n_bands, dtype=np.int16)
 
         # These index the pixel arrays (also sequential)
-        self.exposure_start = np.empty(self.NEXP, dtype=np.int32)
-        self.exposure_N = np.empty(self.NEXP, dtype=np.int32)
+        self.exposure_start = np.empty(self.n_exp, dtype=np.int32)
+        self.exposure_N = np.empty(self.n_exp, dtype=np.int32)
 
         i,b = 0,0
         for e,stamp in enumerate(stamps):
+            # are we starting a new band?
             if e > 0 and stamp.band != stamp.band[e-1]:
                 b += 1
             self.band_N[b] += 1
@@ -163,11 +178,11 @@ class Patch:
 
             self.xpix[i:i+N] = stamp.xpix
             self.ypix[i:i+N] = stamp.ypix
-            self.vpix[i:i+N] = stamp.vpix
+            self.data[i:i+N] = stamp.vpix
             self.ierr[i:i+N] = stamp.ierr
 
-            # Finished this exposure; pad the pixel array to the thread_block_size
-            i += N + N%thread_block_size
+            # Finished this exposure
+            i += N
 
         assert i == total_padded_size
 
@@ -175,59 +190,36 @@ class Patch:
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
 
 
-    def send_to_gpu():
+    def send_to_gpu(self, residual=False):
         '''
-        Transfer the patch data to GPU main memory.
+        Transfer the patch data to GPU main memory.  Saves the pointers
+        and builds the Patch struct from patch.cu; sends that to GPU memory.
+        Saves the pointer for forwarding to the likelihood call.
+
+        Parameters
+        ----------
+        residual: bool, optional
+            Whether to allocate GPU-side space for a residual image array.
+            Default: False.
         '''
+
+        self.gpu_patch = 
+
+    def send_proposal(self, proposal, block=1024):
+        grid = (n_bands,1,1)
+        block = (block,1,1)
+
+        kernel(self.gpu_patch, proposal, results, grid=grid, block=block)
+
+
 
 
 class CPUPatch(Patch):
-
-    def __init__(self, region, NGMAX=20):
-        self.sky_region = region
-        self.checkout_scene()
-        self.NGMAX = NGMAX
-
-    def checkout_scene(self, sources=None):
-        """Find all the sources in this patch in the global Scene, and assign 
-        them to be active or inactive, then make a subscene for this patch.
-        """
-        self.sources = sources
-        self.NSOURCE = len(self.sources)
-        self.ActiveSourceIDs = np.ones(self.NSOURCE) - 1
-        self.scene = Scene(sources)
 
     def checkin_scene(self):
         """Copy the parameters of the current scene into the Global scene.
         """
         pass
-
-    def load_metadata(self, exposures):
-        """Add metadata for each exposure to each source.
-        """
-        for expID, ex in enumerate(exposures):
-            for s in self.scene.sources:
-                # Do this for ZP, CRVAL, CRPIX, dpix_dsky, scale, and psf info.
-                s.metadata[expID] = ex.metadata
-
-    def get_valid_pixels(self, exposure):
-        raise NotImplementedError
-
-    def send_pixel_data(self):
-        """Send the pixel data over to the GPU.  This is done only once at the
-        beginning.
-        """
-        # send pixel data
-        pass
-
-    def send_sources(self, Theta=None):
-        """Send over the sources (with appropriate parameters).  This is done 
-        every likelihood call.  Actually we will probably want to send the
-        sources once and then just send arrays of parameters.
-        """
-        if Theta is not None:
-            self.scene.set_all_parameters(Theta)
-        # send self.scene.sources
 
 
 class SquarePatch(Patch):

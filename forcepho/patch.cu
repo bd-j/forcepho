@@ -32,12 +32,12 @@ public:
     PixFloat *residual;
 
     /* Indexing for the image data */
-    // Number of bands and exposures is known from the CUDA grid size
-    // int n_bands = gridDim.x
+    // Number of bands is known from the CUDA grid size:
+    //     int n_bands = gridDim.x;
 
     // These index the pixel arrays
     int *exposure_start;    // [expnum]
-    int *exposure_N;        // [expnum]  
+    int *exposure_N;        // [expnum]
 
     // These index the exposure_start and exposure_N arrays
     // bands are indexed sequentially, not by any band ID
@@ -51,7 +51,7 @@ public:
     int n_active;
 
     // The number of radii we're using in our Sersic models
-    int n_radii;   
+    int n_radii;
 
     // ----------------------- Astrometry --------------------
     // Astrometry: scale, rotation matrices (and derivatives)
@@ -81,14 +81,14 @@ public:
 
     // The number of PSFSourceGaussians per source per exposure
     // This number is constant for a given band, hence this array is length nbands
-    int *n_psf_per_source;  [band] // NOTE: This could have been type int8_t
+    int *n_psf_per_source;  // [band] // NOTE: This could have been type int8_t
 
     // Few per sersic bin per source per exposure
     // Indexing is:  TODO: Fix below
     //      psfgauss[exposure*n_psf_per_source[band]*nsource + n_psf_per_source[band]*source + psf]
     // The exposure indices for a band can be found from band_start and band_N
-    PSFSourceGaussian *psfgauss;   [expnum][source][psfgauss_per_source]
-    int *psfgauss_start;    [expnum]
+    PSFSourceGaussian *psfgauss;  // [expnum][source][psfgauss_per_source]
+    int *psfgauss_start;  // [expnum]
     // psfgauss_N = n_psf_per_source*n_active
 };
 
