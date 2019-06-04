@@ -17,7 +17,8 @@ class Patch:
         miniscene,         # All peaks identified in this patch region
         mask,              # The mask that defines the nominal patch
         super_pixel_size=1,  # Number of pixels in each superpixel
-        dtype=np.float32   # data type precision for pixel and flux data
+        pix_dtype=np.float32,  # data type for pixel and flux data
+        meta_dtype=np.float32   # data type for non-pixel data
         ):
         '''
         Constructs a Patch from PostageStamps (exposures) and a MiniScene
@@ -28,23 +29,32 @@ class Patch:
         The Patch object contains methods for sending the patch data to
         the GPU with PyCUDA.  It also serves as the entry point for sending
         new parameter proposals to the GPU and getting back the results.
+
+        Parameters
+        ----------
+        pix_dtype: np.dtype, optional
+            The Numpy datatype of the pixel data, like fluxes and coordinates.
+            Default: np.float32
+
+        meta_dtype: np.dtype, optional
+            The Numpy datatype of the non-pixel data, like transformation matrices.
+            Default: np.float32
         '''
+
+        self.pix_dtype = pix_dtype
+        self.meta_dtype = meta_dtype
 
         # Group stamps by band
         # stamp.band must be an int identifier (does not need to be contiguous)
-        stamps = sorted(stamps, key=lambda st: st.band)
+        band_ids = [st.band for st in stamps]
+        assert (np.diff(band_ids) > 0).all(), 'Stamps must be sorted by band'
 
         bands = [stamp.band for stamp in stamps]
         uniq_bands, n_exp_per_band = np.unique(bands, return_counts=True)
 
-        # number of gaussians in the sersic
-        # should be the same for all sources
-        self.n_radii = miniscene.n_radii
-
         # Use the stamps and miniscene to populate these
         self.n_bands = len(uniq_bands)          # Number of bands/filters
         self.n_exp = len(stamps)           # Number of exposures covering the patch (all bands)
-        self.n_active = miniscene.n_active         # Number of sources in the patch
         NPHI = 
         NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
         NTHETA = NBAND + 6, # Number of on-sky parameters per source
@@ -56,7 +66,9 @@ class Patch:
         # Pack the 2D stamps into 1D arrays
         pack_pix(stamps, super_pixel_size)
 
-        pack_astrometry(stamps)
+        pack_source_metadata(miniscene)
+
+        pack_astrometry(miniscene.sources)
 
         pack_psf(miniscene)
         
@@ -71,7 +83,8 @@ class Patch:
 
         # miniscene sources know their affine transformation values
 
-    def pack_psf(self, miniscene):
+
+    def pack_psf(self, miniscene, dtype=None):
         '''
         Each Sersic radius bin has a number of Gaussians associated with it from the PSF.
         The number of these will be constant in a given band, but the Gaussian parameters
@@ -79,12 +92,65 @@ class Patch:
 
         We'll just track the total count across radius bins; the individual Gaussians
         will know which bin they belong to.
+
+        Fills in the following arrays:
+        - self.n_psf_per_source
+        - self.psfgauss
+        - self.psfgauss_start
         '''
 
-        self.n_psf_per_source
+        if not dtype:
+            dtype = self.meta_dtype
+
+        self.n_psf_per_source = np.empty(self.n_bands, dtype=dtype)
+        self.n_psf_per_source[:] = miniscene.n_psf_per_source  # ???
+
+        psf_dtype = np.dtype([('gauss_params',dtype,6),('sersic_bin',np.int32)])
+        n_psfgauss = n_psf_per_source.sum()*self.n_exp*self.n_sources
+        self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
+
+        self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
+        self.psfgauss_start[1:] = np.cumsum(n_psf_per_source)[:-1]*self.n_exp*self.n_sources
+
+        s = 0
+        for b in range(self.n_bands):
+            for e in range(self.band_start[b], self.band_start[b] + self.band_N[b]):
+                for source in miniscene.sources:
+                    # sources have one set of psf gaussians per band
+                    N = len(source.psfgauss[b])
+                    self.psfgauss[s:s+N] = source.psfgauss[b]
+                    s += N
+                assert N == psfgauss_start[e]  # check we got our indexing right
 
 
-    def pack_astrometry(self, sources, dtype=np.float32):
+    def pack_source_metadata(self, miniscene, dtype=None):
+        '''
+        We don't actually pack sources in the Patch; that happens
+        in a Proposal.  But we do have some global constants related
+        to sources, such as the total number of soures and number of
+        Sersic radii bins.  So we pack those here.
+
+        Fills in:
+        - self.n_sources
+        - self.n_radii
+        - self.rad2
+        '''
+
+        if not dtype:
+            dtype = self.meta_dtype
+
+        # number of sources in the patch
+        self.n_sources = miniscene.n_active
+
+        # number of gaussians in the sersic
+        # should be the same for all sources
+        self.n_radii = miniscene.n_radii
+
+        self.rad2 = np.empty(self.n_radii, dtype=dtype)
+        self.rad2[:] = self.rad2  # ???
+
+
+    def pack_astrometry(self, sources, dtype=None):
         '''
         The sources know their local astrometric transformation matrices
         (this was previously populated from the stamps).  We need to send
@@ -99,10 +165,13 @@ class Patch:
         - self.G
         '''
 
+        if not dtype:
+            dtype = self.meta_dtype
+
         # Each source need different astrometry for each exposure
 
-        self.D = np.empty((self.n_exp, self.n_active, 2, 2), dtype=dtype)
-        self.CW = np.empty((self.n_exp, self.n_active, 2, 2), dtype=dtype)
+        self.D = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
+        self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
         self.crval = np.empty((self.n_exp, 2), dtype=dtype)
         self.G = np.empty((self.n_exp), dtype=dtype)
@@ -122,7 +191,7 @@ class Patch:
 
 
 
-    def pack_pix(self, stamps, super_pixel_size):
+    def pack_pix(self, stamps, super_pixel_size, dtype=None):
         '''
         We have stamps of exposures that we want to pack into
         concatenated 1D pixel arrays.  We want them to be in
@@ -141,6 +210,9 @@ class Patch:
         - self.exposure_start
         - self.exposure_N
         '''
+
+        if not dtype:
+            dtype = self.pix_dtype
         
         # TODO: convert function to numba
 

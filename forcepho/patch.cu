@@ -53,7 +53,7 @@ public:
     int n_radii;
 
     // The square radii of the Sersic mixtures (in arcsec^2)
-    float *rad2;   [n_radii] 
+    float *rad2;  // [n_radii] 
 
     // ----------------------- Astrometry --------------------
     // Astrometry: scale, rotation matrices (and derivatives)
@@ -94,10 +94,6 @@ public:
     int *psfgauss_start;  // [expnum]
     // psfgauss_N = n_psf_per_source*n_active
 };
-
-
-
-
 
 
 class PSFSourceGaussian {
