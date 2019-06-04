@@ -36,19 +36,19 @@ public:
     //     int n_bands = gridDim.x;
 
     // These index the pixel arrays
-    int *exposure_start;    // [expnum]
-    int *exposure_N;        // [expnum]
+    int *exposure_start;    // [expnum]. This exposure's pixels start at exposure_start[exposure]
+    int *exposure_N;        // [expnum]. This exposure has exposure_N[exposure] pixels. 
 
     // These index the exposure_start and exposure_N arrays
     // bands are indexed sequentially, not by any band ID
     // These are the expnum used elsewhere
-    int16_t *band_start;    // [band]
-    int16_t *band_N;        // [band]
+    int16_t *band_start;    // [band]. This band's exposures start at band_start[band].
+    int16_t *band_N;        // [band]. This band has band_N[band] exposures. 
 
     // ------------------ Source data --------------------
     // Number of active sources
     // (GPU never knows about inactive sources)
-    int n_active;
+    int n_sources;
 
     // The number of radii we're using in our Sersic models
     int n_radii;
@@ -87,6 +87,7 @@ public:
     // Indexing is:  TODO: Fix below
     //      psfgauss[exposure*n_psf_per_source[band]*nsource + n_psf_per_source[band]*source + psf]
     // The exposure indices for a band can be found from band_start and band_N
+
     PSFSourceGaussian *psfgauss;  // [expnum][source][psfgauss_per_source]
     int *psfgauss_start;  // [expnum]
     // psfgauss_N = n_psf_per_source*n_active

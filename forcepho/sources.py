@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.interpolate import SmoothBivariateSpline
+import warnings
 try:
     import h5py
 except(ImportError):
-    import warnings
     warnings.warn("h5py could not be imported")
 # For rendering
 from .gaussmodel import convert_to_gaussians, compute_gig
@@ -400,10 +400,13 @@ class Galaxy(Source):
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
-        if splinedata is None:
-            raise ValueError("Galaxies must have `splinedata` information to make A(r, n) bivariate splines")
-        else:
+        try:
             self.initialize_splines(splinedata)
+        except:
+            message = ("Could not load `splinedata`." 
+                       "Galaxies must have `splinedata` information "
+                       "to make A(r, n) bivariate splines")
+            warnings.warn(message)
 
         if not free_sersic:
             # Fix the sersic parameters n_sersic and r_h
