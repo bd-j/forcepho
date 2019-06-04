@@ -43,7 +43,7 @@ class Patch:
 
         # Use the stamps and miniscene to populate these
         NBAND = len(uniq_bands)          # Number of bands/filters
-        self.nexp = len(stamps)           # Number of exposures covering the patch
+        self.nexp = len(stamps)           # Number of exposures covering the patch (all bands)
         self.nsource = len(miniscene)         # Number of sources in the patch
         NACTIVE = miniscene.nactive         # number of active sources in the patch
         NPHI = 
@@ -62,12 +62,13 @@ class Patch:
         pack_psf_source_gaussians()
         
         # Here is the on-sky and on-image source information
-        source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
-        source_metadata = np.empty([NSOURCE, NEXP, MANY], dtype=np.float64)
+        # 
+        # source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
+        # source_metadata = np.empty([NSOURCE, NEXP, MANY], dtype=np.float64)
 
         # Here are the actual on-image and on-sky objects
-        gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
-        sources = np.empty([NSOURCE], dtype=object)
+        # gaussians = np.empty([NEXP, NSOURCE, NGMAX], dtype=object)
+        # sources = np.empty([NSOURCE], dtype=object)
 
         # miniscene sources know their affine transformation values
 
@@ -99,11 +100,11 @@ class Patch:
         # We already resorted the stamps
         for i in range(self.nexp):
             for s,source in enumerate(sources):
-                self.D[i,s] = source.stamp_scales[stamp]
-                self.CW[i,s] = source.stamp_cds[stamp] # dpix/dra, dpix/ddec
-                self.crpix[i,s] = source.stamp_crpixs[stamp]
-                self.crval[i,s] = source.stamp_crvals[stamp]
-                self.G[i,s] = source.stamp_zps[stamp]
+                self.D[i,s] = source.stamp_scales[i]
+                self.CW[i,s] = source.stamp_cds[i] # dpix/dra, dpix/ddec
+                self.crpix[i,s] = source.stamp_crpixs[i]
+                self.crval[i,s] = source.stamp_crvals[i]
+                self.G[i,s] = source.stamp_zps[i]
 
 
 
@@ -125,7 +126,6 @@ class Patch:
         - self.band_N
         - self.exposure_start
         - self.exposure_N
-
         '''
         
         # TODO: convert function to numba
