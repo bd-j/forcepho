@@ -13,9 +13,8 @@ TODO: decide how to fill this struct.  CUDA memcpy, or constructor kernel?
 
 */
 
-#include <cstdint>
-
-typedef float PixFloat;  // maybe put this elsewhere?
+#ifndef PATCH_INCLUDE
+#define PATCH_INCLUDE
 
 class Patch {
 public:
@@ -112,3 +111,5 @@ public:
     // The index of the sersic radius bin this Gaussian applies to
     int sersic_radius_bin;
 };
+
+#endif
