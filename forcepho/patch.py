@@ -11,7 +11,6 @@ import numpy as np
 import h5py
 
 import pycuda
-import pycuda.autoinit  # safe?
 import pycuda.driver as cuda
 
 class Patch:
@@ -64,11 +63,11 @@ class Patch:
         # multiple exposures)
         
         # Pack the 2D stamps into 1D arrays
-        #self.pack_pix(stamps, mask, super_pixel_size)
+        self.pack_pix(stamps, mask, super_pixel_size)
 
         self.pack_source_metadata(miniscene)
 
-        #self.pack_astrometry(miniscene.sources)
+        self.pack_astrometry(miniscene.sources)
 
         #self.pack_psf(miniscene)
 
@@ -105,8 +104,10 @@ class Patch:
         for e in range(self.n_exp):
             for source in miniscene.sources:
                 # sources have one set of psf gaussians per exposure
-                N = len(source.psfgauss[e])
-                self.psfgauss[s:s+N] = source.psfgauss[e]
+                # length of that set is const in a band, however
+                this_psfgauss = source.psfgauss(e)
+                N = len(this_psfgauss)
+                self.psfgauss[s:s+N] = this_psfgauss
                 s += N
             assert N == psfgauss_start[e]  # check we got our indexing right
 
@@ -128,11 +129,11 @@ class Patch:
             dtype = self.meta_dtype
 
         # number of sources in the patch
-        self.n_sources = miniscene.n_active
+        self.n_sources = miniscene.nactive
 
         # number of gaussians in the sersic
         # should be the same for all sources
-        self.n_radii = miniscene.n_radii
+        self.n_radii = len(miniscene.sources[0].radii)
 
         self.rad2 = np.empty(self.n_radii, dtype=dtype)
         self.rad2[:] = miniscene.sources[0].radii**2
@@ -209,7 +210,7 @@ class Patch:
         assert super_pixel_size == 1  # TODO: super-pixel ordering
 
         shapes = np.array([stamp.shape for stamp in stamps], dtype=int)
-        sizes = np.array([stamp.size for stamp in stamps], dtype=int)
+        sizes = np.array([stamp.npix for stamp in stamps], dtype=int)
 
         total_padded_size = np.sum(sizes)  # will have super-pixel padding
 
@@ -230,18 +231,18 @@ class Patch:
         i,b = 0,0
         for e,stamp in enumerate(stamps):
             # are we starting a new band?
-            if e > 0 and stamp.band != stamp.band[e-1]:
+            if e > 0 and stamp.band != stamps[e-1].band:
                 b += 1
             self.band_N[b] += 1
 
-            N = stamp.size
+            N = stamp.npix
             self.exposure_start[e] = i
             self.exposure_N[e] = N
 
-            self.xpix[i:i+N] = stamp.xpix
-            self.ypix[i:i+N] = stamp.ypix
-            self.data[i:i+N] = stamp.vpix
-            self.ierr[i:i+N] = stamp.ierr
+            self.xpix[i:i+N] = stamp.xpix.flat
+            self.ypix[i:i+N] = stamp.ypix.flat
+            self.data[i:i+N] = stamp.pixel_values.flat
+            self.ierr[i:i+N] = stamp.ierr.flat
 
             # Finished this exposure
             i += N
@@ -278,11 +279,9 @@ class Patch:
                 arr = getattr(self, arrname)
                 arr_dt = self.patch_struct_dtype[arrname]
                 if arr_dt == self.ptr_dtype:
-                    print(f'Copying {arrname} to GPU: {arr} (dtype: {arr.dtype})')
                     self.cuda_ptrs[arrname] = cuda.to_device(arr)
-                    print(f'self.cuda_ptrs[arrname] = {self.cuda_ptrs[arrname]}')
-                    print(f'hex(int(self.cuda_ptrs[arrname])) = {hex(int(self.cuda_ptrs[arrname]))}')
             except AttributeError:
+                print(f'Do not have field: {arrname}')
                 pass  # this will be removed later once we have all attrs
 
 
@@ -291,14 +290,13 @@ class Patch:
 
         # Get a singlet of the custom dtype
         # Is there a better way to do this?
-        patch_struct = np.empty(1, dtype=self.patch_struct_dtype)[0]
+        patch_struct = np.zeros(1, dtype=self.patch_struct_dtype)[0]
 
         for arrname in self.patch_struct_dtype.names:
             arr_dt = self.patch_struct_dtype[arrname]
             if arr_dt == self.ptr_dtype:
                 if arrname not in self.cuda_ptrs:
                     continue
-                print('Assigning pointer for',arrname)
                 # Array? Assign pointer.
                 patch_struct[arrname] = self.cuda_ptrs[arrname]
             else:
@@ -306,7 +304,6 @@ class Patch:
                 patch_struct[arrname] = getattr(self, arrname)
 
         # Copy the patch struct to the gpu
-        print(patch_struct)
         self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
@@ -349,14 +346,14 @@ class Patch:
             __global__ void check_patch_struct(Patch *patch){{
                 printf("Kernel sees: sizeof(Patch) = %d (Numpy size: {self.patch_struct_dtype.itemsize})\\n", sizeof(Patch));
                 assert(sizeof(Patch) == {self.patch_struct_dtype.itemsize});
-                
+
                 printf("Kernel sees: patch->n_sources = %d\\n", patch->n_sources);
                 assert(patch->n_sources == {self.n_sources});
 
                 printf("Kernel sees: patch->n_radii = %d\\n", patch->n_radii);
                 printf("Kernel sees: patch->rad2 = %p\\n", patch->rad2);
                 for(int i = 0; i < patch->n_radii; i++){{
-                    printf("%f ", patch->rad2[i]);
+                    printf("%g ", patch->rad2[i]);
                 }}
                 printf("\\n");
             }}

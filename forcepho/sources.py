@@ -26,6 +26,9 @@ class Scene(object):
         ss = [str(s) for s in self.sources]
         return "\n".join(ss)
 
+    def __len__(self):
+        return len(self.sources)
+
     def param_indices(self, sid, filtername=None):
         """Get the indices of the relevant parameters in the giant Theta
         vector.  Assumes that the order of parameters for each source is
@@ -68,6 +71,15 @@ class Scene(object):
         plist = [s.get_param_vector() for s in self.sources if not s.fixed]
         params = np.concatenate(plist)
         return params
+
+    def get_proposal(self, active=True):
+        if active:
+            plist = [s.proposal() for s in self.sources if not s.fixed]
+        else:
+            plist = [s.proposal() for s in self.sources if s.fixed]
+
+        return np.array(plist)
+
 
     @property
     def nactive(self):
@@ -431,6 +443,13 @@ class Galaxy(Source):
             # Fix the sersic parameters n_sersic and r_h
             self.nshape = 2
 
+        try:
+            from .proposal import source_struct_dtype
+            self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
+        except(ImportError):
+            warnings.warn("Could not get proposal.source_struct_dtype")
+
+
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
@@ -524,6 +543,22 @@ class Galaxy(Source):
         """
         # ngauss array of da/drh
         return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines]))
+
+    def proposal(self):
+        """A parameter proposal in the form required for transfer to the GPU
+        """
+        self.proposal_struct["fluxes"][0, :self.nband] = self.flux
+        self.proposal_struct["ra"] = self.ra
+        self.proposal_struct["dec"] = self.dec
+        self.proposal_struct["q"] = self.q
+        self.proposal_struct["pa"] = self.pa
+        self.proposal_struct["nsersic"] = self.nsersic
+        self.proposal_struct["rh"] = self.rh
+        self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
+        self.proposal_struct["damplitude_drh"][0, :self.ngauss] = damplitude_drh
+        self.proposal_struct["damplitude_drh"][0, :self.ngauss] = damplitude_dsersic
+
+        return self.proposal_struct
 
 
 class ConformalGalaxy(Galaxy):
