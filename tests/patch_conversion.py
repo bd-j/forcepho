@@ -170,16 +170,14 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
     # loop over all filters to add filter specific information
     npsf_list = []
     counter = 0
-    for i_band, ii_filter in enumerate(hdf5_file.keys()):
-        if 'mini_scene' not in ii_filter:
-            for jj_exp in hdf5_file[ii_filter].keys():
-                if 'exp' in jj_exp:
-                    psfs = nradii * [stamp_list[counter].psf]
-                    psf_list.append(psfs)
-                    npsf = np.sum([p.ngauss for p in psfs])
-                    counter += 1
-                    break
+
+    temp_name = ''
+    for s in stamp_list:
+        if s.filtername != temp_name:
+            psfs = nradii * [s.psf]
+            npsf = np.sum([p.ngauss for p in psfs])
             npsf_list.append(npsf)
+            temp_name = s.filtername
 
     mini_scene.npsf_per_source = np.array(npsf_list, dtype=np.int16)
 
@@ -187,7 +185,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
 
 
 
-'''
+
 # testing
 
 # define path to PSF and filename of patch
@@ -207,5 +205,5 @@ nradii = 9
 
 # convert patch into list of stamps and mini scene
 list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
-'''
+
 
