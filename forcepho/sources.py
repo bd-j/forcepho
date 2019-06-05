@@ -214,6 +214,17 @@ class Source(object):
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
 
+    def psfgauss(self, e, psf_dtype=None):
+        psfs = self.stamp_psfs[e]
+        assert len(psfs) == len(self.radii)
+        for r, p in enumerate(psfs):
+            params = p.as_tuplelist()
+            this_exposure = [(par, r) for par in params]
+        if psf_dtype is not None:
+            return np.array(this_exposure, dtype=psf_dtype)
+        else:
+            return this_exposure
+
     def render(self, stamp, compute_deriv=True, **compute_keywords):
         """Render a source on a PostageStamp.
 
