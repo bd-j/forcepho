@@ -1,9 +1,9 @@
-/* 
-NWarps = BlockSize/WarpSize(=32)
+/* compute_gaussian_kernels.cu
 
-Create chi^2 and d(chi2/dparam) in shared memory and zero them.
-    chi^2[NWarps]
-    dchi_dp[NWarps][NActiveGalaxy]
+This is the code to compute a Gaussian mixture likelihood and derivative
+on the GPU.  Top-level code view:
+
+Create chi^2 and d(chi2/dparam) accumulators in shared memory and zero them.
 
 For each exposure:
 
@@ -14,7 +14,7 @@ For each exposure:
 
     	Load Image Data
 		Loop over all ImageGaussians:
-		    Evaluate Gaussians to create Residual image, save in register
+		    Evaluate Gaussians to create Residual image, save it
 
 		Compute local_chi2 from residual image for this pixel
 		Reduce local_chi2 over warp; atomic_add result to shared mem
@@ -24,53 +24,8 @@ For each exposure:
 				Compute local_dchi_dp and accumulate
 		    Reduce local_dchi_dp over warp and atomic_add to shared dchi_dp for galaxy
 	    	
+When done with all exposures, copy the accumulators to the output buffer.
 */
-
-/*
-class Patch {
-    // Exposure data[], ierr[], xpix[], ypix[], astrometry
-    // List of FixedGalaxy
-    // Number of SkyGalaxy
-	int nActiveGals; 
-	int nFixedGals;
-	SkyGalaxy * FixedGals;
-	//..list of fixed galaxies? 
-	PixFloat * data;
-	PixFloat * ierr;
-	PixFloat * xpix; 
-	PixFloat * ypix; 
-	//..astrometry? 
-	PSFGaussian * psfgauss;
-	int * n_psf_gauss;   // Indexed by exposure
-	int * start_psf_gauss;   // Indexed by exposure
-};
-
-class SkyGalaxy {
-    // On-sky galaxy parameters
-	// flux: total flux
-	// ra: right ascension (degrees)
-	// dec: declination (degrees)
-	// q, pa: axis ratio squared and position angle
-	// n: sersic index
-	// r: half-light radius (arcsec)
-	float flux; 
-	float ra; 
-	float dec;
-	float q; 
-	float pa; 
-	float n;
-	float r; 
-};
-class Proposal {
-	SkyGalaxy * ActiveGals;     // List of SkyGalaxy, input for this HMC likelihood
-};
-
-typedef struct{
-	int nGauss; 
-	ImageGaussian * gaussians; //List of ImageGaussians
-    // TODO: May not need this to be explicit
-} Galaxy;
-*/  
 //=================== ABOVE THIS LINE IS DEPRECATED ============
 
 
@@ -196,12 +151,12 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 class Accumulator {
   public:
     float chi2;
-    float dchi2_dp[NPARAM*MAXACTIVE]; //TODO: Need to figure out how to make this not compile time.
+    float dchi2_dp[NPARAMS*MAXSOURCES]; //TODO: Need to figure out how to make this not compile time.
 	//NAM TODO NPARAM=7 is baked into some assumptions above... changing it will break things. 
 
     Accumulator() {
         chi2 = 0.0;
-        for (int j=0; j<NPARAM*MAXACTIVE; j++) dchi2_dp[j] = 0.0;
+        for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
     }
     ~Accumulator() { }
 
@@ -211,26 +166,26 @@ class Accumulator {
         input += __shfl_down(input,  4);
         input += __shfl_down(input,  2);
         input += __shfl_down(input,  1);
-        if (threadIdx.x&31==0) atomicAdd(answer, input);
+        if (threadIdx.x&31==0) atomicAdd_block(answer, input);
     }
     
     // Could put the Reduction code in here
     void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
     void SumDChi2dp(float *_dchi2_dp, int gal) { 
-        for (int j=0; j<NPARAM; j++) 
-            warpReduceSum(dchi2_dp+NPARAM*gal+j, _dchi2_dp[j]); 
+        for (int j=0; j<NPARAMS; j++) 
+            warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
     }
 
     /// This copies this Accumulator into another memory buffer
     inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
         if (threadIdx.x==0) *pchi2 = chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
     }
 
     inline void addto(Accumulator &A) {
         if (threadIdx.x==0) chi2 += A.chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
@@ -336,9 +291,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		matrix22 dS_dq, dR_dpa;
 		dS_dq.scale_matrix_deriv(galaxy.q);
 		dR_dpa.rotation_matrix_deriv(galaxy.pa);
-			
-	
-		//NAM  might benefit from a vector class. this is gross. 
+				
 		float smean[2]; 
 		smean[0] = galaxy.ra  - crval[0];
 		smean[1] = galaxy.dec - crval[1]; 
@@ -373,7 +326,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
 /// a scalar chi2 response, and a vector dchi2_dp response.
 /// The proposal is a pointer to Source[n_active] sources.
-/// The response is a pointer to [band][MaxSource] responses.
+/// The response is a pointer to [band][MaxSource] Responses.
 
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
@@ -383,26 +336,31 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
 
-    // TODO: THIS IS BROKEN.
-    // Need to define a shared pointer and then have one thread
-    // call malloc to allocate this shared memory.
-    // CreateAndZeroAccumulators();
+    // Create And Zero Accumulators
     __shared__ Accumulator accum[NUMACCUMS]();
-    int warp = threadIdx.x / ACCUMSIZE;  // We are accumulating each warp separately. 
+
+    // Now figure out which one this thread should use
+    // TODO: 32 is the warp size; perhaps use a built-in name
+    int threads_per_accum = ceilf(blockDim.x/32/NUMACCUMS)*32;    
+    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
 	
-    int band = blockIdx.x;   // This block is doing one band
+    int thisband = blockIdx.x;   // This block is doing one band
+    // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
+
+    // Allocate the ImageGaussians for this band (same number for all exposures)
+    int n_gal_gauss = patch->n_psf_per_source[thisband];
+    __shared__ ImageGaussian *imageGauss; // [source][gauss]
+    if (threadIDx.x==0) 
+        imageGauss = (ImageGaussian *)malloc(
+                sizeof(ImageGaussian)*n_gal_gauss * patch->n_sources);
+        // The claim is that this malloc returns shared memory because the 
+        // target pointer is shared.
+    __syncthreads();   // Have to get this malloc done
 
     // Loop over Exposures
-    for (int e = 0; e < patch->band_N[band]; e++) {
-        int exposure = patch->band_start[band] + e;
+    for (int e = 0; e < patch->band_N[thisband]; e++) {
+        int exposure = patch->band_start[thisband] + e;
 		int start_psf_gauss = patch->psfgauss_start[exposure];
-
-        // TODO: THIS IS BROKEN.
-        // Need to define a shared pointer and then have one thread
-        // call malloc to allocate this shared memory.
-		int n_gal_gauss = patch->n_psf_per_source[band];
-		__shared__ ImageGaussian imageGauss[n_gal_gauss * patch->n_sources];
-            // [source][gauss]
 
         CreateImageGaussians(patch, sources, exposure, imageGauss);
 
@@ -417,13 +375,10 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    PixFloat ierr = patch->ierr[pix];
 		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gal_gauss * patch->n_sources); 
             patch->residual[pix] = residual;
-		    // This loads data and ierr, then subtracts the active
-		    // and fixed Gaussians to make the residual
 
             residual *= ierr;   // Form residual/sigma, which is chi
 		    float chi2 = residual*residual;
-		    accum[warp].SumChi2(chi2);
-		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
+		    accum[accumnum].SumChi2(chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 	    
 		    // Now we loop over Active Galaxies and compute the derivatives
@@ -431,7 +386,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
                 float dchi2_dp[NPARAM]; //NAM i think this only needs to be declared once per a thread's lifetime, so long as it's zeroed below. 
 				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
 				ComputeGaussianDerivative(xp, yp, residual, imageGauss+gal*n_gal_gauss, dchi2_dp);  //loop over all gaussians
-				accum[warp].SumDChi2dp(dchi2_dp, gal);
+				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
 		    }
 		}
 	__syncthreads();
@@ -439,8 +394,8 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
-    accum[0].coadd_and_sync(accum, blockDim.x/ACCUMSIZE);
+    accum[0].coadd_and_sync(accum, NUMACCUMS);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, &(pdchi2_dp[blockIdx.x].dchi2_dparam), patch->n_sources);
+    accum[0].store((float *)pchi2, &(pdchi2_dp[thisband].dchi2_dparam), patch->n_sources);
     return;
 }

@@ -125,7 +125,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
         for jj_exp in hdf5_file[ii_filter].keys():
             if 'exp' in jj_exp:
                 stamp_list.append(make_individual_stamp(hdf5_file, ii_filter, jj_exp, band_counter, psfpath=psfpath, fwhm=3.0, background=0.0))
-                band_counter += 0
+                band_counter += 1
 
     # loop over sources to add additional information
 
