@@ -7,6 +7,7 @@ kernels with PyCUDA.  The corresponding CUDA data model is
 in proposal.cu, and the CUDA kernels are in compute_gaussians_kernel.cu.
 '''
 
+import sys
 import os.path
 
 import numpy as np
@@ -23,7 +24,7 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=256, shared_size=48000,
+    def __init__(self, patch, thread_block=32, shared_size=48000, max_registers=64, show_ptxas=False,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
@@ -36,8 +37,16 @@ class Proposer:
         with open(os.path.join(thisdir, kernel_fn), 'r') as fp:
             kernel_source = fp.read()
 
-        #-Xptxas="-v"
-        mod = SourceModule(kernel_source, cache_dir=False, include_dirs=[thisdir], options=['-std=c++11'], no_extern_c=True)
+        options = ['-std=c++11', '-lineinfo']
+
+        if show_ptxas:
+            options += ['--ptxas-options=-v']
+
+        if max_registers:
+            options += [f'-maxrregcount={max_registers}']
+
+        mod = SourceModule(kernel_source, cache_dir=False, include_dirs=[thisdir],
+            options=options, no_extern_c=True, keep=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
     def evaluate_proposal(self, proposal):
@@ -55,7 +64,8 @@ class Proposer:
         chi_out = np.empty(1, dtype=np.float32)  # or array?
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
 
-        print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}')
+        print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}',
+            file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
         self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),              # inputs

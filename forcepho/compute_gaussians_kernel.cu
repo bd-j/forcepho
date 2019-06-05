@@ -70,6 +70,10 @@ class ImageGaussian {
 /// Compute the Model for one pixel from all galaxies; return the residual image
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
+
+    if(threadIdx.x == 0)
+        printf("ComputeResidualImage\n");
+
 	PixFloat residual = data;
 	
 	//loop over all image gaussians g for all galaxies. 
@@ -96,6 +100,9 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
             ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) //pass in pointer to first gaussian for this galaxy. 
 {
+    if(threadIdx.x == 0)
+        printf("ComputeGaussianDerivative\n");
+
 	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   //loop ovver all gaussians in this galaxy. 
 		ImageGaussian *g = gaussian+gauss;
 	
@@ -158,6 +165,9 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 	
+    if(threadIdx.x == 0)
+        printf("GetGaussianAndJacobian\n");
+
 	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
@@ -211,8 +221,9 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 	__shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss; 
 	__shared__ float G, crpix[2], crval[2]; 
 	
-	
 	if ( threadIdx.x == 0 ){
+        printf("CreateImageGaussians\n");
+
 	    band = blockIdx.x;   // This block is doing one band
 		psfgauss_start = patch->psfgauss_start[exposure];
 		G = patch->G[exposure]; 
@@ -304,7 +315,9 @@ class Accumulator {
     }
     
     // Could put the Reduction code in here
-    __device__ void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
+    __device__ void SumChi2(float _chi2) {
+        warpReduceSum(&chi2, _chi2);
+    }
     __device__ void SumDChi2dp(float *_dchi2_dp, int gal) { 
         for (int j=0; j<NPARAMS; j++) 
             warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
@@ -343,8 +356,9 @@ extern "C" {
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
     // We will use a block of shared memory
-    extern __shared__ char _shared[];
-    char *shared = (char *)_shared;
+    extern __shared__ char shared[];
+    int shared_counter = 0;
+    //char *shared = (char *)_shared;
 
     // Get the patch set up
     Patch *patch = (Patch *)_patch;  
@@ -358,13 +372,14 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
     __shared__ ImageGaussian *imageGauss; // [source][gauss]
-    Accumulator *accum;   // [NUMACCUMS]
+    __shared__ Accumulator *accum;   // [NUMACCUMS]
     
     if (threadIdx.x==0) {
         n_gal_gauss = patch->n_psf_per_source[thisband];
-        accum = (Accumulator *)shared;
-        shared += sizeof(Accumulator)*NUMACCUMS;
-        imageGauss = (ImageGaussian *)shared;
+        accum = (Accumulator *) shared;
+        //shared += sizeof(Accumulator)*NUMACCUMS;
+        shared_counter += NUMACCUMS*sizeof(Accumulator);
+        imageGauss = (ImageGaussian *) (shared + shared_counter);
     }
     __syncthreads();   // Have to get this malloc done
 
@@ -395,7 +410,9 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    PixFloat data = patch->data[pix];
 		    PixFloat ierr = patch->ierr[pix];
 		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gal_gauss * patch->n_sources); 
-            patch->residual[pix] = residual;
+
+            if(patch->residual != NULL)
+                patch->residual[pix] = residual;
 
             // Compute chi2 and accumulate it
             residual *= ierr;   // Form residual/sigma, which is chi
@@ -408,12 +425,20 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 				for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;
 				ComputeGaussianDerivative(xp, yp, residual, 
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
+
+                if (threadIdx.x == 0) printf("boop %d\n", gal); 
 				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
+                if (threadIdx.x == 0) printf("after accum %d\n", gal); 
+
 		    }
+
+            if(threadIdx.x ==0 ) printf("out of galaxy loop\n");
 		}
+
+
 	__syncthreads();
     }
-
+    printf("exiting loop.\n");
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);

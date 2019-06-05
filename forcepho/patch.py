@@ -215,12 +215,15 @@ class Patch:
         shapes = np.array([stamp.shape for stamp in stamps], dtype=int)
         sizes = np.array([stamp.npix for stamp in stamps], dtype=int)
 
-        total_padded_size = np.sum(sizes)  # will have super-pixel padding
+        # will have super-pixel padding
+        warp_size = 32
+        total_padded_size = np.sum( (sizes + warp_size - 1)//warp_size*warp_size )
 
-        self.xpix = np.empty(total_padded_size, dtype=dtype)
-        self.ypix = np.empty(total_padded_size, dtype=dtype)
-        self.data = np.empty(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
-        self.ierr = np.empty(total_padded_size, dtype=dtype)  # 1/sigma
+        # TODO: we use zeros instead of empty for the padding bytes
+        self.xpix = np.zeros(total_padded_size, dtype=dtype)
+        self.ypix = np.zeros(total_padded_size, dtype=dtype)
+        self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
 
         # These index the exposure_start and exposure_N arrays
         # bands are indexed sequentially, not by any band ID
@@ -240,7 +243,8 @@ class Patch:
 
             N = stamp.npix
             self.exposure_start[e] = i
-            self.exposure_N[e] = N
+            warp_padding = (warp_size - N%warp_size)
+            self.exposure_N[e] = N + warp_padding
 
             self.xpix[i:i+N] = stamp.xpix.flat
             self.ypix[i:i+N] = stamp.ypix.flat
@@ -248,7 +252,7 @@ class Patch:
             self.ierr[i:i+N] = stamp.ierr.flat
 
             # Finished this exposure
-            i += N
+            i += N + warp_padding
 
         assert i == total_padded_size
 
