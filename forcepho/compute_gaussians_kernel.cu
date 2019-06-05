@@ -336,9 +336,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		matrix22 dS_dq, dR_dpa;
 		dS_dq.scale_matrix_deriv(galaxy.q);
 		dR_dpa.rotation_matrix_deriv(galaxy.pa);
-			
-	
-		//NAM  might benefit from a vector class. this is gross. 
+				
 		float smean[2]; 
 		smean[0] = galaxy.ra  - crval[0];
 		smean[1] = galaxy.dec - crval[1]; 
