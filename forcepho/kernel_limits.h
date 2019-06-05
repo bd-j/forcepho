@@ -9,6 +9,8 @@
 
 // The number of on-sky parameters per band that yield derivatives
 #define NPARAMS 7
+// NOTE: Changing this *also* requires changing the structure of 
+// the ImageGaussian class and the computation of the derivatives.
 
 // The maximum square distance in a Gaussian evaluation before we no-op.
 // Note that this refers to Y in exp(-0.5*Y)
