@@ -16,6 +16,10 @@ TODO: decide how to fill this struct.  CUDA memcpy, or constructor kernel?
 #ifndef PATCH_INCLUDE
 #define PATCH_INCLUDE
 
+typedef float PixFloat;
+
+class PSFSourceGaussian;
+
 class Patch {
 public:
 
