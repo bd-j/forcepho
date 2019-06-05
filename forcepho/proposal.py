@@ -9,7 +9,7 @@ in proposal.cu, and the CUDA kernels are in compute_gaussians_kernel.cu.
 
 import numpy as np
 
-from kernel_limits import MAXBANDS, MAXRADII
+from .kernel_limits import MAXBANDS, MAXRADII
 
 import pycuda
 import pycuda.driver as cuda
@@ -29,17 +29,17 @@ class Proposer:
         mod = SourceModule(kernel_fn)
         self.kernel = mod.get_function(kernel_name)
 
-    def make_proposal(self, proposal):
+
+    def evaluate_proposal(self, proposal):
         # TODO: use pinned memory here?
-        cuda_ptr = cuda.to_device(proposal)
+        proposal_allocation = cuda.to_device(proposal)
+        proposal_cuda_ptr = np.uintp(proposal_allocation)
 
         # alloc responses
 
         # is this synchronous?
         # do we need to "prepare" the call?
-        kernel(patch, proposal)
-
-
+        kernel(patch, proposal_cuda_ptr, grid=self.grid, block=self.block)
 
 
 source_float_dt = np.float32
@@ -52,5 +52,5 @@ source_struct_dtype = np.dtype([('ra', source_float_dt),
                                 ('fluxes', source_float_dt, MAXBANDS),
                                 ('mixture_amplitudes', source_float_dt, MAXRADII),
                                 ('damplitude_drh', source_float_dt, MAXRADII),
-                                ('damplitude_dnsersic', source_float_dt, MAXRADII),]
+                                ('damplitude_dnsersic', source_float_dt, MAXRADII),],
                                 align=True)

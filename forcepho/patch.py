@@ -69,7 +69,7 @@ class Patch:
 
         self.pack_astrometry(miniscene.sources)
 
-        #self.pack_psf(miniscene)
+        self.pack_psf(miniscene)
 
 
     def pack_psf(self, miniscene, dtype=None):
@@ -90,15 +90,18 @@ class Patch:
         if not dtype:
             dtype = self.meta_dtype
 
-        self.n_psf_per_source = np.empty(self.n_bands, dtype=dtype)
-        self.n_psf_per_source[:] = miniscene.n_psf_per_source  # ???
+        self.n_psf_per_source = np.empty(self.n_bands, dtype=np.int32)
+        self.n_psf_per_source[:] = miniscene.npsf_per_source  # ???
 
         psf_dtype = np.dtype([('gauss_params',dtype,6),('sersic_bin',np.int32)])
-        n_psfgauss = n_psf_per_source.sum()*self.n_exp*self.n_sources
+        n_psfgauss = self.n_psf_per_source.sum()*self.n_exp*self.n_sources
         self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
 
         self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
-        self.psfgauss_start[1:] = np.cumsum(n_psf_per_source)[:-1]*self.n_exp*self.n_sources
+        _n_psf_per_source = np.repeat(self.n_psf_per_source, self.band_N)
+        self.psfgauss_start[1:] = np.cumsum(_n_psf_per_source)[:-1]*self.n_sources
+        print(self.psfgauss_start)
+        print(self.n_psf_per_source)
 
         s = 0
         for e in range(self.n_exp):
@@ -107,9 +110,11 @@ class Patch:
                 # length of that set is const in a band, however
                 this_psfgauss = source.psfgauss(e)
                 N = len(this_psfgauss)
+                #print(N)
                 self.psfgauss[s:s+N] = this_psfgauss
                 s += N
-            assert N == psfgauss_start[e]  # check we got our indexing right
+            if e < self.n_exp:
+                assert s == self.psfgauss_start[e+1], (e,s,self.n_sources,self.psfgauss_start[e+1])  # check we got our indexing right
 
 
     def pack_source_metadata(self, miniscene, dtype=None):

@@ -33,7 +33,7 @@ class PointSpreadFunction(object):
         """
         params = []
         for i in range(self.ngauss):
-            cov = self.covariances[i][0,0]
+            cov = self.covariances[i]
             cxx, cxy, cyy = cov[0,0], cov[0,1], cov[1,1]
             amp = self.amplitudes[i]
             xcen, ycen = self.means[i]

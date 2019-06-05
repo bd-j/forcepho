@@ -237,9 +237,10 @@ class Source(object):
     def psfgauss(self, e, psf_dtype=None):
         psfs = self.stamp_psfs[e]
         assert len(psfs) == len(self.radii)
+        this_exposure = []
         for r, p in enumerate(psfs):
             params = p.as_tuplelist()
-            this_exposure = [(par, r) for par in params]
+            this_exposure += [(par, r) for par in params]
         if psf_dtype is not None:
             return np.array(this_exposure, dtype=psf_dtype)
         else:
@@ -443,11 +444,8 @@ class Galaxy(Source):
             # Fix the sersic parameters n_sersic and r_h
             self.nshape = 2
 
-        try:
-            from .proposal import source_struct_dtype
-            self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
-        except(ImportError):
-            warnings.warn("Could not get proposal.source_struct_dtype")
+        from .proposal import source_struct_dtype
+        self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
 
 
     def set_params(self, theta, filtername=None):
