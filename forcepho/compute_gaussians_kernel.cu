@@ -158,7 +158,7 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 	
-	sersicgauss.scovar_im = sersicgauss.covar * sersicgauss.T.AAt(); 
+	sersicgauss.scovar_im = sersicgauss.covar * matrix22::AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -171,7 +171,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * math.pi) ;
+	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * M_PI) ;
 
 	//now get derivatives of F
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
@@ -208,7 +208,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 
 __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure, ImageGaussian * imageGauss) {
 	
-	__shared__ int band, psfgauss_start, n_psf_per_source, n_radii, n_gal_gauss; 
+	__shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss; 
 	__shared__ float G, crpix[2], crval[2]; 
 	
 	
@@ -221,7 +221,6 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		crval[0] = patch->crval[2*exposure];  crval[1] = patch->crval[2*exposure + 1]; 
 	
 		n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
-		n_radii = patch->n_radii;
 	    n_gal_gauss = patch->n_sources * n_psf_per_source;
 	    // TODO: Consider use of __constant__ variables
 	}
@@ -343,7 +342,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     Source *sources = (Source *)_proposal;
 
     // Create And Zero Accumulators
-    __shared__ Accumulator accum[NUMACCUMS]();
+    __shared__ Accumulator accum[NUMACCUMS];
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
@@ -368,7 +367,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Loop over Exposures
     for (int e = 0; e < patch->band_N[thisband]; e++) {
         int exposure = patch->band_start[thisband] + e;
-		int start_psf_gauss = patch->psfgauss_start[exposure];
 
         CreateImageGaussians(patch, sources, exposure, imageGauss);
 
