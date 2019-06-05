@@ -154,6 +154,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
                         CW_list.append(CW_mat)
                         D_list.append(D_mat)
                         psfs = nradii * [stamp_list[counter].psf]
+                        psf_list.append(psfs)
                         crpix_list.append(stamp_list[counter].crpix)
                         crval_list.append(stamp_list[counter].crval)
                         G_list.append(stamp_list[counter].photocounts)
