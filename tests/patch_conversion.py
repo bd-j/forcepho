@@ -48,7 +48,7 @@ def make_individual_stamp(hdf5_file, ii_filter, jj_exp, counter, psfpath=None, f
     stamp.wcs = WCS(hdr)
 
     # add the PSF
-    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file[ii_filter]['psf_name'][0]), fwhm)
+    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file[ii_filter]['psf_name'][0].decode("utf-8")), fwhm)
 
     # add extra information
     stamp.photocounts = dict_info['phot']
@@ -104,13 +104,17 @@ def get_transform_mats(source, wcs):
     return(CW_mat, D_mat)
 
 
-def patch_conversion(patch_name, splinedata, psfpath, n_psf=9):
+def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
 
     # read file
     hdf5_file = h5py.File(patch_name, 'r')
 
     # create scene
-    mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:], hdf5_file['mini_scene']['sourceflux'][:], hdf5_file['mini_scene']['filters'][:].tolist(), splinedata=splinedata)
+    filter_list = []
+    for ii_f in hdf5_file['mini_scene']['filters'][:]:
+        filter_list.append(ii_f.decode("utf-8"))
+
+    mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:], hdf5_file['mini_scene']['sourceflux'][:], filter_list, splinedata=splinedata)
 
     # make list of stamps
 
@@ -139,18 +143,19 @@ def patch_conversion(patch_name, splinedata, psfpath, n_psf=9):
         counter = 0
 
         # loop over all stamps (i.e. filters and exposures)
-        for ii_filter in hdf5_file.keys():
-            for jj_exp in hdf5_file[ii_filter].keys():
-                if 'exp' in jj_exp:
-                    wcs = stamp_list[counter].wcs
-                    CW_mat, D_mat = get_transform_mats(source, wcs)
-                    CW_list.append(CW_mat)
-                    D_list.append(D_mat)
-                    psf_list.append(n_psf * [stamp_list[counter].psf])
-                    crpix_list.append(stamp_list[counter].crpix)
-                    crval_list.append(stamp_list[counter].crval)
-                    G_list.append(stamp_list[counter].photocounts)
-                    counter += 1
+        for i_band, ii_filter in enumerate(hdf5_file.keys()):
+            if 'mini_scene' not in ii_filter:
+                for jj_exp in hdf5_file[ii_filter].keys():
+                    if 'exp' in jj_exp:
+                        wcs = stamp_list[counter].wcs
+                        CW_mat, D_mat = get_transform_mats(source, wcs)
+                        CW_list.append(CW_mat)
+                        D_list.append(D_mat)
+                        psfs = nradii * [stamp_list[counter].psf]
+                        crpix_list.append(stamp_list[counter].crpix)
+                        crval_list.append(stamp_list[counter].crval)
+                        G_list.append(stamp_list[counter].photocounts)
+                        counter += 1
 
         source.stamp_scales = D_list
         source.stamp_psfs = psf_list
@@ -159,11 +164,27 @@ def patch_conversion(patch_name, splinedata, psfpath, n_psf=9):
         source.stamp_crvals = crval_list
         source.stamp_zps = G_list
 
+    npsf_list = []
+
+    counter = 0
+    for i_band, ii_filter in enumerate(hdf5_file.keys()):
+        if 'mini_scene' not in ii_filter:
+            for jj_exp in hdf5_file[ii_filter].keys():
+                if 'exp' in jj_exp:
+                    psfs = nradii * [stamp_list[counter].psf]
+                    psf_list.append(psfs)
+                    npsf = np.sum([p.ngauss for p in psfs])
+                    counter += 1
+                    break
+            npsf_list.append(npsf)
+
+    mini_scene.npsf_per_source = np.array(npsf_list, dtype=np.int16)
+
     return stamp_list, mini_scene
 
 
-'''
 
+'''
 # read in patch
 
 base = "/Users/sandrotacchella/Desktop/patch_construction/"
@@ -180,12 +201,11 @@ splinedata = os.path.join(base, "data/sersic_mog_model.smooth=0.0150.h5")
 
 # number of PSFs, place holder
 
-num_psf = 9
+nradii = 9
 
 
 # convert patch into list of stamps and mini scene
 
-list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, n_psf=num_psf)
-
+list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
 '''
 
