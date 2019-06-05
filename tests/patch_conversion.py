@@ -48,7 +48,7 @@ def make_individual_stamp(hdf5_file, ii_filter, jj_exp, counter, psfpath=None, f
     stamp.wcs = WCS(hdr)
 
     # add the PSF
-    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file[ii_filter]['psf_name'][0]), fwhm)
+    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file[ii_filter]['psf_name'][0].decode("utf-8")), fwhm)
 
     # add extra information
     stamp.photocounts = dict_info['phot']

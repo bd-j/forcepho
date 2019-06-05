@@ -31,8 +31,7 @@ class Patch:
         This includes rearranging the data into (padded) super-pixel order.
 
         The Patch object contains methods for sending the patch data to
-        the GPU with PyCUDA.  It also serves as the entry point for sending
-        new parameter proposals to the GPU and getting back the results.
+        the GPU with PyCUDA.
 
         Parameters
         ----------
@@ -348,7 +347,9 @@ class Patch:
             #include "patch.cu"
 
             __global__ void check_patch_struct(Patch *patch){{
-                printf("sizeof(Patch) = %d (Numpy size: {self.patch_struct_dtype.itemsize})\\n", sizeof(Patch));
+                printf("Kernel sees: sizeof(Patch) = %d (Numpy size: {self.patch_struct_dtype.itemsize})\\n", sizeof(Patch));
+                assert(sizeof(Patch) == {self.patch_struct_dtype.itemsize});
+                
                 printf("Kernel sees: patch->n_sources = %d\\n", patch->n_sources);
                 assert(patch->n_sources == {self.n_sources});
 
