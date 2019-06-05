@@ -3,11 +3,12 @@
 #ifndef HEADER_INCLUDE
 #define HEADER_INCLUDE
 
-#include "limits.h"
+#include "kernel_limits.h"
 
 #include <cstdint>
 #include <math.h>
-#include "CudaErrors.cuh"
+#include "matrix22.cc"
+//#include "CudaErrors.cuh"
 
 typedef float PixFloat;
 

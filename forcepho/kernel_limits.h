@@ -22,6 +22,9 @@
 #define NUMACCUMS 1
 
 
+#define MAXRADII 10
+
+
 // Shared memory in each GPU block is limited to 48 KB, which is 12K floats.
 // We have a handful of single variables, and then the big items are:
 // The accumulators are NUMACCUMS*(NPARAMS*MAXSOURCES+1) shared floats 

@@ -35,7 +35,7 @@ class Response {
     // This is the gradients for all sources in a patch in a band
     // It is ordered d/dflux, d/dra, d/dec, d/dq, d/dpa, d/dsersic, d/drh
     // and then repeats for each source. 
-    float dchi2_dparam[MAXSOURCE * 7];
+    float dchi2_dparam[MAXSOURCES * 7];
 };
 
 #endif

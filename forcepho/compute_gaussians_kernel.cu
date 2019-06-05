@@ -68,7 +68,7 @@ class ImageGaussian {
 
 
 /// Compute the Model for one pixel from all galaxies; return the residual image
-__device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total); 
+__device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
 	PixFloat residual = data;
 	
@@ -94,7 +94,7 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 
 /// Compute the likelihood derivative for one pixel and one galaxy
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
-            ImageGaussian *gaussian, float * dchi2_dp) //pass in pointer to first gaussian for this galaxy. 
+            ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) //pass in pointer to first gaussian for this galaxy. 
 {
 	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   //loop ovver all gaussians in this galaxy. 
 		ImageGaussian *g = gaussian+gauss;
@@ -127,7 +127,7 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		dchi2_dp[1] += g->dx_dAlpha * dC_dx + g->dy_dAlpha * dC_dy;
 		dchi2_dp[2] += g->dx_dDelta * dC_dx + g->dy_dDelta * dC_dy;
 		dchi2_dp[3] += g->dA_dQ  * dC_dA + dC_dfx * g->dFxx_dQ + dC_dfxy * g->dFxy_dQ + dC_dfy * g->dFyy_dQ;
-		dchi2_dp[4] += g->dA_dPA * dC_dA + dC_dfx * g->dFxx_dPA + dC_dfxy * dFxy_dPA + dC_dfy * dFyy_dPA;
+		dchi2_dp[4] += g->dA_dPA * dC_dA + dC_dfx * g->dFxx_dPA + dC_dfxy * g->dFxy_dPA + dC_dfy * g->dFyy_dPA;
 		dchi2_dp[5] += g->dA_dSersic * dC_dA;
 		dchi2_dp[6] += g->dA_drh * dC_dA;	
 	}
@@ -158,7 +158,7 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGaussian &psfgauss, ImageGaussian & gauss){
 	
-	sersicgauss.scovar_im = sersicgauss.covar * T.AAt(); 
+	sersicgauss.scovar_im = sersicgauss.covar * sersicgauss.T.AAt(); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -177,15 +177,15 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
 	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
 	
-	matrix22 dF_dq      = -matrix22::ABA (F, dSigma_dq);  // F *  dSigma_dq * F
-	matrix22 dF_dpa     = -matrix22::ABA (F, dSigma_dpa); // F * dSigma_dpa * F
+	matrix22 dF_dq      = -matrix22::ABA (f, dSigma_dq);  // F *  dSigma_dq * F
+	matrix22 dF_dpa     = -matrix22::ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
 	float ddetF_dq   = detF *  (Sigma * dF_dq).trace(); 
 	float ddetF_dpa  = detF * (Sigma * dF_dpa).trace(); 
 	
 	// Now get derivatives with respect to sky parameters
     gauss.dA_dQ      = gauss.amp / (2.0 * detF) * ddetF_dq;  
-    gauss.dA_dpA     = gauss.amp / (2.0 * detF) * ddetF_dpa;  
+    gauss.dA_dPA     = gauss.amp / (2.0 * detF) * ddetF_dpa;  
     gauss.dA_dFlux   = gauss.amp / sersicgauss.flux; 
     gauss.dA_dSersic = gauss.amp / sersicgauss.amp * sersicgauss.da_dn;
     gauss.dA_drh     = gauss.amp / sersicgauss.amp * sersicgauss.da_dr;
@@ -270,7 +270,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
-    	GetGaussianAndJacobian(sersicgauss, psfgauss, imageGauss[gal * n_psf_per_source + p]);
+    	GetGaussianAndJacobian(sersicgauss, psfgauss, imageGauss[g * n_psf_per_source + p]);
 	}
 }
 	
@@ -309,18 +309,18 @@ class Accumulator {
     /// This copies this Accumulator into another memory buffer
     inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
         if (threadIdx.x==0) *pchi2 = chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
     }
 
-    inline void addto(Accumulator &A) {
+    inline void addto(Accumulator &A, int nActive) {
         if (threadIdx.x==0) chi2 += A.chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
-    void coadd_and_sync(Accumulator *A, int nAcc) {
-        for (int n=1; n<nAcc; n++) addto(A[n]);
+    void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
+        for (int n=1; n<nAcc; n++) addto(A[n], nActive);
         __syncthreads();
     }
 };
@@ -357,7 +357,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
     __shared__ ImageGaussian *imageGauss; // [source][gauss]
-    if (threadIDx.x==0) 
+    if (threadIdx.x==0) 
         n_gal_gauss = patch->n_psf_per_source[thisband];
         imageGauss = (ImageGaussian *)malloc(
                 sizeof(ImageGaussian)*n_gal_gauss * patch->n_sources);
@@ -392,10 +392,10 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 	    
 		    // Now we loop over Sources and compute the derivatives for each
-		    for (int gal = 0; gal < patch.n_sources; gal++) {
-				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
+		    for (int gal = 0; gal < patch->n_sources; gal++) {
+				for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;
 				ComputeGaussianDerivative(xp, yp, residual, 
-                        imageGauss+gal*n_gal_gauss, dchi2_dp);  
+                        imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
 				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
 		    }
 		}
@@ -404,7 +404,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
-    accum[0].coadd_and_sync(accum, NUMACCUMS);
+    accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);
     Response *r = (Response *)pdchi2_dp;
     accum[0].store((float *)pchi2, &(pdchi2_dp[thisband].dchi2_dparam), patch->n_sources);
     return;

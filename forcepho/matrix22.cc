@@ -79,10 +79,10 @@ class matrix22 {
     }
 
     // matrix * scalar (and the reverse)
-    inline matrix22& operator * (const matrix22& A, const float s) {
+    inline matrix22 operator * (const matrix22& A, const float s) {
         return matrix22(A.v11*s, A.v12*s, A.v21*s, A.v22*s);
     }
-    inline matrix22& operator * (const float s, const matrix22& A) {
+    inline matrix22 operator * (const float s, const matrix22& A) {
         return matrix22(s*A.v11, s*A.v12, s*A.v21, s*A.v22);
     }
 
@@ -124,7 +124,7 @@ class matrix22 {
     /// This assumes A is symmetric!
     inline matrix22 BtAB(const matrix22& A, const matrix& B) {
         matrix22 C = A*B;
-        float tmp = B.v11*C.v12+B.v21*C.v22,
+        float tmp = B.v11*C.v12+B.v21*C.v22;
         return matrix22( B.v11*C.v11+B.v21*C.v21, tmp, tmp, B.v12*C.v12+B.v22*C.v22);
     }
     inline matrix22 BABt(const matrix22& A, const matrix& B) {
