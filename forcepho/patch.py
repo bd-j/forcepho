@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""patch.py -- data model for a patch on the sky
+"""
+patch.py -- data model for a patch on the sky
+
+The corresponding GPU-side CUDA struct is in patch.cu.
 """
 
 import numpy as np
@@ -11,16 +14,12 @@ import pycuda
 import pycuda.autoinit  # safe?
 import pycuda.driver as cuda
 
-
-from .gaussmodel import convert_to_gaussians, compute_gaussian
-from .sources import Scene
-
 class Patch:
 
     def __init__(self,
         stamps,            # A list of PostageStamp objects (exposure data) from FITS files
         miniscene,         # All peaks identified in this patch region
-        mask,              # The mask that defines the nominal patch
+        mask=None,              # The mask that defines the nominal patch
         super_pixel_size=1,  # Number of pixels in each superpixel
         pix_dtype=np.float32,  # data type for pixel and flux data
         meta_dtype=np.float32   # data type for non-pixel data
@@ -60,33 +59,19 @@ class Patch:
         # Use the stamps and miniscene to populate these
         self.n_bands = len(uniq_bands)          # Number of bands/filters
         self.n_exp = len(stamps)           # Number of exposures covering the patch (all bands)
-        NPHI = 
-        NDERIV =          # Number of non-zero Jacobian elements per ImageGaussian
-        NTHETA = NBAND + 6, # Number of on-sky parameters per source
 
         # Pixel Data
         # These are arrays of pixel data for *all* pixels in a patch (i.e.
         # multiple exposures)
         
         # Pack the 2D stamps into 1D arrays
-        pack_pix(stamps, mask, super_pixel_size)
+        #self.pack_pix(stamps, mask, super_pixel_size)
 
-        pack_source_metadata(miniscene)
+        self.pack_source_metadata(miniscene)
 
-        pack_astrometry(miniscene.sources)
+        #self.pack_astrometry(miniscene.sources)
 
-        pack_psf(miniscene)
-        
-        # Here is the on-sky and on-image source information
-        # 
-        # source_params = np.empty([NSOURCE, NTHETA], dtype=np.float64)
-        # source_metadata = np.empty([NSOURCE, n_exp, MANY], dtype=np.float64)
-
-        # Here are the actual on-image and on-sky objects
-        # gaussians = np.empty([n_exp, NSOURCE, NGMAX], dtype=object)
-        # sources = np.empty([NSOURCE], dtype=object)
-
-        # miniscene sources know their affine transformation values
+        #self.pack_psf(miniscene)
 
 
     def pack_psf(self, miniscene, dtype=None):
@@ -120,7 +105,7 @@ class Patch:
         s = 0
         for e in range(self.n_exp):
             for source in miniscene.sources:
-                # sources have one set of psf gaussians per band
+                # sources have one set of psf gaussians per exposure
                 N = len(source.psfgauss[e])
                 self.psfgauss[s:s+N] = source.psfgauss[e]
                 s += N
@@ -216,7 +201,6 @@ class Patch:
         '''
 
         # TODO: use mask
-        assert mask.all()
 
         if not dtype:
             dtype = self.pix_dtype
@@ -225,8 +209,8 @@ class Patch:
 
         assert super_pixel_size == 1  # TODO: super-pixel ordering
 
-        shapes = np.array([stamp.shape for stamp in stamps])
-        sizes = np.array([stamp.size for stamp in stamps])
+        shapes = np.array([stamp.shape for stamp in stamps], dtype=int)
+        sizes = np.array([stamp.size for stamp in stamps], dtype=int)
 
         total_padded_size = np.sum(sizes)  # will have super-pixel padding
 
@@ -289,35 +273,103 @@ class Patch:
         '''
 
         # use names of struct dtype fields to transfer all arrays to the GPU
-        cuda_ptrs = {}
-        for arrname in patch_struct_dtype.names:
-            arr = getattr(self, arrname)
-            arr_dt = patch_struct_dtype[arrname]
-            if arr_dt is ptr_dtype:
-                cuda_ptrs[arrname] = cuda.to_device(arr)
+        self.cuda_ptrs = {}
+        for arrname in self.patch_struct_dtype.names:
+            try:
+                arr = getattr(self, arrname)
+                arr_dt = self.patch_struct_dtype[arrname]
+                if arr_dt == self.ptr_dtype:
+                    print(f'Copying {arrname} to GPU: {arr} (dtype: {arr.dtype})')
+                    self.cuda_ptrs[arrname] = cuda.to_device(arr)
+                    print(f'self.cuda_ptrs[arrname] = {self.cuda_ptrs[arrname]}')
+                    print(f'hex(int(self.cuda_ptrs[arrname])) = {hex(int(self.cuda_ptrs[arrname]))}')
+            except AttributeError:
+                pass  # this will be removed later once we have all attrs
+
 
         # use their pointers to fill in the patch struct
-        assert set(cuda_ptrs.keys()) == set(patch_struct_dtype.names)
+        #assert set(self.cuda_ptrs) == set(self.patch_struct_dtype.names)
 
         # Get a singlet of the custom dtype
         # Is there a better way to do this?
-        patch_struct = np.empty(1, dtype=patch_struct_dtype)
-        patch_struct = patch_struct[0]
+        patch_struct = np.empty(1, dtype=self.patch_struct_dtype)[0]
 
-        for arrname in patch_struct_dtype.names:
-            arr_dt = patch_struct_dtype[arrname]
-            if arr_dt is ptr_dtype:
+        for arrname in self.patch_struct_dtype.names:
+            arr_dt = self.patch_struct_dtype[arrname]
+            if arr_dt == self.ptr_dtype:
+                if arrname not in self.cuda_ptrs:
+                    continue
+                print('Assigning pointer for',arrname)
                 # Array? Assign pointer.
-                patch_struct[arrname] = cuda_ptrs[arrname]
+                patch_struct[arrname] = self.cuda_ptrs[arrname]
             else:
                 # Value? Assign directly.
                 patch_struct[arrname] = getattr(self, arrname)
 
         # Copy the patch struct to the gpu
+        print(patch_struct)
         self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
 
+    def free(self):
+        # Release the device-side arrays
+        try:
+            for cuda_ptr in self.cuda_ptrs.values():
+                if cuda_ptr:
+                    cuda_ptr.free()
+        except AttributeError:
+            pass  # no cuda_ptrs
+
+        # Release the device-side patch struct
+        try:
+            if self.gpu_patch:
+                self.gpu_patch.free()
+        except AttributeError:
+            pass  # no gpu_patch
+
+
+    def __del__(self):
+        self.free()  # do we want to do this?
+
+
+    def test_struct_transfer(self, gpu_patch):
+        '''
+        Run a simple PyCUDA kernel that checks that the data sent
+        was the data received.
+        '''
+
+        from pycuda.compiler import SourceModule
+        import os
+
+        mod = SourceModule(
+            f'''
+            #include <limits.h>
+            #include "patch.cu"
+
+            __global__ void check_patch_struct(Patch *patch){{
+                printf("sizeof(Patch) = %d (Numpy size: {self.patch_struct_dtype.itemsize})\\n", sizeof(Patch));
+                printf("Kernel sees: patch->n_sources = %d\\n", patch->n_sources);
+                assert(patch->n_sources == {self.n_sources});
+
+                printf("Kernel sees: patch->n_radii = %d\\n", patch->n_radii);
+                printf("Kernel sees: patch->rad2 = %p\\n", patch->rad2);
+                for(int i = 0; i < patch->n_radii; i++){{
+                    printf("%f ", patch->rad2[i]);
+                }}
+                printf("\\n");
+            }}
+            ''',
+            include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], cache_dir='/gpfs/wolf/gen126/scratch/lgarrison/pycuda_cache')
+
+        kernel = mod.get_function('check_patch_struct')
+
+        retcode = kernel(self.gpu_patch, block=(1,1,1), grid=(1,1,1))
+
+        print(f"Kernel done.")
+
+
+    # TODO: will probably go elsewhere
     def send_proposal(self, proposal, block=1024):
         grid = (self.n_bands,1,1)
         block = (block,1,1)
