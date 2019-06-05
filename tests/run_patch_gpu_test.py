@@ -5,6 +5,7 @@ from scipy.optimize import minimize
 from frocepho.posterior import Posterior
 from forcepho.patch import Patch
 
+from patch_conversion import patch_conversion
 
 try:
     import theano
@@ -27,6 +28,7 @@ try:
     import pycuda.driver as cuda
     from pycuda import gpuarray, compiler, autoinit
     HAS_GPU = True
+    CACHE_DIR = os.env["PYCUDA_CACHE"]
 except:
     HAS_GPU = False
 
@@ -41,7 +43,7 @@ if HAS_GPU:
     with open(kernel_file, "r") as f:
         kernel_string = f.readlines()
     mod = compiler.SourceModule(kernel_string, 
-                                cache_dir="/gpfs/wolf/gen126/scratch/bdjohnson/pycudacache/")
+                                cache_dir=CACHE_DIR)
 
     lnlike_kernel = mod.get_function("EvaluateProposal")
 
