@@ -84,9 +84,9 @@ typedef struct { //NAM TODO write a constructor?
 	float amp;
 	float xcen;
 	float ycen;
-	float Cxx;
-	float Cyy;
-	float Cxy;
+%%% 	float Cxx;
+%%% 	float Cyy;
+%%% 	float Cxy;
 	
 	float flux; 
 	float G; 
@@ -97,16 +97,15 @@ typedef struct { //NAM TODO write a constructor?
 	matrix22 dT_dpa;
 	
 	matrix22 scovar_im; 
-	matrix22 scovar; 
+	matrix22 scovar;    // Is this just the rad2 value?
 	
 	float da_dn;
 	float da_dr; 
-	
-	// TODO: Consider whether a dummy float will help with shared memory bank constraints
 } PixGaussian;
 
-//NAM if all galaxies active, don't need to separate these... 
-typedef struct {
+
+class ImageGaussian {
+  public:
     // 6 Gaussian parameters
 	float amp;
 	float xcen; 
@@ -114,7 +113,6 @@ typedef struct {
 	float fxx; 
 	float fyy;
 	float fxy; 
-	// TODO: Consider whether a dummy float will help with shared memory bank constraints
 	
     // 15 Jacobian elements (Image -> Sky)
     float dA_dFlux;
@@ -132,28 +130,10 @@ typedef struct {
     float dFxy_dPA;
     float dA_dSersic;
     float dA_drh;
-} ImageGaussian;
-
-// typedef struct {
-//     // 15 Jacobian elements (Image -> Sky)
-//     float dA_dFlux;
-//     float dx_dAlpha;
-//     float dy_dAlpha;
-//     float dx_dDelta;
-//     float dy_dDelta;
-//     float dA_dQ;
-//     float dFxx_dQ;
-//     float dFyy_dQ;
-//     float dFxy_dQ;
-//     float dA_dPA;
-//     float dFxx_dPA;
-//     float dFyy_dPA;
-//     float dFxy_dPA;
-//     float dA_dSersic;
-//     float dA_drh;
-// } ImageGaussianJacobian;
+};
 
 
+// TODO: This needs to be updated for the Patch class
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patch patch, Galaxy galaxy); //NAM do we need patch, galaxy? 
 {
 	PixFloat residual = data;
@@ -179,20 +159,20 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Patc
 	return residual;
 }
 
-__device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, float * dchi2_dp) //NAM why are we passing in residual? it's been accumulated over ImageGaussians earlier... we need to repeat work here to get isolated Image Gaussian
+__device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
+            ImageGaussian *gauss, float * dchi2_dp) 
 {
-	float dx = xp - gauss.xcen; 
-	float dy = yp - gauss.ycen; 
-	float vx = gauss.fxx * dx + gauss.fxy * dy;
-	float vy = gauss.fyy * dy + gauss.fxy * dx;
+	float dx = xp - gauss->xcen; 
+	float dy = yp - gauss->ycen; 
+	float vx = gauss->fxx * dx + gauss->fxy * dy;
+	float vy = gauss->fyy * dy + gauss->fxy * dx;
 	float Gp = exp(-0.5 * (dx*vx + dy*vy));
 	float H = 1.0; 
-	float root_det = 1.0; 			
 	
-	H = 1.0 + (vx*vx + vy*vy - gauss.fxx - gauss.fyy) / 24.0; 
-	float C = gauss.amp * Gp * H * root_det; //count in this pixel. 
+	float H = 1.0 + (vx*vx + vy*vy - gauss->fxx - gauss->fyy) / 24.0; 
+	float C = residual_ierr2 * gauss->amp * Gp * H;   //count in this pixel. 
 	
-    float dC_dA = C / gauss.amp;
+    float dC_dA = C / gauss->amp;
     float dC_dx = C*vx;
     float dC_dy = C*vy;
     float dC_dfx = -0.5*C*dx*dx;
@@ -200,31 +180,12 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
     float dC_dfxy = -1.0*C*dx*dy;
 	
     float c_h = C / H;
-    dC_dx -= c_h * (g.fxx*vx + g.fxy*vy) / 12.0;
-    dC_dy -= c_h * (g.fyy*vy + g.fxy*vx) / 12.0;
+    dC_dx -= c_h * (gauss->fxx*vx + gauss->fxy*vy) / 12.0;
+    dC_dy -= c_h * (gauss->fyy*vy + gauss->fxy*vx) / 12.0;
     dC_dfx -= c_h * (1.0 - 2.0*dx*vx) / 24.0;
     dC_dfy -= c_h * (1.0 - 2.0*dy*vy) / 24.0;
     dC_dfxy += c_h * (dy*vx + dx*vy) / 12.0;
-	
-	
-	 // gradients += np.matmul(g.derivs, dI_dphi)
-//      gradients[0][:] = dC_dA[:]
-//      gradients[1][:] = dC_dx[:]
-//      gradients[2][:] = dC_dy[:]
-//      gradients[3][:] = dC_dfx[:]
-//      gradients[4][:] = dC_dfy[:]
-//      gradients[5][:] = dC_dfxy[:]
 			 
-			 
-	//NAM TODO this is wrong. 
-
-    dchi2_dpim[0] += residual * dC_dA; 
-    dchi2_dpim[1] += residual * dC_dx;
-    dchi2_dpim[2] += residual * dC_dy;
-    dchi2_dpim[3] += residual * dC_dfx;
-    dchi2_dpim[4] += residual * dC_dfy;
-    dchi2_dpim[5] += residual * dC_dfxy;
-
     // TODO: Multiply by Jacobian and add to dchi2_dp
 }
 
@@ -277,7 +238,7 @@ class Accumulator {
 
 
 __device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussian psfgauss, ImageGaussian & gauss){
-	sersicgauss.scovar_im = T * sersicgauss.scovar * T.T();
+	sersicgauss.scovar_im = T * sersicgauss.scovar * T.T();   // TODO: Op provided
 	
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -289,12 +250,13 @@ __device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussi
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.amp * psfgauss.amp * pow(f.det(), 0.5) / (2.0 * math.pi) ;
+	gauss.amp = sersicgauss.flux * sersicgauss.amp * psfgauss.amp * sqrt(f.det()) / (2.0 * math.pi) ;
 	
-	matrix22 Sigma = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
-	matrix22 F = Sigma.inv(); 
-	float detF = F.det(); 
-	float K = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * pow(detF, 0.5) / (2.0 * math.pi); 
+    // TODO: Check if this is duplicated
+%%% 	matrix22 Sigma = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
+%%% 	matrix22 F = Sigma.inv(); 
+%%% 	float detF = F.det(); 
+%%% 	float K = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * pow(detF, 0.5) / (2.0 * math.pi); 
 	
 	//now get derivatives 
 	//of F
@@ -387,26 +349,27 @@ __device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussi
 
 __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure) {
 	
-	int tid = threadIdx.x; 
-    int band = blockIdx.x;   // This block is doing one band
-	
-	int psfgauss_start = patch->psfgauss_start[exposure];
-	
+    // TODO: These initializers may need to be only run in one thread, and then sync'ed
+    __shared__ int band = blockIdx.x;   // This block is doing one band
+	__shared__ int psfgauss_start = patch->psfgauss_start[exposure];
 	__shared__ float G = patch->G[exposure]; 
 	__shared__ float crpix[2], crval[2]; 
 	
 	crpix[0] = patch->crpix[exposure][0];  crpix[1] = patch->crpix[exposure][1];  
 	crval[0] = patch->crval[exposure][0];  crval[1] = patch->crval[exposure][1]; 
 	
-	int n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
-	//int n_radii = patch->n_radii;
-	
-	while (tid < patch->n_sources * n_psf_per_source){
-        int g = tid / n_psf_per_source;
-		int p = tid - g * n_psf_per_source;
+	__shared__ int n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
+	__shared__ int n_radii = patch->n_radii;
+    __shared__ int n_gal_gauss = patch->n_sources * n_psf_per_source;
+    // TODO: Consider use of __constant__ variables
+
+	for (int tid = threadIdx.x; tid < n_gal_gauss; tid += blockDim.x) {
+        int g = tid / n_psf_per_source;  // Source number
+		int p = tid - g * n_psf_per_source;   // Gaussian number
 		
-		Source galaxy = sources[g]; 	
-		PSFSourceGaussian psfgauss = patch->psfgauss[psfgauss_start + p]; 
+        // TODO: Convert . to ->
+		Source *galaxy = sources+g; 	
+		PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p; 
 		PixGaussian	sersicgauss; 
 		
 		sersicgauss.G = G; 
@@ -417,9 +380,9 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		//Get the transformation matrix and other conversions
 		matrix22 D, R, S; 
 		
-		int d_cw_start = 4 * patch->n_sources * exposure + 4 * g; 
-		D  = matrix22(patch->D[d_cw_start ], patch->D[d_cw_start  + 1], patch->D[d_cw_start  + 2], patch->D[d_cw_start  + 3]); // NAM yuck! 
-		sersicgauss.CW = matrix22(patch->CW[d_cw_start], patch->CW[d_cw_start + 1], patch->CW[d_cw_start + 2], patch->CW[d_cw_start + 3]);
+		int d_cw_start = 4 * (patch->n_sources * exposure + g); 
+		D  = matrix22(patch->D+d_cw_start);
+		sersicgauss.CW = matrix22(patch->CW+d_cw_start);
 		
 		R.rot(galaxy.pa); 
 		S.scale(galaxy.q); 
@@ -434,101 +397,32 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 	
 		//NAM  might benefit from a vector class. this is gross. 
 		float smean[2]; 
-		smean[0] = galaxy.ra  - patch->crval[exposure][0];
-		smean[1] = galaxy.dec - patch->crval[exposure][1]; 
+		smean[0] = galaxy.ra  - crval[0];
+		smean[1] = galaxy.dec - crval[1]; 
 	    matrix22::Av(CW, *smean);
 		
-		sersicgauss.xcen = smean[0] + patch->crpix[exposure][0]; 
-		sersicgauss.ycen = smean[1] + patch->crpix[exposure][1]; 
+		sersicgauss.xcen = smean[0] + crpix[0]; 
+		sersicgauss.ycen = smean[1] + crpix[1]; 
 		
-		sersicgauss.Cxx = patch->rad2[s]; 
-		sersicgauss.Cyy = patch->rad2[s]; 
-		sersicgauss.Cxy = 0.0; 
-		
-		sersicgauss.scovar = matrix22(sersicgauss.Cxx, sersicgauss.Cxy, sersicgauss.Cxy, sersicgauss.Cyy );
-		
+        // TODO: Delete Cxx, Cyy, Cxy in PixGaussian
+		sersicgauss.scovar = matrix22(patch->rad2[s], patch->rad2[s]);
 		sersicgauss.amp = galaxy.mixture_amplitudes[s]; 
 		
 		sersicgauss.da_dn = galaxy.damplitude_dnsersic[s];
 		sersicgauss.da_dr = galaxy.damplitude_drh[s] ; 
 
 		//pull the correct flux from the multiband array
-		sersicgaus.flux = proposal.fluxes[blockId.x]; 
-		//float pamp = psfgauss.amp; 
+		sersicgauss.flux = galaxy->fluxes[band];
 
-		//get PSF component means and covariances in the pixel space
-		//NAM TODO assumes units are already in pixel space. 
-		//matrix22 pcovar = matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
-	    //matrix22 pmean  = matrix22(psfgauss.xcen, psfgauss.cen); 
-
-    	//ConstructImageGaussian(T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*n_gal_gauss+s*n_psf_gauss+p]);
 
     	GetGaussianAndJacobian(sersicgauss, psfgauss, imageGauss[gal * n_psf_per_source + p]);
 				
-    		//ConstructImageJacobian(scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*n_gal_gauss+s*n_psf_gauss+p]);
-		
-		
-		tid += blockDim.x; 
+    	//ConstructImageGaussian(T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*n_gal_gauss+s*n_psf_gauss+p]);
+        //ConstructImageJacobian(scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*n_gal_gauss+s*n_psf_gauss+p]);
 	}
-	
-	
-
-	
-	
-	
-	//     for (int gal=0; gal<nActiveGals+nFixedGals; gal++) {
-	// 	Patch patch = ;//NAM TODO
-	//
-	//     // Do the setup of the transformations
-	// 	//Get the transformation matrix and other conversions
-	// 	matrix22 D = matrix22(patch.scale[0], patch.scale[1]); //diagonal 2x2 matrix.
-	// 	matrix22 R = rot(galaxy.pa);
-	// 	matrix22 S = scale(galaxy.q);
-	// 	matrix22 T = D * R * S;
-	// 	matrix22 CW = matrix22(patch.dpix_dsky[0], patch.dpix_dsky[1]);
-	// 	float G = patch.photocounts;
-	//
-	// 	//And its derivatives with respect to scene parameters
-	// 	matrix22 dS_dq = scale_matrix_deriv(galaxy.q);
-	// 	matrix22 dR_dpa = rotation_matrix_deriv(galaxy.pa);
-	// 	matrix22 dT_dq = D * R * dS_dq;
-	// 	matrix22 dT_dpa = D * dR_dpa * S;
-	//
-	//
-	//         for (int s=0; s<patch->nSersicGauss; s++) {
-	// 		//get source spline and derivatives
-	// 	    smean = patch.sky_to_pix([source.ra, source.dec]) //NAM TODO	//these don't have to be matrix22s. just two numbers...
-	//
-	// 		matrix22 scovar = matrix22(galaxy.covariances[s], galaxy.covariances[s]) ; //diagonal elements of this gaussian's covariance matrix for sersic index s.
-	// 		float samp = galaxy.amplitudes[s];
-	// 		float da_dn = galaxy.damplitude_dsersic[s];
-	// 		float da_dr = galaxy.damplitude_drh[s] ;
-	//
-	// 		//pull the correct flux from the multiband array
-	// 		float flux = patch.flux[blockId.x]; //NAM TODO is this right?
-	//
-	//     	for (int p=0; p<n_psf_gauss; p++) {
-	// 			float pamp = patch.psf.amplitudes[p];
-	//
-	// 			//get PSF component means and covariances in the pixel space
-	// 			if (patch.psf.units[p] == 'arcsec'){
-	// 				matrix22 pcovar = D * patch.psf.covariances[p] * D.T();
-	// 				matrix22 pmean = D * patch.psf.means[p];  //these don't have to be matrix22s. just two numbers...
-	// 			}
-	// 			else if (patch.psf.units == 'pixels'){
-	// 				matrix22 pcovar = patch.psf.covariances[p];
-	// 		        matrix22 pmean = stamp.psf.means[p]; //these don't have to be matrix22s. just two numbers...
-	// 			}
-	//
-	// 	    	ConstructImageGaussian(s,p,gal, T * scovar T.T(), pcovar, smean, samp, pmean, pamp, flux, imageGauss[gal*n_gal_gauss+s*n_psf_gauss+p]);
-	//
-	// 			if (gal<nActiveGals) {
-	// 	    		ConstructImageJacobian(s,p,gal, scovar, pcovar, samp, pamp, flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW, imageJacob[gal*n_gal_gauss+s*n_psf_gauss+p]);
-	// 			}
-	//     	}
-	//     	}
-	// }
 }
+	
+	
 
 
 // ================= Primary Proposal Kernel ========================
@@ -553,13 +447,13 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Need to define a shared pointer and then have one thread
     // call malloc to allocate this shared memory.
     // CreateAndZeroAccumulators();
-    __shared__ Accumulator accum[blockDim.x/ACCUMSIZE]();
+    __shared__ Accumulator accum[NUMACCUMS]();
     int warp = threadIdx.x / ACCUMSIZE;  // We are accumulating each warp separately. 
 	
     int band = blockIdx.x;   // This block is doing one band
 
     // Loop over Exposures
-    for (e = 0; e < patch->band_N[band]; e++) {
+    for (int e = 0; e < patch->band_N[band]; e++) {
         int exposure = patch->band_start[band] + e;
 		int start_psf_gauss = patch->psfgauss_start[exposure];
 
@@ -567,40 +461,39 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
         // Need to define a shared pointer and then have one thread
         // call malloc to allocate this shared memory.
 		int n_gal_gauss = patch->n_psf_per_source[band];
-		__shared__ ImageGaussians imageGauss[n_gal_gauss * patch->n_sources];
-		__shared__ ImageGaussiansJacobians imageJacob[n_gal_gauss * patch->n_sources];
+		__shared__ ImageGaussian imageGauss[n_gal_gauss * patch->n_sources];
+            // [source][gauss]
 
-        CreateImageGaussians(patch, sources, exposure);
+        CreateImageGaussians(patch, sources, exposure, imageGauss);
 
 		__syncthreads();
 	
-		for (p = threadIdx.x ; p < patch->exposure_N[exposure]; p += blockDim.x) {
+		for (int p = threadIdx.x ; p < patch->exposure_N[exposure]; p += blockDim.x) {
 		    int pix = patch->exposure_start[exposure] + p;
 
 		    float xp = patch->xpix[pix];
 		    float yp = patch->ypix[pix];
 		    PixFloat data = patch->data[pix];
 		    PixFloat ierr = patch->ierr[pix];
-		    PixFloat residual = ComputeResidualImage(xp, yp, data); 
+		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss); 
+            patch->residual[pix] = residual;
 		    // This loads data and ierr, then subtracts the active
 		    // and fixed Gaussians to make the residual
 
-		    float chi2 = residual*ierr;
-		    chi2 *= chi2;
+            residual *= ierr;   // Form residual/sigma, which is chi
+		    float chi2 = residual*residual;
 		    accum[warp].SumChi2(chi2);
 		    /// ReduceWarp_Add(chi2, accum[warp].chi2));
+            residual *= ierr;   // We want res*ierr^2 for the derivatives
 	    
 		    // Now we loop over Active Galaxies and compute the derivatives
-		    for (gal = 0; gal < patch.n_sources; gal++) {
-		    		float dchi2_dp[NPARAM];
+		    for (int gal = 0; gal < patch.n_sources; gal++) {
+                float dchi2_dp[NPARAM];
 				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
-				for (gauss = 0; ) {
-				    ComputeGaussianDerivative(pix, residual, gal, gauss, dchi2_dp); 
+				for (int gauss = 0; gauss<n_gal_gauss; gauss++) {  
+				    ComputeGaussianDerivative(xp, yp, residual, imageGauss+gal*n_gal_gauss+gauss, dchi2_dp); 
 				}
-			
 				accum[warp].SumDChi2dp(dchi2_dp, gal);
-
-				///ReduceWarp_Add(dchi2_dp, accum[warp].dchi2_dp);
 		    }
 		}
 	__syncthreads();
