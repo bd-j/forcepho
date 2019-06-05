@@ -100,6 +100,15 @@ class matrix22 {
                         A.v21*B.v11+A.v22*B.v21, A.v21*B.v12+A.v22*B.v22);
     }
 
+	///Compute A B A, return matrix
+	inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
+		float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 
+		float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v11 * A.v11 * B.v21 + A.v12 * A.v22 * B.v22; 
+		float v21 = A.v11 * A.v21 * B.v11 + A.v11 * A.v11 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 
+		float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v11 * A.v11 * B.v22; 
+		return matrix22(v11, v12, v21, v22); 
+	}
+
     /// Compute A A^T, return the symmetrix matrix
     inline matrix22 AAt(const matrix22& A) {
         float tmp = A.v11*A.v21+A.v12*A.v22;
