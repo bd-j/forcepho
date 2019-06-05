@@ -158,7 +158,7 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 	
-	sersicgauss.scovar_im = sersicgauss.covar * matrix22::AAt(sersicgauss.T); 
+	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -177,8 +177,8 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
 	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
 	
-	matrix22 dF_dq      = -matrix22::ABA (f, dSigma_dq);  // F *  dSigma_dq * F
-	matrix22 dF_dpa     = -matrix22::ABA (f, dSigma_dpa); // F * dSigma_dpa * F
+	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
+	matrix22 dF_dpa     = -1.0 * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
 	float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
 	float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
@@ -254,7 +254,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		smean[0] = galaxy->ra  - crval[0];
 		smean[1] = galaxy->dec - crval[1]; 
 		sersicgauss.CW = matrix22(patch->CW+d_cw_start);
-	    matrix22::Av(sersicgauss.CW, *smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean. 
+	    Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean. 
 		
 		int s = psfgauss->sersic_radius_bin; 
 		sersicgauss.xcen = smean[0] + crpix[0]; 
@@ -283,42 +283,44 @@ class Accumulator {
     float dchi2_dp[NPARAMS*MAXSOURCES]; 
         //OPTION: Figure out how to make this not compile time.
 
-    Accumulator() {
+    __device__ Accumulator() {
         chi2 = 0.0;
         for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
     }
-    ~Accumulator() { }
+    __device__ ~Accumulator() { }
 
-    void warpReduceSum(float *answer, float input) {
-        input += __shfl_down(input, 16);
-        input += __shfl_down(input,  8);
-        input += __shfl_down(input,  4);
-        input += __shfl_down(input,  2);
-        input += __shfl_down(input,  1);
-        if (threadIdx.x&31==0) atomicAdd_block(answer, input);
+
+#define FULL_MASK 0xffffffff
+    __device__ void warpReduceSum(float *answer, float input) {
+        input += __shfl_down_sync(FULL_MASK, input, 16);
+        input += __shfl_down_sync(FULL_MASK, input,  8);
+        input += __shfl_down_sync(FULL_MASK, input,  4);
+        input += __shfl_down_sync(FULL_MASK, input,  2);
+        input += __shfl_down_sync(FULL_MASK, input,  1);
+        if (threadIdx.x&31==0) atomicAdd(answer, input);
     }
     
     // Could put the Reduction code in here
-    void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
-    void SumDChi2dp(float *_dchi2_dp, int gal) { 
+    __device__ void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
+    __device__ void SumDChi2dp(float *_dchi2_dp, int gal) { 
         for (int j=0; j<NPARAMS; j++) 
             warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
     }
 
     /// This copies this Accumulator into another memory buffer
-    inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
+    __device__ inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
         if (threadIdx.x==0) *pchi2 = chi2;
         for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
     }
 
-    inline void addto(Accumulator &A, int nActive) {
+    __device__ inline void addto(Accumulator &A, int nActive) {
         if (threadIdx.x==0) chi2 += A.chi2;
         for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
-    void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
+    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
         for (int n=1; n<nAcc; n++) addto(A[n], nActive);
         __syncthreads();
     }
@@ -404,6 +406,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, &(pdchi2_dp[thisband].dchi2_dparam), patch->n_sources);
+    accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), patch->n_sources);
     return;
 }
