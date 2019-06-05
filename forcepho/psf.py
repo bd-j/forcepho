@@ -28,6 +28,18 @@ class PointSpreadFunction(object):
         self.means = np.array([parameters["x"], parameters["y"]]).T
         self.amplitudes = parameters["amp"]
 
+    def as_tuplelist(self):
+        """Return the parameters of the gaussians in the PSF mixture as a list of tuples.  Each element of the list is a tuple of (a, x, y, cxx, cyy, cxy)
+        """
+        params = []
+        for i in range(self.ngauss):
+            cov = self.covariances[i][0,0]
+            cxx, cxy, cyy = cov[0,0], cov[0,1], cov[1,1]
+            amp = self.amplitudes[i]]
+            xcen, ycen = self.means[i]
+            params.append((amp, xcen, ycen, cxx, cyy, cxy))
+        return params
+   
 
 def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
             ngauss=None, oversample=8, center=104):
