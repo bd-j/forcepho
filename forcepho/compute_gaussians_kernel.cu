@@ -26,32 +26,14 @@ For each exposure:
 	    	
 When done with all exposures, copy the accumulators to the output buffer.
 */
-//=================== ABOVE THIS LINE IS DEPRECATED ============
+// Shared memory is arranged in 32 banks of 4 byte stagger
+
+//=============================================================================== 
 
 
 #include "header.hh"
 #include "patch.cu"
 #include "proposal.cu"
-
-//NAM do we want this class, or should we make the convolve a method of PSFSourceGaussian?
-typedef struct { 
-    // 6 Gaussian parameters for sersic profile 
-	float amp;
-	float xcen;
-	float ycen;
-	float covar; //diagonal element of sersic profile covariance. covariance = covar * I. 
-	matrix22 scovar_im; 
-	
-	//some distortions and astrometry specific to ??source??. 
-	float flux; 
-	float G; 
-	float da_dn;
-	float da_dr;
-	matrix22 CW; 
-	matrix22 T; 
-	matrix22 dT_dq;
-	matrix22 dT_dpa;
-} PixGaussian; 
 
 
 class ImageGaussian {
@@ -82,36 +64,40 @@ class ImageGaussian {
     float dA_drh;
 };
 
+// ======================  Code to Evaluate the Gaussians =========================
 
+
+/// Compute the Model for one pixel from all galaxies; return the residual image
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total); 
 {
 	PixFloat residual = data;
 	
 	//loop over all image gaussians g for all galaxies. 
 	for (int i = 0; i < n_gauss_total; i ++){
-		ImageGaussian g = imageGauss[i]
-		float dx = xp - g.xcen; 
-		float dy = yp - g.ycen; 
-		float vx = g.fxx * dx + g.fxy * dy;
-		float vy = g.fyy * dy + g.fxy * dx;
+		ImageGaussian *g = imageGauss+i;
+		float dx = xp - g->xcen; 
+		float dy = yp - g->ycen; 
+		float vx = g->fxx * dx + g->fxy * dy;
+		float vy = g->fyy * dy + g->fxy * dx;
 		float exparg = dx*vx+dy*vy;
 		if (exparg>MAX_EXP_ARG) continue;
 		float Gp = exp(-0.5 * exparg);
 
 		// Here are the second-order corrections to the pixel integral
-		float H = 1.0 + (vx*vx + vy*vy - g.fxx - g.fyy) / 24.0; 
-		float C = g.amp * Gp * H; //count in this pixel. 
+		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) / 24.0; 
+		float C = g->amp * Gp * H; //count in this pixel. 
 		
 		residual -= C; 
 	}
 	return residual;
 }
 
+/// Compute the likelihood derivative for one pixel and one galaxy
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
             ImageGaussian *gaussian, float * dchi2_dp) //pass in pointer to first gaussian for this galaxy. 
 {
 	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   //loop ovver all gaussians in this galaxy. 
-		ImageGaussian g = gaussian[gauss];
+		ImageGaussian *g = gaussian+gauss;
 	
 		float dx = xp - g->xcen; 
 		float dy = yp - g->ycen; 
@@ -137,66 +123,40 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 	    dC_dfxy  += c_h * (dy*vx + dx*vy) / 12.0;
 			 
 	    //Multiply by Jacobian and add to dchi2_dp	
-		dchi2_dp[0] += g.dA_dFlux * dC_dA ; 
-		dchi2_dp[1] += g.dx_dAlpha * dC_dx + g.dy_dAlpha * dC_dy;
-		dchi2_dp[2] += g.dx_dDelta * dC_dx + g.dy_dDelta * dC_dy;
-		dchi2_dp[3] += g.dA_dQ  * dC_dA + dC_dfx * g.dFxx_dQ + dC_dfxy * g.dFxy_dQ + dC_dfy * g.dFyy_dQ;
-		dchi2_dp[4] += g.dA_dPA * dC_dA + dC_dfx * g.dFxx_dPA + dC_dfxy * dFxy_dPA + dC_dfy * dFyy_dPA;
-		dchi2_dp[5] += g.dA_dSersic * dC_dA;
-		dchi2_dp[6] += g.dA_drh * dC_dA;	
+		dchi2_dp[0] += g->dA_dFlux * dC_dA ; 
+		dchi2_dp[1] += g->dx_dAlpha * dC_dx + g->dy_dAlpha * dC_dy;
+		dchi2_dp[2] += g->dx_dDelta * dC_dx + g->dy_dDelta * dC_dy;
+		dchi2_dp[3] += g->dA_dQ  * dC_dA + dC_dfx * g->dFxx_dQ + dC_dfxy * g->dFxy_dQ + dC_dfy * g->dFyy_dQ;
+		dchi2_dp[4] += g->dA_dPA * dC_dA + dC_dfx * g->dFxx_dPA + dC_dfxy * dFxy_dPA + dC_dfy * dFyy_dPA;
+		dchi2_dp[5] += g->dA_dSersic * dC_dA;
+		dchi2_dp[6] += g->dA_drh * dC_dA;	
 	}
 }
 
 
-class Accumulator {
-  public:
-    float chi2;
-    float dchi2_dp[NPARAMS*MAXSOURCES]; //TODO: Need to figure out how to make this not compile time.
-	//NAM TODO NPARAM=7 is baked into some assumptions above... changing it will break things. 
+// =================== Code to prepare the Gaussians =======================
 
-    Accumulator() {
-        chi2 = 0.0;
-        for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
-    }
-    ~Accumulator() { }
+//NAM do we want this class, or should we make the convolve a method of PSFSourceGaussian?
+typedef struct { 
+    // 6 Gaussian parameters for sersic profile 
+	float amp;
+	float xcen;
+	float ycen;
+	float covar; //diagonal element of sersic profile covariance. covariance = covar * I. 
+	matrix22 scovar_im; 
+	
+	//some distortions and astrometry specific to ??source??. 
+	float flux; 
+	float G; 
+	float da_dn;
+	float da_dr;
+	matrix22 CW; 
+	matrix22 T; 
+	matrix22 dT_dq;
+	matrix22 dT_dpa;
+} PixGaussian; 
 
-    void warpReduceSum(float *answer, float input) {
-        input += __shfl_down(input, 16);
-        input += __shfl_down(input,  8);
-        input += __shfl_down(input,  4);
-        input += __shfl_down(input,  2);
-        input += __shfl_down(input,  1);
-        if (threadIdx.x&31==0) atomicAdd_block(answer, input);
-    }
-    
-    // Could put the Reduction code in here
-    void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
-    void SumDChi2dp(float *_dchi2_dp, int gal) { 
-        for (int j=0; j<NPARAMS; j++) 
-            warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
-    }
-
-    /// This copies this Accumulator into another memory buffer
-    inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
-        if (threadIdx.x==0) *pchi2 = chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
-            pdchi2_dp[j] = dchi2_dp[j];
-    }
-
-    inline void addto(Accumulator &A) {
-        if (threadIdx.x==0) chi2 += A.chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
-            dchi2_dp[j] += A.dchi2_dp[j];
-    }
-
-    void coadd_and_sync(Accumulator *A, int nAcc) {
-        for (int n=1; n<nAcc; n++) addto(A[n]);
-        __syncthreads();
-    }
-};
-
-
-__device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussian psfgauss, ImageGaussian & gauss){
+__device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGaussian &psfgauss, ImageGaussian & gauss){
 	
 	sersicgauss.scovar_im = sersicgauss.covar * T.AAt(); 
 		
@@ -213,8 +173,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussi
 	
 	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * math.pi) ;
 
-	//now get derivatives 
-	//of F
+	//now get derivatives of F
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
 	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
 	
@@ -224,7 +183,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian sersicgauss, PSFSourceGaussi
 	float ddetF_dq   = detF *  (Sigma * dF_dq).trace(); 
 	float ddetF_dpa  = detF * (Sigma * dF_dpa).trace(); 
 	
-	//of Amplitude
+	// Now get derivatives with respect to sky parameters
     gauss.dA_dQ      = gauss.amp / (2.0 * detF) * ddetF_dq;  
     gauss.dA_dpA     = gauss.amp / (2.0 * detF) * ddetF_dpa;  
     gauss.dA_dFlux   = gauss.amp / sersicgauss.flux; 
@@ -317,10 +276,57 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 	
 	
 
+// ===================== Helper class for accumulating the results ========
+
+class Accumulator {
+  public:
+    float chi2;
+    float dchi2_dp[NPARAMS*MAXSOURCES]; 
+        //OPTION: Figure out how to make this not compile time.
+
+    Accumulator() {
+        chi2 = 0.0;
+        for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
+    }
+    ~Accumulator() { }
+
+    void warpReduceSum(float *answer, float input) {
+        input += __shfl_down(input, 16);
+        input += __shfl_down(input,  8);
+        input += __shfl_down(input,  4);
+        input += __shfl_down(input,  2);
+        input += __shfl_down(input,  1);
+        if (threadIdx.x&31==0) atomicAdd_block(answer, input);
+    }
+    
+    // Could put the Reduction code in here
+    void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
+    void SumDChi2dp(float *_dchi2_dp, int gal) { 
+        for (int j=0; j<NPARAMS; j++) 
+            warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
+    }
+
+    /// This copies this Accumulator into another memory buffer
+    inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
+        if (threadIdx.x==0) *pchi2 = chi2;
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
+            pdchi2_dp[j] = dchi2_dp[j];
+    }
+
+    inline void addto(Accumulator &A) {
+        if (threadIdx.x==0) chi2 += A.chi2;
+        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=BlockDim.x)
+            dchi2_dp[j] += A.dchi2_dp[j];
+    }
+
+    void coadd_and_sync(Accumulator *A, int nAcc) {
+        for (int n=1; n<nAcc; n++) addto(A[n]);
+        __syncthreads();
+    }
+};
 
 // ================= Primary Proposal Kernel ========================
 
-// Shared memory is arranged in 32 banks of 4 byte stagger
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 
@@ -338,9 +344,10 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // Create And Zero Accumulators
     __shared__ Accumulator accum[NUMACCUMS]();
+    float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
-    // TODO: 32 is the warp size; perhaps use a built-in name
+    // OPTION: 32 is the warp size; perhaps use a built-in name
     int threads_per_accum = ceilf(blockDim.x/32/NUMACCUMS)*32;    
     int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
 	
@@ -348,9 +355,10 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
 
     // Allocate the ImageGaussians for this band (same number for all exposures)
-    int n_gal_gauss = patch->n_psf_per_source[thisband];
+    __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
     __shared__ ImageGaussian *imageGauss; // [source][gauss]
     if (threadIDx.x==0) 
+        n_gal_gauss = patch->n_psf_per_source[thisband];
         imageGauss = (ImageGaussian *)malloc(
                 sizeof(ImageGaussian)*n_gal_gauss * patch->n_sources);
         // The claim is that this malloc returns shared memory because the 
@@ -369,6 +377,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		for (int p = threadIdx.x ; p < patch->exposure_N[exposure]; p += blockDim.x) {
 		    int pix = patch->exposure_start[exposure] + p;
 
+            // Get the data and compute the model for this one pixel
 		    float xp = patch->xpix[pix];
 		    float yp = patch->ypix[pix];
 		    PixFloat data = patch->data[pix];
@@ -376,16 +385,17 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gal_gauss * patch->n_sources); 
             patch->residual[pix] = residual;
 
+            // Compute chi2 and accumulate it
             residual *= ierr;   // Form residual/sigma, which is chi
 		    float chi2 = residual*residual;
 		    accum[accumnum].SumChi2(chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 	    
-		    // Now we loop over Active Galaxies and compute the derivatives
+		    // Now we loop over Sources and compute the derivatives for each
 		    for (int gal = 0; gal < patch.n_sources; gal++) {
-                float dchi2_dp[NPARAM]; //NAM i think this only needs to be declared once per a thread's lifetime, so long as it's zeroed below. 
 				for (int j=0; j<NPARAM; j++) dchi2_dp[j]=0.0;
-				ComputeGaussianDerivative(xp, yp, residual, imageGauss+gal*n_gal_gauss, dchi2_dp);  //loop over all gaussians
+				ComputeGaussianDerivative(xp, yp, residual, 
+                        imageGauss+gal*n_gal_gauss, dchi2_dp);  
 				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
 		    }
 		}
