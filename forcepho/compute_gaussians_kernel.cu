@@ -290,7 +290,7 @@ class Accumulator {
     __device__ ~Accumulator() { }
 
 
-#define FULL_MASK 0xffffffff
+	#define FULL_MASK 0xffffffff
     __device__ void warpReduceSum(float *answer, float input) {
         input += __shfl_down_sync(FULL_MASK, input, 16);
         input += __shfl_down_sync(FULL_MASK, input,  8);
@@ -308,20 +308,20 @@ class Accumulator {
     }
 
     /// This copies this Accumulator into another memory buffer
-    __device__ inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
+    __device__ inline void store(float *pchi2, float *pdchi2_dp, int n_active) {
         if (threadIdx.x==0) *pchi2 = chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
+        for (int j=threadIdx.x; j<n_active*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
     }
 
-    __device__ inline void addto(Accumulator &A, int nActive) {
+    __device__ inline void addto(Accumulator &A, int n_active) {
         if (threadIdx.x==0) chi2 += A.chi2;
-        for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
+        for (int j=threadIdx.x; j<n_active*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
-    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
-        for (int n=1; n<nAcc; n++) addto(A[n], nActive);
+    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_active) {
+        for (int n=1; n<nAcc; n++) addto(A[n], n_active);
         __syncthreads();
     }
 };
