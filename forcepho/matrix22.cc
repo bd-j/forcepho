@@ -7,6 +7,28 @@ Convention:
 TODO: We should template this.
 */
 
+
+
+/* Testing if we don't need this:
+// Apparently binary operator overloads need to be outside the class
+class matrix22;
+
+// matrix * scalar (and the reverse)
+inline matrix22 operator * (const matrix22& A, const float s);
+inline matrix22 operator * (const float s, const matrix22& A);
+
+/// matrix + matrix, matrix - matrix
+inline matrix22 operator + (const matrix22& A, const matrix22& B);
+inline matrix22 operator - (const matrix22& A, const matrix22& B);
+
+/// matrix * matrix product
+inline matrix22 operator * (const matrix22& A, const matrix22& B);
+*/
+
+
+	
+
+
 class matrix22 {
   public:
     float v11, v12, v21, v22;
@@ -152,14 +174,14 @@ inline float vtAv(matrix22& A, float v1, float v2) {
 }
 
 /// A matrix * vector product, returning in place
-inline void Av(matrix22& A, float &v) {
+inline void Av(matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
     v[0] = A.v11 * v1 + A.v21 * v2; 
     v[1] = A.v12 * v1 + A.v22 * v2; 
 }
 
 /// A matrix * vector product, returning out of place
-inline void Av(float &w, matrix22& A, float &v) {
+inline void Av(float *w, matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
     w[0] = A.v11 * v1 + A.v21 * v2; 
     w[1] = A.v12 * v1 + A.v22 * v2; 

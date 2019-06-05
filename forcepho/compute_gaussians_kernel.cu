@@ -156,9 +156,9 @@ typedef struct {
 	matrix22 dT_dpa;
 } PixGaussian; 
 
-__device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGaussian &psfgauss, ImageGaussian & gauss){
+__device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 	
-	sersicgauss.scovar_im = sersicgauss.covar * sersicgauss.T.AAt(); 
+	sersicgauss.scovar_im = sersicgauss.covar * matrix22::AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -171,7 +171,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * math.pi) ;
+	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * M_PI) ;
 
 	//now get derivatives of F
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
@@ -180,8 +180,8 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 	matrix22 dF_dq      = -matrix22::ABA (f, dSigma_dq);  // F *  dSigma_dq * F
 	matrix22 dF_dpa     = -matrix22::ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
-	float ddetF_dq   = detF *  (Sigma * dF_dq).trace(); 
-	float ddetF_dpa  = detF * (Sigma * dF_dpa).trace(); 
+	float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
+	float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
 	
 	// Now get derivatives with respect to sky parameters
     gauss.dA_dQ      = gauss.amp / (2.0 * detF) * ddetF_dq;  
@@ -208,7 +208,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 
 __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure, ImageGaussian * imageGauss) {
 	
-	__shared__ int band, psfgauss_start, n_psf_per_source, n_radii, n_gal_gauss; 
+	__shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss; 
 	__shared__ float G, crpix[2], crval[2]; 
 	
 	
@@ -217,11 +217,10 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		psfgauss_start = patch->psfgauss_start[exposure];
 		G = patch->G[exposure]; 
 	
-		crpix[0] = patch->crpix[exposure][0];  crpix[1] = patch->crpix[exposure][1];  
-		crval[0] = patch->crval[exposure][0];  crval[1] = patch->crval[exposure][1]; 
+		crpix[0] = patch->crpix[2*exposure];  crpix[1] = patch->crpix[2*exposure + 1];  
+		crval[0] = patch->crval[2*exposure];  crval[1] = patch->crval[2*exposure + 1]; 
 	
 		n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
-		n_radii = patch->n_radii;
 	    n_gal_gauss = patch->n_sources * n_psf_per_source;
 	    // TODO: Consider use of __constant__ variables
 	}
@@ -243,17 +242,17 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		
 		int d_cw_start = 4 * (patch->n_sources * exposure + g); 
 		D  = matrix22(patch->D+d_cw_start);		
-		R.rot(galaxy.pa); 
-		S.scale(galaxy.q); 
+		R.rot(galaxy->pa); 
+		S.scale(galaxy->q); 
 	
 		//And its derivatives with respect to scene parameters
 		matrix22 dS_dq, dR_dpa;
-		dS_dq.scale_matrix_deriv(galaxy.q);
-		dR_dpa.rotation_matrix_deriv(galaxy.pa);
+		dS_dq.scale_matrix_deriv(galaxy->q);
+		dR_dpa.rotation_matrix_deriv(galaxy->pa);
 				
 		float smean[2]; 
-		smean[0] = galaxy.ra  - crval[0];
-		smean[1] = galaxy.dec - crval[1]; 
+		smean[0] = galaxy->ra  - crval[0];
+		smean[1] = galaxy->dec - crval[1]; 
 		sersicgauss.CW = matrix22(patch->CW+d_cw_start);
 	    matrix22::Av(sersicgauss.CW, *smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean. 
 		
@@ -261,16 +260,16 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.xcen = smean[0] + crpix[0]; 
 		sersicgauss.ycen = smean[1] + crpix[1]; 
 		sersicgauss.covar = patch->rad2[s]; 
-		sersicgauss.amp   = galaxy.mixture_amplitudes[s]; 
-		sersicgauss.da_dn = galaxy.damplitude_dnsersic[s];
-		sersicgauss.da_dr = galaxy.damplitude_drh[s] ; 
+		sersicgauss.amp   = galaxy->mixture_amplitudes[s]; 
+		sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
+		sersicgauss.da_dr = galaxy->damplitude_drh[s] ; 
 		sersicgauss.flux = galaxy->fluxes[band]; 		//pull the correct flux from the multiband array
 		sersicgauss.G = G; 
 		sersicgauss.T = D * R * S; 
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
-    	GetGaussianAndJacobian(sersicgauss, psfgauss, imageGauss[g * n_psf_per_source + p]);
+    	GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[g * n_psf_per_source + p]);
 	}
 }
 	
@@ -343,7 +342,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     Source *sources = (Source *)_proposal;
 
     // Create And Zero Accumulators
-    __shared__ Accumulator accum[NUMACCUMS]();
+    __shared__ Accumulator accum[NUMACCUMS];
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
@@ -368,7 +367,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Loop over Exposures
     for (int e = 0; e < patch->band_N[thisband]; e++) {
         int exposure = patch->band_start[thisband] + e;
-		int start_psf_gauss = patch->psfgauss_start[exposure];
 
         CreateImageGaussians(patch, sources, exposure, imageGauss);
 
