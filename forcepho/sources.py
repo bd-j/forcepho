@@ -70,6 +70,14 @@ class Scene(object):
         return params
 
     @property
+    def nactive(self):
+        return len([s for s in self.sources if not s.fixed])
+    
+    @property
+    def nfixed(self):
+        return len([s for s in self.sources if s.fixed])
+
+    @property
     def parameter_names(self):
         """Get names for all the parameters in the scene
         """
