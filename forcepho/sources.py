@@ -554,7 +554,7 @@ class Galaxy(Source):
         self.proposal_struct["rh"] = self.rh
         self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
         self.proposal_struct["damplitude_drh"][0, :self.ngauss] = self.damplitude_drh
-        self.proposal_struct["damplitude_dsersic"][0, :self.ngauss] = self.damplitude_dsersic
+        self.proposal_struct["damplitude_dnsersic"][0, :self.ngauss] = self.damplitude_dsersic
 
         return self.proposal_struct
 

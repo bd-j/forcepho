@@ -350,6 +350,9 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
+	
+    int thisband = blockIdx.x;   // This block is doing one band
+	
 
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
@@ -372,7 +375,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     int threads_per_accum = ceilf(blockDim.x/32/NUMACCUMS)*32;    
     int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
 	
-    int thisband = blockIdx.x;   // This block is doing one band
     // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
 
     // Loop over Exposures
