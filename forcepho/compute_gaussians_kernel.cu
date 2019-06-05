@@ -156,9 +156,9 @@ typedef struct {
 	matrix22 dT_dpa;
 } PixGaussian; 
 
-__device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGaussian &psfgauss, ImageGaussian & gauss){
+__device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 	
-	sersicgauss.scovar_im = sersicgauss.covar * sersicgauss.T.AAt(); 
+	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
 	matrix22 f = covar.inv(); 
@@ -171,17 +171,17 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * math.pi) ;
+	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * M_PI) ;
 
 	//now get derivatives of F
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
 	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
 	
-	matrix22 dF_dq      = -matrix22::ABA (f, dSigma_dq);  // F *  dSigma_dq * F
-	matrix22 dF_dpa     = -matrix22::ABA (f, dSigma_dpa); // F * dSigma_dpa * F
+	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
+	matrix22 dF_dpa     = -1.0 * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
-	float ddetF_dq   = detF *  (Sigma * dF_dq).trace(); 
-	float ddetF_dpa  = detF * (Sigma * dF_dpa).trace(); 
+	float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
+	float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
 	
 	// Now get derivatives with respect to sky parameters
     gauss.dA_dQ      = gauss.amp / (2.0 * detF) * ddetF_dq;  
@@ -208,7 +208,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian &sersicgauss, PSFSourceGauss
 
 __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure, ImageGaussian * imageGauss) {
 	
-	__shared__ int band, psfgauss_start, n_psf_per_source, n_radii, n_gal_gauss; 
+	__shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss; 
 	__shared__ float G, crpix[2], crval[2]; 
 	
 	
@@ -217,11 +217,10 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		psfgauss_start = patch->psfgauss_start[exposure];
 		G = patch->G[exposure]; 
 	
-		crpix[0] = patch->crpix[exposure][0];  crpix[1] = patch->crpix[exposure][1];  
-		crval[0] = patch->crval[exposure][0];  crval[1] = patch->crval[exposure][1]; 
+		crpix[0] = patch->crpix[2*exposure];  crpix[1] = patch->crpix[2*exposure + 1];  
+		crval[0] = patch->crval[2*exposure];  crval[1] = patch->crval[2*exposure + 1]; 
 	
 		n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
-		n_radii = patch->n_radii;
 	    n_gal_gauss = patch->n_sources * n_psf_per_source;
 	    // TODO: Consider use of __constant__ variables
 	}
@@ -243,34 +242,34 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		
 		int d_cw_start = 4 * (patch->n_sources * exposure + g); 
 		D  = matrix22(patch->D+d_cw_start);		
-		R.rot(galaxy.pa); 
-		S.scale(galaxy.q); 
+		R.rot(galaxy->pa); 
+		S.scale(galaxy->q); 
 	
 		//And its derivatives with respect to scene parameters
 		matrix22 dS_dq, dR_dpa;
-		dS_dq.scale_matrix_deriv(galaxy.q);
-		dR_dpa.rotation_matrix_deriv(galaxy.pa);
+		dS_dq.scale_matrix_deriv(galaxy->q);
+		dR_dpa.rotation_matrix_deriv(galaxy->pa);
 				
 		float smean[2]; 
-		smean[0] = galaxy.ra  - crval[0];
-		smean[1] = galaxy.dec - crval[1]; 
+		smean[0] = galaxy->ra  - crval[0];
+		smean[1] = galaxy->dec - crval[1]; 
 		sersicgauss.CW = matrix22(patch->CW+d_cw_start);
-	    matrix22::Av(sersicgauss.CW, *smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean. 
+	    Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean. 
 		
 		int s = psfgauss->sersic_radius_bin; 
 		sersicgauss.xcen = smean[0] + crpix[0]; 
 		sersicgauss.ycen = smean[1] + crpix[1]; 
 		sersicgauss.covar = patch->rad2[s]; 
-		sersicgauss.amp   = galaxy.mixture_amplitudes[s]; 
-		sersicgauss.da_dn = galaxy.damplitude_dnsersic[s];
-		sersicgauss.da_dr = galaxy.damplitude_drh[s] ; 
+		sersicgauss.amp   = galaxy->mixture_amplitudes[s]; 
+		sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
+		sersicgauss.da_dr = galaxy->damplitude_drh[s] ; 
 		sersicgauss.flux = galaxy->fluxes[band]; 		//pull the correct flux from the multiband array
 		sersicgauss.G = G; 
 		sersicgauss.T = D * R * S; 
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
-    	GetGaussianAndJacobian(sersicgauss, psfgauss, imageGauss[g * n_psf_per_source + p]);
+    	GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[g * n_psf_per_source + p]);
 	}
 }
 	
@@ -284,42 +283,44 @@ class Accumulator {
     float dchi2_dp[NPARAMS*MAXSOURCES]; 
         //OPTION: Figure out how to make this not compile time.
 
-    Accumulator() {
+    __device__ Accumulator() {
         chi2 = 0.0;
         for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
     }
-    ~Accumulator() { }
+    __device__ ~Accumulator() { }
 
-    void warpReduceSum(float *answer, float input) {
-        input += __shfl_down(input, 16);
-        input += __shfl_down(input,  8);
-        input += __shfl_down(input,  4);
-        input += __shfl_down(input,  2);
-        input += __shfl_down(input,  1);
-        if (threadIdx.x&31==0) atomicAdd_block(answer, input);
+
+#define FULL_MASK 0xffffffff
+    __device__ void warpReduceSum(float *answer, float input) {
+        input += __shfl_down_sync(FULL_MASK, input, 16);
+        input += __shfl_down_sync(FULL_MASK, input,  8);
+        input += __shfl_down_sync(FULL_MASK, input,  4);
+        input += __shfl_down_sync(FULL_MASK, input,  2);
+        input += __shfl_down_sync(FULL_MASK, input,  1);
+        if (threadIdx.x&31==0) atomicAdd(answer, input);
     }
     
     // Could put the Reduction code in here
-    void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
-    void SumDChi2dp(float *_dchi2_dp, int gal) { 
+    __device__ void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
+    __device__ void SumDChi2dp(float *_dchi2_dp, int gal) { 
         for (int j=0; j<NPARAMS; j++) 
             warpReduceSum(dchi2_dp+NPARAMS*gal+j, _dchi2_dp[j]); 
     }
 
     /// This copies this Accumulator into another memory buffer
-    inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
+    __device__ inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
         if (threadIdx.x==0) *pchi2 = chi2;
         for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
     }
 
-    inline void addto(Accumulator &A, int nActive) {
+    __device__ inline void addto(Accumulator &A, int nActive) {
         if (threadIdx.x==0) chi2 += A.chi2;
         for (int j=threadIdx.x; j<nActive*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
-    void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
+    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int nActive) {
         for (int n=1; n<nAcc; n++) addto(A[n], nActive);
         __syncthreads();
     }
@@ -343,7 +344,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     Source *sources = (Source *)_proposal;
 
     // Create And Zero Accumulators
-    __shared__ Accumulator accum[NUMACCUMS]();
+    __shared__ Accumulator accum[NUMACCUMS];
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
@@ -368,7 +369,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Loop over Exposures
     for (int e = 0; e < patch->band_N[thisband]; e++) {
         int exposure = patch->band_start[thisband] + e;
-		int start_psf_gauss = patch->psfgauss_start[exposure];
 
         CreateImageGaussians(patch, sources, exposure, imageGauss);
 
@@ -406,6 +406,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, &(pdchi2_dp[thisband].dchi2_dparam), patch->n_sources);
+    accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), patch->n_sources);
     return;
 }
