@@ -185,7 +185,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
 
 
 
-
+'''
 # testing
 
 # define path to PSF and filename of patch
@@ -205,5 +205,5 @@ nradii = 9
 
 # convert patch into list of stamps and mini scene
 list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
-
+'''
 
