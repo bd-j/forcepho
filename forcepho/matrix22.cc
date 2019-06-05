@@ -78,26 +78,9 @@ class matrix22 {
         return matrix22(A.v22*idet, -A.v12*idet, -A.v21*idet, A.v11*idet);
     }
 
-    // matrix * scalar (and the reverse)
-    inline matrix22 operator * (const matrix22& A, const float s) {
-        return matrix22(A.v11*s, A.v12*s, A.v21*s, A.v22*s);
-    }
-    inline matrix22 operator * (const float s, const matrix22& A) {
-        return matrix22(s*A.v11, s*A.v12, s*A.v21, s*A.v22);
-    }
-
-    /// matrix + matrix, matrix - matrix
-    inline matrix22 operator + (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22); 
-    }
-    inline matrix22 operator - (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22); 
-    }
-
-    /// matrix * matrix product
-    inline matrix22 operator * (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11*B.v11+A.v12*B.v21, A.v11*B.v12+A.v12*B.v22,
-                        A.v21*B.v11+A.v22*B.v21, A.v21*B.v12+A.v22*B.v22);
+    // matrix *= scalar 
+    inline matrix22& operator *= ( const float s) {
+        v11*=s; v12*=s; v21*=s; v22*=s; return *this;
     }
 
 	///Compute A B A, return matrix
@@ -152,6 +135,29 @@ class matrix22 {
 		w[1] = A.v12 * v1 + A.v22 * v2; 
     }
 
-    /// We are not currently providing a matrix * vector product
-    /// Note that we are not providing *= either!
 };
+
+
+// Apparently binary operator overloads need to be outside the class
+
+    // matrix * scalar (and the reverse)
+    inline matrix22 operator * (const matrix22& A, const float s) {
+        return matrix22(A.v11*s, A.v12*s, A.v21*s, A.v22*s);
+    }
+    inline matrix22 operator * (const float s, const matrix22& A) {
+        return matrix22(s*A.v11, s*A.v12, s*A.v21, s*A.v22);
+    }
+
+    /// matrix + matrix, matrix - matrix
+    inline matrix22 operator + (const matrix22& A, const matrix22& B) {
+        return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22); 
+    }
+    inline matrix22 operator - (const matrix22& A, const matrix22& B) {
+        return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22); 
+    }
+
+    /// matrix * matrix product
+    inline matrix22 operator * (const matrix22& A, const matrix22& B) {
+        return matrix22( A.v11*B.v11+A.v12*B.v21, A.v11*B.v12+A.v12*B.v22,
+                        A.v21*B.v11+A.v22*B.v21, A.v21*B.v12+A.v22*B.v22);
+    }
