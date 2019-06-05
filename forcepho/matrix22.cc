@@ -23,6 +23,11 @@ class matrix22 {
     matrix22(float _d1, float _d2) {
         v11 = _d1; v12 = v21 = 0.0; v22 = _d2; }
 
+    /// Read from 4 consecutive floats
+    matrix22(const float d[]) {
+        v11 = d[0]; v12 = d[1]; v21 = d[2]; v22 = d[3];
+    }
+
     // --------------------------------------------------
     // The following operations are almost constructors, but require too much
     // attention.  Instead call as:
@@ -124,11 +129,18 @@ class matrix22 {
         return v1*v1*A.v11 + v1*v2*(A.v12+A.v21) + v2*v2*A.v22;
     }
 	
-	/// A matrix * vector product
+	/// A matrix * vector product, returning in place
     inline void Av(matrix22& A, float &v) {
 		float v1 = v[0]; float v2 = v[1];
 		v[0] = A.v11 * v1 + A.v21 * v2; 
 		v[1] = A.v12 * v1 + A.v22 * v2; 
+    }
+	
+	/// A matrix * vector product, returning out of place
+    inline void Av(float &w, matrix22& A, float &v) {
+		float v1 = v[0]; float v2 = v[1];
+		w[0] = A.v11 * v1 + A.v21 * v2; 
+		w[1] = A.v12 * v1 + A.v22 * v2; 
     }
 
     /// We are not currently providing a matrix * vector product
