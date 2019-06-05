@@ -7,6 +7,11 @@
 import numpy as np
 import h5py
 
+import pycuda
+import pycuda.autoinit  # safe?
+import pycuda.driver as cuda
+
+
 from .gaussmodel import convert_to_gaussians, compute_gaussian
 from .sources import Scene
 
@@ -268,16 +273,48 @@ class Patch:
         '''
         Transfer the patch data to GPU main memory.  Saves the pointers
         and builds the Patch struct from patch.cu; sends that to GPU memory.
-        Saves the pointer for forwarding to the likelihood call.
+        Saves the struct pointer for forwarding to the likelihood call.
 
         Parameters
         ----------
         residual: bool, optional
             Whether to allocate GPU-side space for a residual image array.
             Default: False.
+
+        Returns
+        -------
+        gpu_patch: pycuda.driver.DeviceAllocation
+            A device-side pointer to the Patch struct on the GPU.
+
         '''
 
-        self.gpu_patch = 
+        # use names of struct dtype fields to transfer all arrays to the GPU
+        cuda_ptrs = {}
+        for arrname in patch_struct_dtype.names:
+            arr = getattr(self, arrname)
+            arr_dt = patch_struct_dtype[arrname]
+            if arr_dt is ptr_dtype:
+                cuda_ptrs[arrname] = cuda.to_device(arr)
+
+        # use their pointers to fill in the patch struct
+        assert set(cuda_ptrs.keys()) == set(patch_struct_dtype.names)
+
+        # Get a singlet of the custom dtype
+        # Is there a better way to do this?
+        patch_struct = np.empty(1, dtype=patch_struct_dtype)
+        patch_struct = patch_struct[0]
+
+        for arrname in patch_struct_dtype.names:
+            arr_dt = patch_struct_dtype[arrname]
+            if arr_dt is ptr_dtype:
+                # Array? Assign pointer.
+                patch_struct[arrname] = cuda_ptrs[arrname]
+            else:
+                # Value? Assign directly.
+                patch_struct[arrname] = getattr(self, arrname)
+
+        # Copy the patch struct to the gpu
+        self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
 
@@ -286,3 +323,38 @@ class Patch:
         block = (block,1,1)
 
         kernel(self.gpu_patch, proposal, results, grid=grid, block=block)
+
+
+    # The following must be kept bitwise identical to patch.cu!
+    # TODO: compare the dtype size to the struct size
+    ptr_dtype = np.uintp  # pointer type
+    patch_struct_dtype = np.dtype([('data',ptr_dtype),
+                                   ('ierr',ptr_dtype),
+                                   ('xpix',ptr_dtype),
+                                   ('ypix',ptr_dtype),
+                                   ('residual',ptr_dtype),
+
+                                   ('exposure_start',ptr_dtype),
+                                   ('exposure_N',ptr_dtype),
+
+                                   ('band_start',ptr_dtype),
+                                   ('band_N',ptr_dtype),
+
+                                   ('n_sources', np.int32),
+                                   ('n_radii', np.int32),
+
+                                   ('rad2',ptr_dtype),
+
+                                   ('D',ptr_dtype),
+
+                                   ('crpix',ptr_dtype),
+                                   ('crval',ptr_dtype),
+                                   ('CW',ptr_dtype),
+                                   ('G',ptr_dtype),
+
+                                   ('n_psf_per_source',ptr_dtype),
+
+                                   ('psfgauss',ptr_dtype),
+                                   ('psfgauss_start',ptr_dtype),
+
+                                   ], align=True)
