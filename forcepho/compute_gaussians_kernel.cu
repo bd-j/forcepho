@@ -229,51 +229,49 @@ __device__ void ComputeGaussianDerivative(pix, xp, yp, residual, gal, gauss, flo
 }
 
 
-#define NACTIVE MAXSOURCES   // Hack for now
-
-void warpReduceSum(float *answer, float input) {
-    input += __shfl_down(input, 16);
-    input += __shfl_down(input,  8);
-    input += __shfl_down(input,  4);
-    input += __shfl_down(input,  2);
-    input += __shfl_down(input,  1);
-    if (threadIdx.x&31==0) *answer = input;
-}
-
 class Accumulator {
   public:
     float chi2;
-    float dchi2_dp[NPARAM*NACTIVE]; //TODO: Need to figure out how to make this not compile time.
+    float dchi2_dp[NPARAM*MAXACTIVE]; //TODO: Need to figure out how to make this not compile time.
 
     Accumulator() {
-	chi2 = 0.0;
-	for (int j=0; j<NPARAM*NACTIVE; j++) dchi2_dp[j] = 0.0;
+        chi2 = 0.0;
+        for (int j=0; j<NPARAM*MAXACTIVE; j++) dchi2_dp[j] = 0.0;
     }
     ~Accumulator() { }
+
+    void warpReduceSum(float *answer, float input) {
+        input += __shfl_down(input, 16);
+        input += __shfl_down(input,  8);
+        input += __shfl_down(input,  4);
+        input += __shfl_down(input,  2);
+        input += __shfl_down(input,  1);
+        if (threadIdx.x&31==0) atomicAdd(answer, input);
+    }
     
     // Could put the Reduction code in here
     void SumChi2(float _chi2) { warpReduceSum(&chi2, _chi2); }
     void SumDChi2dp(float *_dchi2_dp, int gal) { 
-	for (int j=0; j<NPARAM; j++) 
-	    warpReduceSum(dchi2_dp+j+NPARAM*gal, _dchi2_dp[j]); 
+        for (int j=0; j<NPARAM; j++) 
+            warpReduceSum(dchi2_dp+NPARAM*gal+j, _dchi2_dp[j]); 
     }
 
     /// This copies this Accumulator into another memory buffer
     inline void store(float *pchi2, float *pdchi2_dp, int nActive) {
         if (threadIdx.x==0) *pchi2 = chi2;
-	for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
-	    pdchi2_dp[j] = dchi2_dp[j];
+        for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+            pdchi2_dp[j] = dchi2_dp[j];
     }
 
     inline void addto(Accumulator &A) {
         if (threadIdx.x==0) chi2 += A.chi2;
-	for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
-	    dchi2_dp[j] += A.dchi2_dp[j];
+        for (int j=threadIdx.x; j<nActive*NPARAM; j+=BlockDim.x)
+            dchi2_dp[j] += A.dchi2_dp[j];
     }
 
     void coadd_and_sync(Accumulator *A, int nAcc) {
         for (int n=1; n<nAcc; n++) addto(A[n]);
-	__syncthreads();
+        __syncthreads();
     }
 };
 
@@ -555,8 +553,8 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Need to define a shared pointer and then have one thread
     // call malloc to allocate this shared memory.
     // CreateAndZeroAccumulators();
-    __shared__ Accumulator accum[blockDim.x/WARPSIZE]();
-    int warp = threadIdx.x / WARPSIZE;  // We are accumulating each warp separately. 
+    __shared__ Accumulator accum[blockDim.x/ACCUMSIZE]();
+    int warp = threadIdx.x / ACCUMSIZE;  // We are accumulating each warp separately. 
 	
     int band = blockIdx.x;   // This block is doing one band
 
@@ -610,7 +608,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
-    accum[0].coadd_and_sync(accum, blockDim.x/WARPSIZE);
+    accum[0].coadd_and_sync(accum, blockDim.x/ACCUMSIZE);
     Response *r = (Response *)pdchi2_dp;
     accum[0].store((float *)pchi2, &(pdchi2_dp[blockIdx.x].dchi2_dparam), patch->n_sources);
     return;

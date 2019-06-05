@@ -14,6 +14,9 @@
 // Note that this refers to Y in exp(-0.5*Y)
 #define MAX_EXP_ARG 36.0
 
-// The number of a threads in a warp (almost certainly fixed by CUDA)
-#define WARPSIZE 32
+// The number of separate accumulators in each GPU block.
+// Using more will consume more memory.
+// It is a requirement that NUMACCUMS divide blockDim.x evenly, yielding a
+// multiple of 32.
+#define NUMACCUMS 1
 
