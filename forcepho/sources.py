@@ -547,16 +547,16 @@ class Galaxy(Source):
     def proposal(self):
         """A parameter proposal in the form required for transfer to the GPU
         """
-        self.proposal_struct["fluxes"][:self.nband] = self.flux
+        self.proposal_struct["fluxes"][0, :self.nband] = self.flux
         self.proposal_struct["ra"] = self.ra
         self.proposal_struct["dec"] = self.dec
         self.proposal_struct["q"] = self.q
         self.proposal_struct["pa"] = self.pa
         self.proposal_struct["nsersic"] = self.nsersic
         self.proposal_struct["rh"] = self.rh
-        self.proposal_struct["mixture_amplitudes"][:self.ngauss] = self.amplitudes
-        self.proposal_struct["damplitude_drh"][:self.ngauss] = damplitude_drh
-        self.proposal_struct["damplitude_drh"][:self.ngauss] = damplitude_dsersic
+        self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
+        self.proposal_struct["damplitude_drh"][0, :self.ngauss] = damplitude_drh
+        self.proposal_struct["damplitude_drh"][0, :self.ngauss] = damplitude_dsersic
 
         return self.proposal_struct
 
