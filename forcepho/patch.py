@@ -100,8 +100,6 @@ class Patch:
         self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
         _n_psf_per_source = np.repeat(self.n_psf_per_source, self.band_N)
         self.psfgauss_start[1:] = np.cumsum(_n_psf_per_source)[:-1]*self.n_sources
-        print(self.psfgauss_start)
-        print(self.n_psf_per_source)
 
         s = 0
         for e in range(self.n_exp):
@@ -113,7 +111,7 @@ class Patch:
                 #print(N)
                 self.psfgauss[s:s+N] = this_psfgauss
                 s += N
-            if e < self.n_exp:
+            if e < self.n_exp-1:
                 assert s == self.psfgauss_start[e+1], (e,s,self.n_sources,self.psfgauss_start[e+1])  # check we got our indexing right
 
 
@@ -361,23 +359,22 @@ class Patch:
                     printf("%g ", patch->rad2[i]);
                 }}
                 printf("\\n");
+
+                int i = 100;
+                PSFSourceGaussian p = patch->psfgauss[i];
+                printf("Kernel sees: patch->psfgauss[%d] = (%f,%f,%f,%f,%f,%f,%d)\\n", i,
+                        p.amp, p.xcen, p.ycen,
+                        p.Cxx, p.Cyy, p.Cxy, p.sersic_radius_bin
+                        );
             }}
             ''',
             include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], cache_dir='/gpfs/wolf/gen126/scratch/lgarrison/pycuda_cache')
 
         kernel = mod.get_function('check_patch_struct')
 
-        retcode = kernel(self.gpu_patch, block=(1,1,1), grid=(1,1,1))
+        retcode = kernel(gpu_patch, block=(1,1,1), grid=(1,1,1))
 
         print(f"Kernel done.")
-
-
-    # TODO: will probably go elsewhere
-    def send_proposal(self, proposal, block=1024):
-        grid = (self.n_bands,1,1)
-        block = (block,1,1)
-
-        kernel(self.gpu_patch, proposal, results, grid=grid, block=block)
 
 
     # The following must be kept bitwise identical to patch.cu!
