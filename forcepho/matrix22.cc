@@ -62,20 +62,21 @@ class matrix22 {
 
     // --------------------------------------------------
     // The following operations return a new output matrix
+    // The input instance is not altered
     
     /// The transpose
-    inline matrix22 T(matrix22& A) { return matrix22(A.v11, A.v21, A.v12, A.v22); }
+    inline matrix22 T() { return matrix22(v11, v21, v12, v22); }
 
     /// The determinant
-    inline float det(matrix22& A) { return A.v11*A.v22-A.v12*A.v21; }
+    inline float det() { return v11*v22-v12*v21; }
 
     /// The trace
-    inline float trace(matrix22& A) { return A.v11+A.v22; }
+    inline float trace() { return v11+v22; }
 
     /// The inverse
-    inline matrix22 inv(matrix22& A) {
-        float idet = 1.0/det(A);
-        return matrix22(A.v22*idet, -A.v12*idet, -A.v21*idet, A.v11*idet);
+    inline matrix22 inv() {
+        float idet = 1.0/this->det();
+        return matrix22(v22*idet, -v12*idet, -v21*idet, v11*idet);
     }
 
     // matrix *= scalar 
@@ -83,81 +84,85 @@ class matrix22 {
         v11*=s; v12*=s; v21*=s; v22*=s; return *this;
     }
 
-	///Compute A B A, return matrix
-	inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
-		float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 
-		float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v11 * A.v11 * B.v21 + A.v12 * A.v22 * B.v22; 
-		float v21 = A.v11 * A.v21 * B.v11 + A.v11 * A.v11 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 
-		float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v11 * A.v11 * B.v22; 
-		return matrix22(v11, v12, v21, v22); 
-	}
-
-    /// Compute A A^T, return the symmetrix matrix
-    inline matrix22 AAt(const matrix22& A) {
-        float tmp = A.v11*A.v21+A.v12*A.v22;
-        return matrix22(A.v11*A.v11+A.v12*A.v12, tmp, tmp, A.v21*A.v21+A.v22*A.v22);
-    }
-    /// Compute A^T A (not the same as above!)
-    inline matrix22 AtA(const matrix22& A) {
-        float tmp = A.v11*A.v12+A.v21*A.v22;
-        return matrix22(A.v11*A.v11+A.v21*A.v21, tmp, tmp, A.v12*A.v12+A.v22*A.v22);
-    }
-
-    /// matrix^T matrix matrix triple symmetric product
-    /// This assumes A is symmetric!
-    inline matrix22 BtAB(const matrix22& A, const matrix& B) {
-        matrix22 C = A*B;
-        float tmp = B.v11*C.v12+B.v21*C.v22;
-        return matrix22( B.v11*C.v11+B.v21*C.v21, tmp, tmp, B.v12*C.v12+B.v22*C.v22);
-    }
-    inline matrix22 BABt(const matrix22& A, const matrix& B) {
-        matrix22 C = B*A;
-        float tmp = C.v11*B.v21+C.v12*B.v22,
-        return matrix22( C.v11*B.v11+C.v12*B.v12, tmp, tmp, C.v21*B.v21+C.v22*B.v22);
-    }
-
-    /// A vector*matrix*vector compression to a float
-    inline float vtAv(matrix22& A, float v1, float v2) {
-        return v1*v1*A.v11 + v1*v2*(A.v12+A.v21) + v2*v2*A.v22;
-    }
-	
-	/// A matrix * vector product, returning in place
-    inline void Av(matrix22& A, float &v) {
-		float v1 = v[0]; float v2 = v[1];
-		v[0] = A.v11 * v1 + A.v21 * v2; 
-		v[1] = A.v12 * v1 + A.v22 * v2; 
-    }
-	
-	/// A matrix * vector product, returning out of place
-    inline void Av(float &w, matrix22& A, float &v) {
-		float v1 = v[0]; float v2 = v[1];
-		w[0] = A.v11 * v1 + A.v21 * v2; 
-		w[1] = A.v12 * v1 + A.v22 * v2; 
-    }
-
 };
 
 
 // Apparently binary operator overloads need to be outside the class
 
-    // matrix * scalar (and the reverse)
-    inline matrix22 operator * (const matrix22& A, const float s) {
-        return matrix22(A.v11*s, A.v12*s, A.v21*s, A.v22*s);
-    }
-    inline matrix22 operator * (const float s, const matrix22& A) {
-        return matrix22(s*A.v11, s*A.v12, s*A.v21, s*A.v22);
-    }
+// matrix * scalar (and the reverse)
+inline matrix22 operator * (const matrix22& A, const float s) {
+    return matrix22(A.v11*s, A.v12*s, A.v21*s, A.v22*s);
+}
+inline matrix22 operator * (const float s, const matrix22& A) {
+    return matrix22(s*A.v11, s*A.v12, s*A.v21, s*A.v22);
+}
 
-    /// matrix + matrix, matrix - matrix
-    inline matrix22 operator + (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22); 
-    }
-    inline matrix22 operator - (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22); 
-    }
+/// matrix + matrix, matrix - matrix
+inline matrix22 operator + (const matrix22& A, const matrix22& B) {
+    return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22); 
+}
+inline matrix22 operator - (const matrix22& A, const matrix22& B) {
+    return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22); 
+}
 
-    /// matrix * matrix product
-    inline matrix22 operator * (const matrix22& A, const matrix22& B) {
-        return matrix22( A.v11*B.v11+A.v12*B.v21, A.v11*B.v12+A.v12*B.v22,
-                        A.v21*B.v11+A.v22*B.v21, A.v21*B.v12+A.v22*B.v22);
-    }
+/// matrix * matrix product
+inline matrix22 operator * (const matrix22& A, const matrix22& B) {
+    return matrix22( A.v11*B.v11+A.v12*B.v21, A.v11*B.v12+A.v12*B.v22,
+                A.v21*B.v11+A.v22*B.v21, A.v21*B.v12+A.v22*B.v22);
+}
+
+// ========== And here are functions that work on matrices ===========
+
+///Compute A B A, return matrix
+inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
+    float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 
+    float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v11 * A.v11 * B.v21 + A.v12 * A.v22 * B.v22; 
+    float v21 = A.v11 * A.v21 * B.v11 + A.v11 * A.v11 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 
+    float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v11 * A.v11 * B.v22; 
+    return matrix22(v11, v12, v21, v22); 
+}
+
+/// Compute A A^T, return the symmetrix matrix
+inline matrix22 AAt(const matrix22& A) {
+    float tmp = A.v11*A.v21+A.v12*A.v22;
+    return matrix22(A.v11*A.v11+A.v12*A.v12, tmp, tmp, A.v21*A.v21+A.v22*A.v22);
+}
+/// Compute A^T A (not the same as above!)
+inline matrix22 AtA(const matrix22& A) {
+    float tmp = A.v11*A.v12+A.v21*A.v22;
+    return matrix22(A.v11*A.v11+A.v21*A.v21, tmp, tmp, A.v12*A.v12+A.v22*A.v22);
+}
+
+/// matrix^T matrix matrix triple symmetric product
+/// This assumes A is symmetric!
+inline matrix22 BtAB(const matrix22& A, const matrix& B) {
+    matrix22 C = A*B;
+    float tmp = B.v11*C.v12+B.v21*C.v22;
+    return matrix22( B.v11*C.v11+B.v21*C.v21, tmp, tmp, B.v12*C.v12+B.v22*C.v22);
+}
+inline matrix22 BABt(const matrix22& A, const matrix& B) {
+    matrix22 C = B*A;
+    float tmp = C.v11*B.v21+C.v12*B.v22,
+    return matrix22( C.v11*B.v11+C.v12*B.v12, tmp, tmp, C.v21*B.v21+C.v22*B.v22);
+}
+
+/// A vector*matrix*vector compression to a float
+inline float vtAv(matrix22& A, float v1, float v2) {
+    return v1*v1*A.v11 + v1*v2*(A.v12+A.v21) + v2*v2*A.v22;
+}
+
+/// A matrix * vector product, returning in place
+inline void Av(matrix22& A, float &v) {
+    float v1 = v[0]; float v2 = v[1];
+    v[0] = A.v11 * v1 + A.v21 * v2; 
+    v[1] = A.v12 * v1 + A.v22 * v2; 
+}
+
+/// A matrix * vector product, returning out of place
+inline void Av(float &w, matrix22& A, float &v) {
+    float v1 = v[0]; float v2 = v[1];
+    w[0] = A.v11 * v1 + A.v21 * v2; 
+    w[1] = A.v12 * v1 + A.v22 * v2; 
+}
+
+
