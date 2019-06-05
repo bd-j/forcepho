@@ -284,11 +284,14 @@ class Accumulator {
         //OPTION: Figure out how to make this not compile time.
 
     __device__ Accumulator() {
-        chi2 = 0.0;
-        for (int j=0; j<NPARAMS*MAXSOURCES; j++) dchi2_dp[j] = 0.0;
     }
     __device__ ~Accumulator() { }
 
+    __device__ void zero() {
+        if (threadIdx.x==0) chi2 = 0.0;
+        for (int j=threadIdx.x; j<NPARAMS*MAXSOURCES; j+=blockDim.x) dchi2_dp[j] = 0.0;
+        __syncthreads();
+    }
 
 	#define FULL_MASK 0xffffffff
     __device__ void warpReduceSum(float *answer, float input) {
@@ -312,6 +315,7 @@ class Accumulator {
         if (threadIdx.x==0) *pchi2 = chi2;
         for (int j=threadIdx.x; j<n_active*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
+        __syncthreads();
     }
 
     __device__ inline void addto(Accumulator &A, int n_active) {
@@ -337,14 +341,30 @@ class Accumulator {
 
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
+    // We will use a block of shared memory
+    extern __shared__ char _shared[];
+    char *shared = (char *)_shared;
+
     // Get the patch set up
     Patch *patch = (Patch *)_patch;  
 
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
 
-    // Create And Zero Accumulators
-    __shared__ Accumulator accum[NUMACCUMS];
+    // Allocate the ImageGaussians for this band (same number for all exposures)
+    __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
+    __shared__ ImageGaussian *imageGauss; // [source][gauss]
+    Accumulator *accum;   // [NUMACCUMS]
+    
+    if (threadIdx.x==0) {
+        n_gal_gauss = patch->n_psf_per_source[thisband];
+        accum = (Accumulator *)shared;
+        shared += sizeof(Accumulator)*NUMACCUMS;
+        imageGauss = (ImageGaussian *)shared;
+    }
+    __syncthreads();   // Have to get this malloc done
+
+    for (int j=0; j<NUMACCUMS; j++) accum[j].zero();
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
@@ -354,17 +374,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 	
     int thisband = blockIdx.x;   // This block is doing one band
     // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
-
-    // Allocate the ImageGaussians for this band (same number for all exposures)
-    __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
-    __shared__ ImageGaussian *imageGauss; // [source][gauss]
-    if (threadIdx.x==0) 
-        n_gal_gauss = patch->n_psf_per_source[thisband];
-        imageGauss = (ImageGaussian *)malloc(
-                sizeof(ImageGaussian)*n_gal_gauss * patch->n_sources);
-        // The claim is that this malloc returns shared memory because the 
-        // target pointer is shared.
-    __syncthreads();   // Have to get this malloc done
 
     // Loop over Exposures
     for (int e = 0; e < patch->band_N[thisband]; e++) {
