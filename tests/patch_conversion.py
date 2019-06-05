@@ -86,6 +86,7 @@ def get_transform_mats(source, wcs):
     '''
     get coordinate transformation matrices CW and D
     '''
+
     # get dsky for step dx, dy = 1, 1
     pos0_sky = np.array([source.ra, source.dec])
     pos0_pix = wcs.wcs_world2pix([pos0_sky], 1)[0]
@@ -93,14 +94,17 @@ def get_transform_mats(source, wcs):
     pos2_pix = pos0_pix + np.array([0.0, 1.0])
     pos1_sky = wcs.wcs_pix2world([pos1_pix], 1)
     pos2_sky = wcs.wcs_pix2world([pos2_pix], 1)
+
     # compute dpix_dsky matrix
     [[dx_dra, dx_ddec]] = (pos1_pix-pos0_pix)/(pos1_sky-pos0_sky)
     [[dy_dra, dy_ddec]] = (pos2_pix-pos0_pix)/(pos2_sky-pos0_sky)
     CW_mat = np.array([[dx_dra, dx_ddec], [dy_dra, dy_ddec]])
+
     # compute D matrix
     W = np.eye(2)
     W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))
     D_mat = 1.0/3600.0*np.matmul(W, CW_mat)
+
     return(CW_mat, D_mat)
 
 
@@ -109,26 +113,24 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
     # read file
     hdf5_file = h5py.File(patch_name, 'r')
 
-    # create scene
+    # get filter list
     filter_list = []
     for ii_f in hdf5_file['mini_scene']['filters'][:]:
         filter_list.append(ii_f.decode("utf-8"))
 
+    # create scene
     mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:], hdf5_file['mini_scene']['sourceflux'][:], filter_list, splinedata=splinedata)
 
     # make list of stamps
-
     stamp_list = []
     band_counter = 0
-
     for ii_filter in hdf5_file.keys():
         for jj_exp in hdf5_file[ii_filter].keys():
             if 'exp' in jj_exp:
                 stamp_list.append(make_individual_stamp(hdf5_file, ii_filter, jj_exp, band_counter, psfpath=psfpath, fwhm=3.0, background=0.0))
-                band_counter += 1
+        band_counter += 1
 
     # loop over sources to add additional information
-
     for ii_s in range(len(mini_scene.sources)):
 
         source = mini_scene.sources[ii_s]
@@ -142,7 +144,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
         G_list = []
         counter = 0
 
-        # loop over all stamps (i.e. filters and exposures)
+        # loop over all stamps (i.e. filters and exposures) to add source specific information
         for i_band, ii_filter in enumerate(hdf5_file.keys()):
             if 'mini_scene' not in ii_filter:
                 for jj_exp in hdf5_file[ii_filter].keys():
@@ -164,8 +166,8 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
         source.stamp_crvals = crval_list
         source.stamp_zps = G_list
 
+    # loop over all filters to add filter specific information
     npsf_list = []
-
     counter = 0
     for i_band, ii_filter in enumerate(hdf5_file.keys()):
         if 'mini_scene' not in ii_filter:
@@ -185,27 +187,24 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
 
 
 '''
-# read in patch
+# testing
+
+# define path to PSF and filename of patch
 
 base = "/Users/sandrotacchella/Desktop/patch_construction/"
-
 psfpath = os.path.join(base, "psfs", "mixtures")
-
 patch_name = os.path.join(base, "test_patch.h5")
 
 
-# load spline data
-
+# filename of spline data
 splinedata = os.path.join(base, "data/sersic_mog_model.smooth=0.0150.h5")
 
 
 # number of PSFs, place holder
-
 nradii = 9
 
 
 # convert patch into list of stamps and mini scene
-
 list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
 '''
 
