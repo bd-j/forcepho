@@ -370,6 +370,7 @@ class Patch:
             ''',
             include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], cache_dir='/gpfs/wolf/gen126/scratch/lgarrison/pycuda_cache')
 
+        print(self.psfgauss[100])
         kernel = mod.get_function('check_patch_struct')
 
         retcode = kernel(gpu_patch, block=(1,1,1), grid=(1,1,1))

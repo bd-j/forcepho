@@ -339,6 +339,7 @@ class Accumulator {
 /// The proposal is a pointer to Source[n_active] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
 
+extern "C" {
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
     // We will use a block of shared memory
@@ -419,4 +420,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     Response *r = (Response *)pdchi2_dp;
     accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), patch->n_sources);
     return;
+}
+
 }

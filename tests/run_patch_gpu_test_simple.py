@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     p = Patch(stamps=list_of_stamps, miniscene=mini_scene)
     gpu_patch = p.send_to_gpu()
-    p.test_struct_transfer(gpu_patch)
+    #p.test_struct_transfer(gpu_patch)
 
     proposal = mini_scene.get_proposal()
     proposer = Proposer(p)

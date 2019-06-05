@@ -7,6 +7,8 @@ kernels with PyCUDA.  The corresponding CUDA data model is
 in proposal.cu, and the CUDA kernels are in compute_gaussians_kernel.cu.
 '''
 
+import os.path
+
 import numpy as np
 
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES
@@ -21,18 +23,22 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=1024, shared_size=48000,
+    def __init__(self, patch, thread_block=256, shared_size=48000,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
         self.block = (thread_block,1,1)
         self.shared_size = shared_size
+        self.patch = patch
 
-        mod = SourceModule(kernel_fn)
+        thisdir = os.path.abspath(os.path.dirname(__file__))
+
+        with open(os.path.join(thisdir, kernel_fn), 'r') as fp:
+            kernel_source = fp.read()
+
+        #-Xptxas="-v"
+        mod = SourceModule(kernel_source, cache_dir=False, include_dirs=[thisdir], options=['-std=c++11'], no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
-
-
-
 
     def evaluate_proposal(self, proposal):
         # TODO: use pinned memory here?
@@ -46,15 +52,20 @@ class Proposer:
         #chi_derivs_out = cuda.mem_alloc(self.patch.n_bands*response_struct_dtype.itemsize)
         #chi_derivs_out_ptr = np.uintp(chi_derivs_out)
 
-        chi_out = np.float32  # or array?
+        chi_out = np.empty(1, dtype=np.float32)  # or array?
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
 
+        print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}')
         # is this synchronous?
         # do we need to "prepare" the call?
         self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),              # inputs
-                                      cuda.Out(chi_out_ptr), cuda.Out(chi_derivs_out_ptr),  # outputs
+                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out),  # outputs
                                       grid=self.grid, block=self.block, shared=self.shared_size,           # launch config
                                       )
+
+        print(chi_out, chi_derivs_out)
+
+        return chi_out, chi_derivs_out
 
 
 source_float_dt = np.float32
