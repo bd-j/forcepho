@@ -17,16 +17,16 @@ from astropy.wcs import WCS
 __all__ = ["make_individual_stamp", "set_scene", "get_transform_mats", "patch_conversion"]
 
 
-def make_individual_stamp(hdf5_file, ii_filter, jj_exp, counter, psfpath=None, fwhm=3.0, background=0.0):
+def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3.0, background=0.0):
 
     # get meta data about exposure
-    dict_info = dict(zip(hdf5_file[ii_filter][jj_exp].attrs.keys(), hdf5_file[ii_filter][jj_exp].attrs.values()))
+    dict_info = dict(zip(hdf5_file['images'][filter_name][exp_name].attrs.keys(), hdf5_file['images'][filter_name][exp_name].attrs.values()))
 
     # add image and uncertainty data to Stamp, flipping axis order
     stamp = PostageStamp()
-    stamp.pixel_values = np.array(hdf5_file[ii_filter][jj_exp]['sci']).T - background
-    stamp.ierr = np.array(hdf5_file[ii_filter][jj_exp]['rms']).T
-    mask = np.array(hdf5_file[ii_filter][jj_exp]['mask']).T
+    stamp.pixel_values = np.array(hdf5_file['images'][filter_name][exp_name]['sci']).T - background
+    stamp.ierr = np.array(hdf5_file['images'][filter_name][exp_name]['rms']).T
+    mask = np.array(hdf5_file['images'][filter_name][exp_name]['mask']).T
     stamp.nx, stamp.ny = stamp.pixel_values.shape
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
@@ -44,17 +44,17 @@ def make_individual_stamp(hdf5_file, ii_filter, jj_exp, counter, psfpath=None, f
     stamp.scale = dict_info['scale']
     stamp.CD = dict_info['CD']
     stamp.W = dict_info['W']
-    hdr = json.loads(hdf5_file[ii_filter][jj_exp]['header'][()])
+    hdr = json.loads(hdf5_file['images'][filter_name][exp_name]['header'][()])
     stamp.wcs = WCS(hdr)
 
     # add the PSF
-    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file[ii_filter]['psf_name'][0].decode("utf-8")), fwhm)
+    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file['images'][filter_name][exp_name]['psf_name'][0].decode("utf-8")), fwhm)
 
     # add extra information
     stamp.photocounts = dict_info['phot']
     stamp.full_header = None
-    stamp.filtername = ii_filter
-    stamp.band = counter
+    stamp.filtername = filter_name
+    stamp.band = hdf5_file['images'][filter_name].attrs['band_idx']
 
     return(stamp)
 
@@ -65,7 +65,7 @@ def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=False)
     sources = []
     for ii_gal in range(len(sourcepars)):
         gal_id, x, y, q, pa, n, rh = sourcepars[ii_gal]
-        s = Galaxy(filters=filters, splinedata=splinedata, free_sersic=free_sersic)
+        s = Galaxy(filters=filters.tolist(), splinedata=splinedata, free_sersic=free_sersic)
         s.global_id = gal_id
         s.sersic = n
         s.rh = rh
@@ -114,21 +114,18 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
     hdf5_file = h5py.File(patch_name, 'r')
 
     # get filter list
-    filter_list = []
-    for ii_f in hdf5_file['mini_scene']['filters'][:]:
-        filter_list.append(ii_f.decode("utf-8"))
+    filter_list = hdf5_file['images'].attrs['filters']
 
     # create scene
     mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:], hdf5_file['mini_scene']['sourceflux'][:], filter_list, splinedata=splinedata)
 
     # make list of stamps
     stamp_list = []
-    band_counter = 0
-    for ii_filter in hdf5_file.keys():
-        for jj_exp in hdf5_file[ii_filter].keys():
-            if 'exp' in jj_exp:
-                stamp_list.append(make_individual_stamp(hdf5_file, ii_filter, jj_exp, band_counter, psfpath=psfpath, fwhm=3.0, background=0.0))
-        band_counter += 1
+    stamp_filter_list = []
+    for filter_name in hdf5_file['images'].attrs['filters']:
+        for exp_name in hdf5_file['images'][filter_name].attrs['exposures']:
+            stamp_list.append(make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=psfpath, fwhm=3.0, background=0.0))
+            stamp_filter_list.append(filter_name)
 
     # loop over sources to add additional information
     for ii_s in range(len(mini_scene.sources)):
@@ -142,23 +139,18 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
         crpix_list = []
         crval_list = []
         G_list = []
-        counter = 0
 
         # loop over all stamps (i.e. filters and exposures) to add source specific information
-        for i_band, ii_filter in enumerate(hdf5_file.keys()):
-            if 'mini_scene' not in ii_filter:
-                for jj_exp in hdf5_file[ii_filter].keys():
-                    if 'exp' in jj_exp:
-                        wcs = stamp_list[counter].wcs
-                        CW_mat, D_mat = get_transform_mats(source, wcs)
-                        CW_list.append(CW_mat)
-                        D_list.append(D_mat)
-                        psfs = nradii * [stamp_list[counter].psf]
-                        psf_list.append(psfs)
-                        crpix_list.append(stamp_list[counter].crpix)
-                        crval_list.append(stamp_list[counter].crval)
-                        G_list.append(stamp_list[counter].photocounts)
-                        counter += 1
+        for s in stamp_list:
+            wcs = s.wcs
+            CW_mat, D_mat = get_transform_mats(source, wcs)
+            CW_list.append(CW_mat)
+            D_list.append(D_mat)
+            psfs = nradii * [s.psf]
+            psf_list.append(psfs)
+            crpix_list.append(s.crpix)
+            crval_list.append(s.crval)
+            G_list.append(s.photocounts)
 
         source.stamp_scales = D_list
         source.stamp_psfs = psf_list
@@ -167,17 +159,15 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
         source.stamp_crvals = crval_list
         source.stamp_zps = G_list
 
-    # loop over all filters to add filter specific information
+    # loop over stamps, count gaussian components in psf for each band
     npsf_list = []
-    counter = 0
 
-    temp_name = ''
-    for s in stamp_list:
-        if s.filtername != temp_name:
-            psfs = nradii * [s.psf]
-            npsf = np.sum([p.ngauss for p in psfs])
-            npsf_list.append(npsf)
-            temp_name = s.filtername
+    for filter_name in filter_list:
+        idx_s = (np.array(stamp_filter_list) == filter_name)
+        s = np.array(stamp_list)[idx_s][0]
+        psfs = nradii * [s.psf]
+        npsf = np.sum([p.ngauss for p in psfs])
+        npsf_list.append(npsf)
 
     mini_scene.npsf_per_source = np.array(npsf_list, dtype=np.int16)
 
@@ -205,5 +195,5 @@ nradii = 9
 
 # convert patch into list of stamps and mini scene
 list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
-'''
 
+'''
