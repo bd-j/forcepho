@@ -350,7 +350,8 @@ class Accumulator {
         input += __shfl_down_sync(FULL_MASK, input,  4);
         input += __shfl_down_sync(FULL_MASK, input,  2);
         input += __shfl_down_sync(FULL_MASK, input,  1);
-        if (threadIdx.x&31==0) atomicAdd(answer, input);
+        // threadIdx.x % 32 == 0
+        if ((threadIdx.x&31)==0) atomicAdd(answer, input);
     }
     
     // Could put the Reduction code in here
