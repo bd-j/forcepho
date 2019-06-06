@@ -72,7 +72,7 @@ class ImageGaussian {
 /// We have to enter a pointer to the whole list of ImageGaussians.
 
 // TODO: n_gauss_total is a shared scalar in the calling function, but not here.
-// Can we avoid the thread-based storage?
+// Can we avoid the thread-based storage?  Max's advice is probably not.
 
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
@@ -107,7 +107,7 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 /// And we supply a pointer where we accumulate the derivatives.
 
 // TODO: n_gal_gauss is a shared scalar in the calling function, but not here.
-// Can we avoid the thread-based storage?
+// Can we avoid the thread-based storage?  Max's advice is probably not.
 
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
             ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) 
@@ -201,28 +201,37 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI)) ;
+    float tmp = sersicgauss.G * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI));
+    gauss.amp = tmp * sersicgauss.flux * sersicgauss.amp;
+	// gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI)) ;
 
 	//now get derivatives of F
-	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
-	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
-    // TODO: This math of A B^T + B A^T could be simplified:
-    // it's the symmetrization of a 2x2 matrix
+	matrix22 dSigma_dq  = sersicgauss.covar * symABt(T, dT_dq);
+    // (sersicgauss.T * sersicgauss.dT_dq.T()+ sersicgauss.dT_dq*sersicgauss.T.T()); 
+	matrix22 dSigma_dpa = sersicgauss.covar * symABt(T, dT_dpa);
+    // (sersicgauss.T * sersicgauss.dT_dpa.T()+sersicgauss.dT_dpa*sersicgauss.T.T()); 
 	
 	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
 	matrix22 dF_dpa     = -1.0 * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
-	float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
-	float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
-	
 	// Now get derivatives with respect to sky parameters
-    gauss.dA_dQ      = gauss.amp /(2.0*detF) * ddetF_dq;  
-    gauss.dA_dPA     = gauss.amp /(2.0*detF) * ddetF_dpa;  
-    // TODO: Why do we multiply and then divide by detF?
-    gauss.dA_dFlux   = gauss.amp / sersicgauss.flux; 
-    gauss.dA_dSersic = gauss.amp / sersicgauss.amp * sersicgauss.da_dn;
-    gauss.dA_drh     = gauss.amp / sersicgauss.amp * sersicgauss.da_dr;
-    // TODO: Some opportunity in the above to avoid some divisions.
+	// float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
+	// float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
+    // gauss.dA_dQ      = gauss.amp /(2.0*detF) * ddetF_dq;  
+    // gauss.dA_dPA     = gauss.amp /(2.0*detF) * ddetF_dpa;  
+    // Old code: Why do we multiply and then divide by detF?
+
+    gauss.dA_dQ      = 0.5*gauss.amp * (covar * dF_dq).trace();
+    gauss.dA_dPA     = 0.5*gauss.amp * (covar * dF_dpa).trace();
+    
+    gauss.dA_dFlux      = tmp * sersicgauss.amp;
+    gauss.dA_dSersic    = tmp * sersicgauss.flux * sersicgauss.da_dn;
+    gauss.dA_drh        = tmp * sersicgauss.flux * sersicgauss.da_dr;
+
+    // gauss.dA_dFlux   = gauss.amp / sersicgauss.flux; 
+    // gauss.dA_dSersic = gauss.amp / sersicgauss.amp * sersicgauss.da_dn;
+    // gauss.dA_drh     = gauss.amp / sersicgauss.amp * sersicgauss.da_dr;
+    // Old code: Some opportunity in the above to avoid some divisions.
 	
 	gauss.dx_dAlpha = sersicgauss.CW.v11; 
 	gauss.dy_dAlpha = sersicgauss.CW.v21; 
