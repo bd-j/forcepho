@@ -398,6 +398,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    PixFloat ierr = patch->ierr[pix];
 		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gal_gauss * patch->n_sources); 
 
+            // Did the CPU ask that we output the residual image?
             if(patch->residual != NULL)
                 patch->residual[pix] = residual;
 
