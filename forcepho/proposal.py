@@ -12,7 +12,7 @@ import os.path
 
 import numpy as np
 
-from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES
+from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 
 import pycuda
 import pycuda.driver as cuda
@@ -24,7 +24,7 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=128, shared_size=48000, max_registers=64, show_ptxas=False,
+    def __init__(self, patch, thread_block=1024, shared_size=48000, max_registers=64, show_ptxas=False,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
@@ -87,21 +87,13 @@ class Proposer:
                                       )
 
         # Is this the right shape?
-        chi_derivs_out = chi_derivs_out.view(np.float32).reshape(self.patch.n_bands, 7, MAXSOURCES)
-        chi_derivs_out = chi_derivs_out[...,:self.patch.n_sources]
+        chi_derivs_out = chi_derivs_out.view(np.float32).reshape(self.patch.n_bands, MAXSOURCES, 7)
+        chi_derivs_out = chi_derivs_out[:,:self.patch.n_sources]
 
         # Unpack return values
         if self.patch.return_residual:
             residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
-
-            # Unpack flat, padded residuals into original images
-            residuals = np.split(residuals_flat, np.cumsum(self.patch.original_sizes)[:-1])
-            
-            for e,residual in enumerate(residuals):
-                residual = residual[:self.patch.original_sizes[e]]
-                residuals[e] = residual.reshape(self.patch.original_shapes[e])
-
-            print(f'First residual: {residuals[0]}')
+            residuals = self.unpack_residuals(residuals_flat)
 
         print(chi_out, chi_derivs_out)
 
@@ -109,6 +101,19 @@ class Proposer:
             return chi_out, chi_derivs_out, residuals
         else:
             return chi_out, chi_derivs_out
+
+
+    def unpack_residuals(self, residuals_flat):
+        # Unpack flat, padded residuals into original images
+        residuals = np.split(residuals_flat, np.cumsum(self.patch.original_sizes)[:-1])
+        
+        for e,residual in enumerate(residuals):
+            residual = residual[:self.patch.original_sizes[e]]
+            residuals[e] = residual.reshape(self.patch.original_shapes[e])
+
+        print(f'First residual: {residuals[0]}')
+
+        return residuals
 
 
 source_float_dt = np.float32
@@ -125,4 +130,4 @@ source_struct_dtype = np.dtype([('ra', source_float_dt),
                                 align=True)
 
 respose_float_dt = source_float_dt
-response_struct_dtype = np.dtype([('dchi2_dparam', respose_float_dt, 7*MAXSOURCES)], align=True)
+response_struct_dtype = np.dtype([('dchi2_dparam', respose_float_dt, NPARAMS*MAXSOURCES)], align=True)

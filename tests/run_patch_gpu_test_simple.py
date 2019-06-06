@@ -3,6 +3,7 @@
 import os
 import sys
 sys.path.append('..')
+from os.path import join as pjoin
 
 import numpy as np
 
@@ -12,6 +13,9 @@ from forcepho.proposal import Proposer
 from patch_conversion import patch_conversion
 
 import pycuda.autoinit
+
+scratch_dir = pjoin('/gpfs/wolf/gen126/scratch', os.environ['USER'], 'residual_images')
+os.makedirs(scratch_dir, exist_ok=True)
 
 if __name__ == '__main__':
     path_to_data = '/gpfs/wolf/gen126/proj-shared/jades/patch_conversion_data'
@@ -28,4 +32,22 @@ if __name__ == '__main__':
 
     proposal = mini_scene.get_proposal()
     proposer = Proposer(p)
-    proposer.evaluate_proposal(proposal)
+    chi2, chi2_derivs, residuals = proposer.evaluate_proposal(proposal)
+
+    print('Plotting residuals...')
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import matplotlib.pyplot as plt
+
+    n_exp_max = np.max(p.n_exp)
+
+    figsize = np.array([p.n_bands, n_exp_max])
+    fig, axes = plt.subplots(p.n_bands, n_exp_max, sharex=True, sharey=True, dpi=72, figsize=figsize*4)
+    for b in range(p.n_bands):
+        axrow = axes[b]
+        for e in range(p.band_N[b]):
+            ax = axrow[e]
+            ax.set_aspect('equal')
+            ax.imshow(residuals[0])
+    #fig.colorbar()
+    fig.savefig(pjoin(scratch_dir, 'residual0.png'))
