@@ -189,6 +189,7 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 
+    // sersicgauss.covar is the square of the radius; it's a scalar
 	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
@@ -316,8 +317,11 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
 		sersicgauss.da_dr = galaxy->damplitude_drh[s] ; 
 		sersicgauss.flux = galaxy->fluxes[band]; 		//pull the correct flux from the multiband array
+        // G is the conversion of flux units to image counts
 		sersicgauss.G = G; 
+        // T is a unit circle, stretched by q, rotated by PA, and then distorted to the pixel scale
 		sersicgauss.T = D * R * S; 
+        // And now we have the derivatives of T wrt q and PA.
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
