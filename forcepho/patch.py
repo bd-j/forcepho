@@ -20,6 +20,7 @@ class Patch:
         miniscene,         # All peaks identified in this patch region
         mask=None,              # The mask that defines the nominal patch
         super_pixel_size=1,  # Number of pixels in each superpixel
+        return_residual=False,
         pix_dtype=np.float32,  # data type for pixel and flux data
         meta_dtype=np.float32   # data type for non-pixel data
         ):
@@ -34,6 +35,10 @@ class Patch:
 
         Parameters
         ----------
+        return_residual: bool, optional
+            Whether the residual image will be returned from the GPU.
+            Default: False.
+
         pix_dtype: np.dtype, optional
             The Numpy datatype of the pixel data, like fluxes and coordinates.
             Default: np.float32
@@ -45,6 +50,8 @@ class Patch:
 
         self.pix_dtype = pix_dtype
         self.meta_dtype = meta_dtype
+
+        self.return_residual = return_residual
 
         # Group stamps by band
         # stamp.band must be an int identifier (does not need to be contiguous)
@@ -243,7 +250,7 @@ class Patch:
 
             N = stamp.npix
             self.exposure_start[e] = i
-            warp_padding = (warp_size - N%warp_size)
+            warp_padding = (warp_size - N%warp_size)%warp_size
             self.exposure_N[e] = N + warp_padding
 
             self.xpix[i:i+N] = stamp.xpix.flat
@@ -260,7 +267,7 @@ class Patch:
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
 
 
-    def send_to_gpu(self, residual=False):
+    def send_to_gpu(self):
         '''
         Transfer the patch data to GPU main memory.  Saves the pointers
         and builds the Patch struct from patch.cu; sends that to GPU memory.
@@ -268,9 +275,6 @@ class Patch:
 
         Parameters
         ----------
-        residual: bool, optional
-            Whether to allocate GPU-side space for a residual image array.
-            Default: False.
 
         Returns
         -------
@@ -288,9 +292,11 @@ class Patch:
                 if arr_dt == self.ptr_dtype:
                     self.cuda_ptrs[arrname] = cuda.to_device(arr)
             except AttributeError:
-                print(f'Do not have field: {arrname}')
-                pass  # this will be removed later once we have all attrs
+                if arrname != 'residual':
+                    raise
 
+        if self.return_residual:
+            self.cuda_ptrs['residual'] = cuda.mem_alloc(self.xpix.nbytes)
 
         # use their pointers to fill in the patch struct
         #assert set(self.cuda_ptrs) == set(self.patch_struct_dtype.names)

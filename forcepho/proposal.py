@@ -24,7 +24,7 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=32, shared_size=48000, max_registers=64, show_ptxas=False,
+    def __init__(self, patch, thread_block=128, shared_size=48000, max_registers=64, show_ptxas=False,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
@@ -61,7 +61,7 @@ class Proposer:
         #chi_derivs_out = cuda.mem_alloc(self.patch.n_bands*response_struct_dtype.itemsize)
         #chi_derivs_out_ptr = np.uintp(chi_derivs_out)
 
-        chi_out = np.empty(1, dtype=np.float32)  # or array?
+        chi_out = np.empty(1, dtype=np.float32)
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
 
         print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}',
@@ -72,6 +72,10 @@ class Proposer:
                                       cuda.Out(chi_out), cuda.Out(chi_derivs_out),  # outputs
                                       grid=self.grid, block=self.block, shared=self.shared_size,           # launch config
                                       )
+
+        if self.patch.return_residual:
+            residual = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
+            print(f'First residual: {residual[0]}')
 
         print(chi_out, chi_derivs_out)
 

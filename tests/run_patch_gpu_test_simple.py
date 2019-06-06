@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
     list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
 
-    p = Patch(stamps=list_of_stamps, miniscene=mini_scene)
+    p = Patch(stamps=list_of_stamps, miniscene=mini_scene, return_residual=True)
     gpu_patch = p.send_to_gpu()
     #p.test_struct_transfer(gpu_patch)
 

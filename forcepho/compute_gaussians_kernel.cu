@@ -70,10 +70,6 @@ class ImageGaussian {
 /// Compute the Model for one pixel from all galaxies; return the residual image
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
-
-    if(threadIdx.x == 0)
-        printf("ComputeResidualImage\n");
-
 	PixFloat residual = data;
 	
 	//loop over all image gaussians g for all galaxies. 
@@ -100,9 +96,6 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
             ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) //pass in pointer to first gaussian for this galaxy. 
 {
-    if(threadIdx.x == 0)
-        printf("ComputeGaussianDerivative\n");
-
 	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   //loop ovver all gaussians in this galaxy. 
 		ImageGaussian *g = gaussian+gauss;
 	
@@ -164,9 +157,6 @@ typedef struct {
 } PixGaussian; 
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
-	
-    if(threadIdx.x == 0)
-        printf("GetGaussianAndJacobian\n");
 
 	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
@@ -222,8 +212,6 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 	__shared__ float G, crpix[2], crval[2]; 
 	
 	if ( threadIdx.x == 0 ){
-        printf("CreateImageGaussians\n");
-
 	    band = blockIdx.x;   // This block is doing one band
 		psfgauss_start = patch->psfgauss_start[exposure];
 		G = patch->G[exposure]; 
@@ -426,19 +414,13 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 				ComputeGaussianDerivative(xp, yp, residual, 
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
 
-                if (threadIdx.x == 0) printf("boop %d\n", gal); 
 				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
-                if (threadIdx.x == 0) printf("after accum %d\n", gal); 
 
 		    }
-
-            if(threadIdx.x ==0 ) printf("out of galaxy loop\n");
 		}
-
 
 	__syncthreads();
     }
-    printf("exiting loop.\n");
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);
@@ -447,4 +429,4 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     return;
 }
 
-}
+}  // extern "C"
