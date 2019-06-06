@@ -410,11 +410,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
-	
-    // Now figure out which Accumulator this thread should use
-    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
-    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
-	
 
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
