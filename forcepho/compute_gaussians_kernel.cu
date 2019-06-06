@@ -74,14 +74,13 @@ class ImageGaussian {
 // TODO: n_gauss_total is a shared scalar in the calling function, but not here.
 // Can we avoid the thread-based storage?  Max's advice is probably not.
 
-__device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
+__device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian *g, int n_gauss_total)
 {
 	PixFloat residual = data;
 	
 	//loop over all image gaussians g for all galaxies. 
-	for (int i = 0; i < n_gauss_total; i ++){
-		ImageGaussian *g = imageGauss+i;
-        // TODO: Could say imageGauss++;
+	for (int i = 0; i < n_gauss_total; i++, g++){
+		// ImageGaussian *g = imageGauss+i;  // Now implicit in g++
 		float dx = xp - g->xcen; 
 		float dy = yp - g->ycen; 
 		float vx = g->fxx * dx + g->fxy * dy;
@@ -110,12 +109,11 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 // Can we avoid the thread-based storage?  Max's advice is probably not.
 
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
-            ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) 
+            ImageGaussian *g, float * dchi2_dp, int n_gal_gauss) 
 {
     // Loop over all gaussians in this galaxy. 
-	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   
-		ImageGaussian *g = gaussian+gauss;
-        // TODO: could just say gaussian++;
+	for (int gauss = 0; gauss<n_gal_gauss; gauss++, g++) {   
+		// ImageGaussian *g = gaussian+gauss;  // Now implicit in g++
 	
 		float dx = xp - g->xcen; 
 		float dy = yp - g->ycen; 
@@ -320,8 +318,8 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
-    	GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[g * n_psf_per_source + p]);
-        // TODO: Wasn't this argument just tid?
+    	GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[tid]);
+            // g * n_psf_per_source + p]);
 	}
 }
 	
