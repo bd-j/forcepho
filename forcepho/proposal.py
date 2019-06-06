@@ -50,16 +50,29 @@ class Proposer:
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
     def evaluate_proposal(self, proposal):
-        # TODO: use pinned memory here?
-        #proposal_allocation = cuda.to_device(proposal)
-        #proposal_cuda_ptr = np.uintp(proposal_allocation)  # needed? can we pass the allocation directly?
+        '''
+        Call the GPU kernel to evaluate the likelihood of a parameter proposal.
 
-        # alloc responses
-        #chi_out = cuda.mem_alloc(np.float32.itemsize)
-        #chi_out_ptr = np.uintp(chi_out)
+        Parameters
+        ----------
+        proposal: ndarray of dtype `source_struct_dtype`
+            An array of source parameters, packed into a Numpy array
+            (and thus ready to send to the GPU).
 
-        #chi_derivs_out = cuda.mem_alloc(self.patch.n_bands*response_struct_dtype.itemsize)
-        #chi_derivs_out_ptr = np.uintp(chi_derivs_out)
+        Returns
+        -------
+        chi2: float
+            The chi^2 for this proposal
+
+        chi2_derivs: ndarray of dtype `response_struct_dtype`
+            The derivatives of chi^2 with respect to proposal parameters.
+            Length of the array is nbands; each element is 7*MAXSOURCES floats.
+
+        residuals: list of ndarray of shape of original exposures
+            The residual image (data - model) for each exposure.  No padding.
+            Only returned if patch.return_residual.
+
+        '''
 
         chi_out = np.empty(1, dtype=np.float32)
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
@@ -73,13 +86,29 @@ class Proposer:
                                       grid=self.grid, block=self.block, shared=self.shared_size,           # launch config
                                       )
 
+        # Is this the right shape?
+        chi_derivs_out = chi_derivs_out.view(np.float32).reshape(self.patch.n_bands, 7, MAXSOURCES)
+        chi_derivs_out = chi_derivs_out[...,:self.patch.n_sources]
+
+        # Unpack return values
         if self.patch.return_residual:
-            residual = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
-            print(f'First residual: {residual[0]}')
+            residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
+
+            # Unpack flat, padded residuals into original images
+            residuals = np.split(residuals_flat, np.cumsum(self.patch.original_sizes)[:-1])
+            
+            for e,residual in enumerate(residuals):
+                residual = residual[:self.patch.original_sizes[e]]
+                residuals[e] = residual.reshape(self.patch.original_shapes[e])
+
+            print(f'First residual: {residuals[0]}')
 
         print(chi_out, chi_derivs_out)
 
-        return chi_out, chi_derivs_out
+        if self.patch.return_residual:
+            return chi_out, chi_derivs_out, residuals
+        else:
+            return chi_out, chi_derivs_out
 
 
 source_float_dt = np.float32

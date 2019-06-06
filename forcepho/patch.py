@@ -222,6 +222,9 @@ class Patch:
         shapes = np.array([stamp.shape for stamp in stamps], dtype=int)
         sizes = np.array([stamp.npix for stamp in stamps], dtype=int)
 
+        self.original_shapes = shapes
+        self.original_sizes = sizes
+
         # will have super-pixel padding
         warp_size = 32
         total_padded_size = np.sum( (sizes + warp_size - 1)//warp_size*warp_size )
