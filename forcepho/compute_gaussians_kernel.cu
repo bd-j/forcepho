@@ -375,8 +375,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Now figure out which one this thread should use
-    // OPTION: 32 is the warp size; perhaps use a built-in name
-    int threads_per_accum = ceilf(blockDim.x/32/NUMACCUMS)*32;    
+    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
     int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
 	
     // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
