@@ -391,7 +391,7 @@ class Accumulator {
 /// The proposal is a pointer to Source[n_active] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
 
-#define THISBAND blockIDx.x
+#define THISBAND blockIdx.x
 // Creating a more interpretable shorthand for this
 
 extern "C" {
