@@ -122,7 +122,11 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float dy = yp - g->ycen; 
 		float vx = g->fxx * dx + g->fxy * dy;
 		float vy = g->fyy * dy + g->fxy * dx;
-		float Gp = exp(-0.5 * (dx*vx + dy*vy));
+		
+		float exparg = dx*vx + dy*vy; 
+		if (exparg>MAX_EXP_ARG) continue;
+		
+		float Gp = exp(-0.5 * exparg);
 		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0/24.0); 
 	
         // Old code: this had divisions
