@@ -8,7 +8,7 @@ Create chi^2 and d(chi2/dparam) accumulators in shared memory and zero them.
 For each exposure:
 
     Create on-image Gaussians from on-sky parameters, put in shared memory
-    	ImageGaussian[NGalaxy*GaussianPerGalaxy]
+    	ImageGaussian[NGalaxy*ImageGaussiansPerGalaxy]
 
     For one pixel per thread (taking BlockSize steps):
 
