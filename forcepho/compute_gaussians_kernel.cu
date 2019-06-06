@@ -204,9 +204,9 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	// gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI)) ;
 
 	//now get derivatives of F
-	matrix22 dSigma_dq  = sersicgauss.covar * symABt(T, dT_dq);
+	matrix22 dSigma_dq  = sersicgauss.covar * symABt(sersicgauss.T, sersicgauss.dT_dq);
     // (sersicgauss.T * sersicgauss.dT_dq.T()+ sersicgauss.dT_dq*sersicgauss.T.T()); 
-	matrix22 dSigma_dpa = sersicgauss.covar * symABt(T, dT_dpa);
+	matrix22 dSigma_dpa = sersicgauss.covar * symABt(sersicgauss.T, sersicgauss.dT_dpa);
     // (sersicgauss.T * sersicgauss.dT_dpa.T()+sersicgauss.dT_dpa*sersicgauss.T.T()); 
 	
 	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
