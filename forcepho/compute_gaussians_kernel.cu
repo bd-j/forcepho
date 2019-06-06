@@ -68,6 +68,9 @@ class ImageGaussian {
 
 
 /// Compute the Model for one pixel from all galaxies; return the residual image
+/// The one pixel is specified with xp, yp, data.
+/// We have to enter a pointer to the whole list of ImageGaussians.
+
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
 	PixFloat residual = data;
@@ -92,7 +95,11 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 	return residual;
 }
 
-/// Compute the likelihood derivative for one pixel and one galaxy
+/// Compute the likelihood derivative for one pixel and one galaxy.
+/// The one pixel is specified with xp, yp, and the residual*ierr^2.
+/// We have to enter a pointer to the Gaussians for this one galaxy.
+/// And we supply a pointer where we accumulate the derivatives.
+
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
             ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) //pass in pointer to first gaussian for this galaxy. 
 {
@@ -333,9 +340,7 @@ class Accumulator {
 
 // ================= Primary Proposal Kernel ========================
 
-
 /// We are being handed pointers to a Patch structure, a Proposal structure,
-
 /// a scalar chi2 response, and a vector dchi2_dp response.
 /// The proposal is a pointer to Source[n_active] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
@@ -355,8 +360,12 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     Source *sources = (Source *)_proposal;
 	
     int thisband = blockIdx.x;   // This block is doing one band
-	
+    // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
 
+    // Now figure out which Accumulator this thread should use
+    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
+    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
+	
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
     __shared__ ImageGaussian *imageGauss; // [source][gauss]
@@ -373,12 +382,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     for (int j=0; j<NUMACCUMS; j++) accum[j].zero();
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
-
-    // Now figure out which one this thread should use
-    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
-    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
-	
-    // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
 
     // Loop over Exposures
     for (int e = 0; e < patch->band_N[thisband]; e++) {
