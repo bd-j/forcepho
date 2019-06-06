@@ -124,7 +124,7 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float Gp = exp(-0.5 * (dx*vx + dy*vy));
 		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0/24.0); 
 	
-        // Old code: TODO -- this had divisions
+        // Old code: this had divisions
 		// float C = residual_ierr2 * g->amp * Gp * H;   
 	    // float dC_dA   = C / g->amp;
 	    // float c_h = C / H;
@@ -382,6 +382,9 @@ class Accumulator {
 /// The proposal is a pointer to Source[n_active] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
 
+#define THISBAND blockIDx.x
+// Creating a more interpretable shorthand for this
+
 extern "C" {
 __global__ void EvaluateProposal(void *_patch, void *_proposal, 
                                  void *pchi2, void *pdchi2_dp) {
@@ -396,9 +399,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // The Proposal is a vector of Sources[n_active]
     Source *sources = (Source *)_proposal;
 	
-    int thisband = blockIdx.x;   // This block is doing one band
-    // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
-
     // Now figure out which Accumulator this thread should use
     int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
     int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
@@ -413,9 +413,9 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     __shared__ Accumulator *accum;   // [NUMACCUMS]
     
     if (threadIdx.x==0) {
-        n_gal_gauss = patch->n_psf_per_source[thisband];
-        band_N = patch->band_N[thisband];
-        band_start = patch->band_start[thisband];
+        n_gal_gauss = patch->n_psf_per_source[THISBAND];
+        band_N = patch->band_N[THISBAND];
+        band_start = patch->band_start[THISBAND];
         n_sources = patch->n_sources;
         n_gauss_total = n_sources*n_gal_gauss;
         accum = (Accumulator *) shared;
@@ -473,7 +473,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), n_sources);
+    accum[0].store((float *)pchi2, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
     return;
 }
 
