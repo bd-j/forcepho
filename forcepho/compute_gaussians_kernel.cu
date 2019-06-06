@@ -363,21 +363,21 @@ class Accumulator {
     }
 
     /// This copies this Accumulator into another memory buffer
-    __device__ inline void store(float *pchi2, float *pdchi2_dp, int n_active) {
+    __device__ inline void store(float *pchi2, float *pdchi2_dp, int n_sources) {
         if (threadIdx.x==0) *pchi2 = chi2;
-        for (int j=threadIdx.x; j<n_active*NPARAMS; j+=blockDim.x)
+        for (int j=threadIdx.x; j<n_sources*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
         __syncthreads();
     }
 
-    __device__ inline void addto(Accumulator &A, int n_active) {
+    __device__ inline void addto(Accumulator &A, int n_sources) {
         if (threadIdx.x==0) chi2 += A.chi2;
-        for (int j=threadIdx.x; j<n_active*NPARAMS; j+=blockDim.x)
+        for (int j=threadIdx.x; j<n_sources*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
     }
 
-    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_active) {
-        for (int n=1; n<nAcc; n++) addto(A[n], n_active);
+    __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_sources) {
+        for (int n=1; n<nAcc; n++) addto(A[n], n_sources);
         __syncthreads();
     }
 };
@@ -386,7 +386,7 @@ class Accumulator {
 
 /// We are being handed pointers to a Patch structure, a Proposal structure,
 /// a scalar chi2 response, and a vector dchi2_dp response.
-/// The proposal is a pointer to Source[n_active] sources.
+/// The proposal is a pointer to Source[n_sources] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
 
 #define THISBAND blockIdx.x
@@ -403,7 +403,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // Get the patch set up
     Patch *patch = (Patch *)_patch;  
 
-    // The Proposal is a vector of Sources[n_active]
+    // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
 	
     // Now figure out which Accumulator this thread should use
