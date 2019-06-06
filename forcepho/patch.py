@@ -20,6 +20,7 @@ class Patch:
         miniscene,         # All peaks identified in this patch region
         mask=None,              # The mask that defines the nominal patch
         super_pixel_size=1,  # Number of pixels in each superpixel
+        return_residual=False,
         pix_dtype=np.float32,  # data type for pixel and flux data
         meta_dtype=np.float32   # data type for non-pixel data
         ):
@@ -34,6 +35,10 @@ class Patch:
 
         Parameters
         ----------
+        return_residual: bool, optional
+            Whether the residual image will be returned from the GPU.
+            Default: False.
+
         pix_dtype: np.dtype, optional
             The Numpy datatype of the pixel data, like fluxes and coordinates.
             Default: np.float32
@@ -45,6 +50,8 @@ class Patch:
 
         self.pix_dtype = pix_dtype
         self.meta_dtype = meta_dtype
+
+        self.return_residual = return_residual
 
         # Group stamps by band
         # stamp.band must be an int identifier (does not need to be contiguous)
@@ -100,8 +107,6 @@ class Patch:
         self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
         _n_psf_per_source = np.repeat(self.n_psf_per_source, self.band_N)
         self.psfgauss_start[1:] = np.cumsum(_n_psf_per_source)[:-1]*self.n_sources
-        print(self.psfgauss_start)
-        print(self.n_psf_per_source)
 
         s = 0
         for e in range(self.n_exp):
@@ -113,7 +118,7 @@ class Patch:
                 #print(N)
                 self.psfgauss[s:s+N] = this_psfgauss
                 s += N
-            if e < self.n_exp:
+            if e < self.n_exp-1:
                 assert s == self.psfgauss_start[e+1], (e,s,self.n_sources,self.psfgauss_start[e+1])  # check we got our indexing right
 
 
@@ -217,12 +222,15 @@ class Patch:
         shapes = np.array([stamp.shape for stamp in stamps], dtype=int)
         sizes = np.array([stamp.npix for stamp in stamps], dtype=int)
 
-        total_padded_size = np.sum(sizes)  # will have super-pixel padding
+        # will have super-pixel padding
+        warp_size = 32
+        total_padded_size = np.sum( (sizes + warp_size - 1)//warp_size*warp_size )
 
-        self.xpix = np.empty(total_padded_size, dtype=dtype)
-        self.ypix = np.empty(total_padded_size, dtype=dtype)
-        self.data = np.empty(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
-        self.ierr = np.empty(total_padded_size, dtype=dtype)  # 1/sigma
+        # TODO: we use zeros instead of empty for the padding bytes
+        self.xpix = np.zeros(total_padded_size, dtype=dtype)
+        self.ypix = np.zeros(total_padded_size, dtype=dtype)
+        self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
 
         # These index the exposure_start and exposure_N arrays
         # bands are indexed sequentially, not by any band ID
@@ -242,7 +250,8 @@ class Patch:
 
             N = stamp.npix
             self.exposure_start[e] = i
-            self.exposure_N[e] = N
+            warp_padding = (warp_size - N%warp_size)%warp_size
+            self.exposure_N[e] = N + warp_padding
 
             self.xpix[i:i+N] = stamp.xpix.flat
             self.ypix[i:i+N] = stamp.ypix.flat
@@ -250,7 +259,7 @@ class Patch:
             self.ierr[i:i+N] = stamp.ierr.flat
 
             # Finished this exposure
-            i += N
+            i += N + warp_padding
 
         assert i == total_padded_size
 
@@ -258,7 +267,7 @@ class Patch:
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
 
 
-    def send_to_gpu(self, residual=False):
+    def send_to_gpu(self):
         '''
         Transfer the patch data to GPU main memory.  Saves the pointers
         and builds the Patch struct from patch.cu; sends that to GPU memory.
@@ -266,9 +275,6 @@ class Patch:
 
         Parameters
         ----------
-        residual: bool, optional
-            Whether to allocate GPU-side space for a residual image array.
-            Default: False.
 
         Returns
         -------
@@ -286,9 +292,11 @@ class Patch:
                 if arr_dt == self.ptr_dtype:
                     self.cuda_ptrs[arrname] = cuda.to_device(arr)
             except AttributeError:
-                print(f'Do not have field: {arrname}')
-                pass  # this will be removed later once we have all attrs
+                if arrname != 'residual':
+                    raise
 
+        if self.return_residual:
+            self.cuda_ptrs['residual'] = cuda.mem_alloc(self.xpix.nbytes)
 
         # use their pointers to fill in the patch struct
         #assert set(self.cuda_ptrs) == set(self.patch_struct_dtype.names)
@@ -361,23 +369,23 @@ class Patch:
                     printf("%g ", patch->rad2[i]);
                 }}
                 printf("\\n");
+
+                int i = 100;
+                PSFSourceGaussian p = patch->psfgauss[i];
+                printf("Kernel sees: patch->psfgauss[%d] = (%f,%f,%f,%f,%f,%f,%d)\\n", i,
+                        p.amp, p.xcen, p.ycen,
+                        p.Cxx, p.Cyy, p.Cxy, p.sersic_radius_bin
+                        );
             }}
             ''',
             include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], cache_dir='/gpfs/wolf/gen126/scratch/lgarrison/pycuda_cache')
 
+        print(self.psfgauss[100])
         kernel = mod.get_function('check_patch_struct')
 
-        retcode = kernel(self.gpu_patch, block=(1,1,1), grid=(1,1,1))
+        retcode = kernel(gpu_patch, block=(1,1,1), grid=(1,1,1))
 
         print(f"Kernel done.")
-
-
-    # TODO: will probably go elsewhere
-    def send_proposal(self, proposal, block=1024):
-        grid = (self.n_bands,1,1)
-        block = (block,1,1)
-
-        kernel(self.gpu_patch, proposal, results, grid=grid, block=block)
 
 
     # The following must be kept bitwise identical to patch.cu!

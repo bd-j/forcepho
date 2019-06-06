@@ -234,7 +234,7 @@ class WorkPlan(object):
 
     @property
     def ierr(self):
-        return self.stamp.ierr
+        return self.stamp.ierr.reshape(-1)
 
 
 class FastWorkPlan(WorkPlan):

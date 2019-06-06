@@ -100,10 +100,6 @@ public:
 };
 
 
-
-
-
-
 class PSFSourceGaussian {
     /*
     Describes a single Gaussian that has already been convolved

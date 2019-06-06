@@ -26,12 +26,15 @@
 
 
 // Shared memory in each GPU block is limited to 48 KB, which is 12K floats.
-// We have a handful of single variables, and then the big items are:
+// We have a handful (~9) of single variables, and then the big items are:
 // The accumulators are NUMACCUMS*(NPARAMS*MAXSOURCES+1) shared floats 
 // The ImageGaussians are n_psf_per_source*n_sources*21 shared floats,
 // so this is bounded by n_psf_per_source*MAXSOURCES*21.
 
 // If n_psf ~ 20, then the memory per source is 20*21 for the gaussians,
 // and only 7*NUMACCUMS for the accumulators.
+// The kernel must be invoked with enough shared memory to hold these two
+// big arrays.  And it has to be enough smaller than 48KB to leave room
+// for the other few variables.  We suggest 48000 bytes.
 
 
