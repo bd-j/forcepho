@@ -35,6 +35,7 @@ When done with all exposures, copy the accumulators to the output buffer.
 #include "patch.cu"
 #include "proposal.cu"
 
+// =====================  ImageGaussian class =============================
 
 class ImageGaussian {
   public:
@@ -66,10 +67,12 @@ class ImageGaussian {
 
 // ======================  Code to Evaluate the Gaussians =========================
 
-
 /// Compute the Model for one pixel from all galaxies; return the residual image
 /// The one pixel is specified with xp, yp, data.
 /// We have to enter a pointer to the whole list of ImageGaussians.
+
+// TODO: n_gauss_total is a shared scalar in the calling function, but not here.
+// Can we avoid the thread-based storage?
 
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian * imageGauss, int n_gauss_total)
 {
@@ -78,6 +81,7 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 	//loop over all image gaussians g for all galaxies. 
 	for (int i = 0; i < n_gauss_total; i ++){
 		ImageGaussian *g = imageGauss+i;
+        // TODO: Could say imageGauss++;
 		float dx = xp - g->xcen; 
 		float dy = yp - g->ycen; 
 		float vx = g->fxx * dx + g->fxy * dy;
@@ -95,16 +99,23 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 	return residual;
 }
 
+// ====================  Code to Compute the Derivatives =====================
+
 /// Compute the likelihood derivative for one pixel and one galaxy.
 /// The one pixel is specified with xp, yp, and the residual*ierr^2.
 /// We have to enter a pointer to the Gaussians for this one galaxy.
 /// And we supply a pointer where we accumulate the derivatives.
 
+// TODO: n_gal_gauss is a shared scalar in the calling function, but not here.
+// Can we avoid the thread-based storage?
+
 __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ierr2, 
-            ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) //pass in pointer to first gaussian for this galaxy. 
+            ImageGaussian *gaussian, float * dchi2_dp, int n_gal_gauss) 
 {
-	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   //loop ovver all gaussians in this galaxy. 
+    // Loop over all gaussians in this galaxy. 
+	for (int gauss = 0; gauss<n_gal_gauss; gauss++) {   
 		ImageGaussian *g = gaussian+gauss;
+        // TODO: could just say gaussian++;
 	
 		float dx = xp - g->xcen; 
 		float dy = yp - g->ycen; 
@@ -169,7 +180,6 @@ typedef struct {
 	matrix22 dT_dq;
 	matrix22 dT_dpa;
 } PixGaussian; 
-
 
 /// This function takes a source Gaussian and a PSF Gaussian and 
 /// performs the convolution, creating the ImageGaussian that contains
@@ -245,12 +255,12 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		psfgauss_start = patch->psfgauss_start[exposure];
 		G = patch->G[exposure]; 
 	
-		crpix[0] = patch->crpix[2*exposure];  crpix[1] = patch->crpix[2*exposure + 1];  
-		crval[0] = patch->crval[2*exposure];  crval[1] = patch->crval[2*exposure + 1]; 
+		crpix[0] = patch->crpix[2*exposure]; crpix[1] = patch->crpix[2*exposure + 1];
+		crval[0] = patch->crval[2*exposure]; crval[1] = patch->crval[2*exposure + 1];
 	
 		n_psf_per_source = patch->n_psf_per_source[band]; //constant per band. 
 	    n_gal_gauss = patch->n_sources * n_psf_per_source;
-	    // TODO: Consider use of __constant__ variables
+	    // OPTION: Consider use of __constant__ variables
 	}
 	
 	__syncthreads();
@@ -395,11 +405,19 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 	
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
+    __shared__ int band_N;   // The number of exposures in this band
+    __shared__ int band_start;   // The starting exposures in this band
+    __shared__ int n_sources;   // The number of sources
+    __shared__ int n_gauss_total;   // Number of image gaussians for all sources
     __shared__ ImageGaussian *imageGauss; // [source][gauss]
     __shared__ Accumulator *accum;   // [NUMACCUMS]
     
     if (threadIdx.x==0) {
         n_gal_gauss = patch->n_psf_per_source[thisband];
+        band_N = patch->band_N[thisband];
+        band_start = patch->band_start[thisband];
+        n_sources = patch->n_sources;
+        n_gauss_total = n_sources*n_gal_gauss;
         accum = (Accumulator *) shared;
         //shared += sizeof(Accumulator)*NUMACCUMS;
         shared_counter += NUMACCUMS*sizeof(Accumulator);
@@ -411,8 +429,8 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
 
     // Loop over Exposures
-    for (int e = 0; e < patch->band_N[thisband]; e++) {
-        int exposure = patch->band_start[thisband] + e;
+    for (int e = 0; e < band_N; e++) {
+        int exposure = band_start + e;
 
         CreateImageGaussians(patch, sources, exposure, imageGauss);
 
@@ -426,7 +444,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    float yp = patch->ypix[pix];
 		    PixFloat data = patch->data[pix];
 		    PixFloat ierr = patch->ierr[pix];
-		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gal_gauss * patch->n_sources); 
+		    PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gauss_total); 
 
             // Did the CPU ask that we output the residual image?
             if(patch->residual != NULL)
@@ -439,7 +457,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 	    
 		    // Now we loop over Sources and compute the derivatives for each
-		    for (int gal = 0; gal < patch->n_sources; gal++) {
+		    for (int gal = 0; gal < n_sources; gal++) {
 				for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;
 				ComputeGaussianDerivative(xp, yp, residual, 
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
@@ -453,9 +471,9 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     }
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
-    accum[0].coadd_and_sync(accum, NUMACCUMS, patch->n_sources);
+    accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), patch->n_sources);
+    accum[0].store((float *)pchi2, (float *) &(r[thisband].dchi2_dparam), n_sources);
     return;
 }
 
