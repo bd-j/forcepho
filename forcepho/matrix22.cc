@@ -49,6 +49,11 @@ class matrix22 {
     CUDA_CALLABLE_MEMBER matrix22(const float d[]) {
         v11 = d[0]; v12 = d[1]; v21 = d[2]; v22 = d[3];
     }
+	
+	CUDA_CALLABLE_MEMBER inline void debug_print(){
+		printf(" %f %f\n", v11, v12);
+		printf(" %f %f\n\n", v21, v22); 
+	}
 
     // --------------------------------------------------
     // The following operations are almost constructors, but require too much
@@ -137,10 +142,16 @@ CUDA_CALLABLE_MEMBER inline matrix22 operator * (const matrix22& A, const matrix
 
 ///Compute A B A, return matrix
 CUDA_CALLABLE_MEMBER inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
-    float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 
-    float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v11 * A.v11 * B.v21 + A.v12 * A.v22 * B.v22; 
-    float v21 = A.v11 * A.v21 * B.v11 + A.v11 * A.v11 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 
-    float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v11 * A.v11 * B.v22; 
+	
+	
+	
+	
+	
+	
+    float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 	
+    float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v12 * A.v12 * B.v21 + A.v12 * A.v22 * B.v22; 	
+    float v21 = A.v11 * A.v21 * B.v11 + A.v21 * A.v21 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 	
+    float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v22 * A.v22 * B.v22; 
     return matrix22(v11, v12, v21, v22); 
 }
 
