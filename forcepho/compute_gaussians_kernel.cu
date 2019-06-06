@@ -374,11 +374,11 @@ class Accumulator {
         if (threadIdx.x==0) chi2 += A.chi2;
         for (int j=threadIdx.x; j<n_sources*NPARAMS; j+=blockDim.x)
             dchi2_dp[j] += A.dchi2_dp[j];
+        __syncthreads();
     }
 
     __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_sources) {
         for (int n=1; n<nAcc; n++) addto(A[n], n_sources);
-        __syncthreads();
     }
 };
 
