@@ -353,7 +353,8 @@ class Accumulator {
         input += __shfl_down_sync(FULL_MASK, input,  4);
         input += __shfl_down_sync(FULL_MASK, input,  2);
         input += __shfl_down_sync(FULL_MASK, input,  1);
-        if (threadIdx.x&31==0) atomicAdd(answer, input);
+
+        if ((threadIdx.x&31) == 0) atomicAdd(answer, input);
     }
     
     // Could put the Reduction code in here
@@ -382,6 +383,7 @@ class Accumulator {
 
     __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_sources) {
         for (int n=1; n<nAcc; n++) addto(A[n], n_sources);
+            __syncthreads();
     }
 };
 
@@ -402,7 +404,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
                                  void *pchi2, void *pdchi2_dp) {
     // We will use a block of shared memory
     extern __shared__ char shared[];
-    int shared_counter = 0;
     //char *shared = (char *)_shared;
 
     // Get the patch set up
@@ -421,6 +422,8 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     __shared__ Accumulator *accum;   // [NUMACCUMS]
     
     if (threadIdx.x==0) {
+        int shared_counter = 0;
+
         n_gal_gauss = patch->n_psf_per_source[THISBAND];
         band_N = patch->band_N[THISBAND];
         band_start = patch->band_start[THISBAND];
@@ -483,6 +486,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
 	__syncthreads();
     }
+
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
