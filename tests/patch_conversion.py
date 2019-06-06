@@ -25,7 +25,7 @@ def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3
     # add image and uncertainty data to Stamp, flipping axis order
     stamp = PostageStamp()
     stamp.pixel_values = np.array(hdf5_file['images'][filter_name][exp_name]['sci']).T - background
-    stamp.ierr = np.array(hdf5_file['images'][filter_name][exp_name]['rms']).T
+    stamp.ierr = 1.0 / np.array(hdf5_file['images'][filter_name][exp_name]['rms']).T
     mask = np.array(hdf5_file['images'][filter_name][exp_name]['mask']).T
     stamp.nx, stamp.ny = stamp.pixel_values.shape
     # note the inversion of x and y order in the meshgrid call here

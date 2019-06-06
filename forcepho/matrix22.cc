@@ -160,6 +160,13 @@ CUDA_CALLABLE_MEMBER inline matrix22 AtA(const matrix22& A) {
     return matrix22(A.v11*A.v11+A.v21*A.v21, tmp, tmp, A.v12*A.v12+A.v22*A.v22);
 }
 
+/// Compute A B^T + B A^T.  This is symmetric and can be computed faster.
+CUDA_CALLABLE_MEMBER inline matrix22 symABt(const matrix22& A, const matrix22& B) {
+    float tmp = A.v11*B.v21 + A.v12*B.v22 + A.v21*B.v11 + A.v22*B.v12;
+    return matrix22( 2.0*(A.v11*B.v11+A.v12*B.v12), tmp, tmp, 2.0*(A.v21*B.v21+A.v22*B.v22));
+}
+
+
 /// matrix^T matrix matrix triple symmetric product
 /// This assumes A is symmetric!
 CUDA_CALLABLE_MEMBER inline matrix22 BtAB(const matrix22& A, const matrix22& B) {
