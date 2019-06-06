@@ -111,23 +111,28 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float vx = g->fxx * dx + g->fxy * dy;
 		float vy = g->fyy * dy + g->fxy * dx;
 		float Gp = exp(-0.5 * (dx*vx + dy*vy));
+		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0/24.0); 
 	
-		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) / 24.0; 
-		float C = residual_ierr2 * g->amp * Gp * H;   
-	
-	    float dC_dA   = C / g->amp;
+        // Old code: TODO -- this had divisions
+		// float C = residual_ierr2 * g->amp * Gp * H;   
+	    // float dC_dA   = C / g->amp;
+	    // float c_h = C / H;
+
+		float dC_dA = residual_ierr2 * Gp;
+        float c_h = dC_dA * g->amp;
+        dC_dA *= H;
+	    float C   = dC_dA * H;
 	    float dC_dx   = C*vx;
 	    float dC_dy   = C*vy;
 	    float dC_dfx  = -0.5*C*dx*dx;
 	    float dC_dfy  = -0.5*C*dy*dy;
 	    float dC_dfxy = -1.0*C*dx*dy;
 	
-	    float c_h = C / H;
-	    dC_dx    -= c_h * (g->fxx*vx + g->fxy*vy) / 12.0;
-	    dC_dy    -= c_h * (g->fyy*vy + g->fxy*vx) / 12.0;
-	    dC_dfx   -= c_h * (1.0 - 2.0*dx*vx) / 24.0;
-	    dC_dfy   -= c_h * (1.0 - 2.0*dy*vy) / 24.0;
-	    dC_dfxy  += c_h * (dy*vx + dx*vy) / 12.0;
+	    dC_dx    -= c_h * (g->fxx*vx + g->fxy*vy) * (1.0/12.0);
+	    dC_dy    -= c_h * (g->fyy*vy + g->fxy*vx) * (1.0/12.0);
+	    dC_dfx   -= c_h * (1.0 - 2.0*dx*vx) * (1.0/24.0);
+	    dC_dfy   -= c_h * (1.0 - 2.0*dy*vy) * (1.0/24.0);
+	    dC_dfxy  += c_h * (dy*vx + dx*vy) * (1.0/12.0);
 			 
 	    //Multiply by Jacobian and add to dchi2_dp	
 		dchi2_dp[0] += g->dA_dFlux * dC_dA ; 
@@ -143,7 +148,9 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 
 // =================== Code to prepare the Gaussians =======================
 
-//NAM do we want this class, or should we make the convolve a method of PSFSourceGaussian?
+/// This holds the information on a single source Gaussian, along with 
+/// info needed to compute derivatives post-convolution.
+
 typedef struct { 
     // 6 Gaussian parameters for sersic profile 
 	float amp;
@@ -163,6 +170,12 @@ typedef struct {
 	matrix22 dT_dpa;
 } PixGaussian; 
 
+
+/// This function takes a source Gaussian and a PSF Gaussian and 
+/// performs the convolution, creating the ImageGaussian that contains
+/// the on-image gaussian plus the Jacobian to convert derivatives into
+/// the on-sky parameters.
+
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 
 	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
@@ -178,11 +191,13 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) / (2.0 * M_PI) ;
+	gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI)) ;
 
 	//now get derivatives of F
 	matrix22 dSigma_dq  = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dq.T()  + sersicgauss.dT_dq  * sersicgauss.T.T() ) ; 
 	matrix22 dSigma_dpa = sersicgauss.covar * (sersicgauss.T * sersicgauss.dT_dpa.T() + sersicgauss.dT_dpa * sersicgauss.T.T() ) ; 
+    // TODO: This math of A B^T + B A^T could be simplified:
+    // it's the symmetrization of a 2x2 matrix
 	
 	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
 	matrix22 dF_dpa     = -1.0 * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
@@ -191,11 +206,13 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	float ddetF_dpa  = detF * (covar * dF_dpa).trace(); 
 	
 	// Now get derivatives with respect to sky parameters
-    gauss.dA_dQ      = gauss.amp / (2.0 * detF) * ddetF_dq;  
-    gauss.dA_dPA     = gauss.amp / (2.0 * detF) * ddetF_dpa;  
+    gauss.dA_dQ      = gauss.amp /(2.0*detF) * ddetF_dq;  
+    gauss.dA_dPA     = gauss.amp /(2.0*detF) * ddetF_dpa;  
+    // TODO: Why do we multiply and then divide by detF?
     gauss.dA_dFlux   = gauss.amp / sersicgauss.flux; 
     gauss.dA_dSersic = gauss.amp / sersicgauss.amp * sersicgauss.da_dn;
     gauss.dA_drh     = gauss.amp / sersicgauss.amp * sersicgauss.da_dr;
+    // TODO: Some opportunity in the above to avoid some divisions.
 	
 	gauss.dx_dAlpha = sersicgauss.CW.v11; 
 	gauss.dy_dAlpha = sersicgauss.CW.v21; 
@@ -212,12 +229,17 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	gauss.dFxy_dPA = dF_dpa.v21; 
 }
 
+/// This function takes all of the sources for this exposure and 
+/// convolves each with the PSFGaussians for all radii, producing a long
+/// set of ImageGaussians that live in the shared memory.
 
 __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposure, ImageGaussian * imageGauss) {
 	
+    // We're going to store some values common to the exposure in shared memory
 	__shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss; 
 	__shared__ float G, crpix[2], crval[2]; 
 	
+    // Load the shared values
 	if ( threadIdx.x == 0 ){
 	    band = blockIdx.x;   // This block is doing one band
 		psfgauss_start = patch->psfgauss_start[exposure];
@@ -233,14 +255,18 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 	
 	__syncthreads();
 	
+    // And now we're ready for the main loop.  
+    // Each thread will work on one ImageGaussian, which means one PSF component
+    // and one source radius for one galaxy/source.
 
 	for (int tid = threadIdx.x; tid < n_gal_gauss; tid += blockDim.x) {
+        // Unpack the source and gaussian.
         int g = tid / n_psf_per_source;       // Source number
 		int p = tid - g * n_psf_per_source;   // Gaussian number
 		
 		Source *galaxy = sources+g; 	
 		PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p; 
-		PixGaussian	sersicgauss; 
+		PixGaussian	sersicgauss;    // This is where we'll queue up the source info
 	
 	    // Do the setup of the transformations		
 		//Get the transformation matrix and other conversions
@@ -276,6 +302,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
     	GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[g * n_psf_per_source + p]);
+        // TODO: Wasn't this argument just tid?
 	}
 }
 	
