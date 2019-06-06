@@ -24,7 +24,7 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=128, shared_size=48000, max_registers=64, show_ptxas=False,
+    def __init__(self, patch, thread_block=1024, shared_size=48000, max_registers=64, show_ptxas=False,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
