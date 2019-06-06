@@ -46,7 +46,7 @@ class Proposer:
             options += [f'-maxrregcount={max_registers}']
 
         mod = SourceModule(kernel_source, cache_dir=False, include_dirs=[thisdir],
-            options=options, no_extern_c=True, keep=True)
+            options=options, no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
     def evaluate_proposal(self, proposal):
@@ -105,13 +105,11 @@ class Proposer:
 
     def unpack_residuals(self, residuals_flat):
         # Unpack flat, padded residuals into original images
-        residuals = np.split(residuals_flat, np.cumsum(self.patch.original_sizes)[:-1])
+        residuals = np.split(residuals_flat, np.cumsum(self.patch.exposure_N)[:-1])
         
         for e,residual in enumerate(residuals):
             residual = residual[:self.patch.original_sizes[e]]
             residuals[e] = residual.reshape(self.patch.original_shapes[e])
-
-        print(f'First residual: {residuals[0]}')
 
         return residuals
 

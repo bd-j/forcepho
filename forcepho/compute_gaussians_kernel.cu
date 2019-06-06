@@ -76,16 +76,19 @@ class ImageGaussian {
 
 __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, ImageGaussian *g, int n_gauss_total)
 {
+
 	PixFloat residual = data;
 	
 	//loop over all image gaussians g for all galaxies. 
 	for (int i = 0; i < n_gauss_total; i++, g++){
 		// ImageGaussian *g = imageGauss+i;  // Now implicit in g++
 		float dx = xp - g->xcen; 
-		float dy = yp - g->ycen; 
+		float dy = yp - g->ycen;
+
 		float vx = g->fxx * dx + g->fxy * dy;
 		float vy = g->fyy * dy + g->fxy * dx;
-		float exparg = dx*vx+dy*vy;
+		float exparg = dx*vx + dy*vy;
+
 		if (exparg>MAX_EXP_ARG) continue;
 		float Gp = exp(-0.5 * exparg);
 
@@ -351,7 +354,7 @@ class Accumulator {
         input += __shfl_down_sync(FULL_MASK, input,  2);
         input += __shfl_down_sync(FULL_MASK, input,  1);
         // threadIdx.x % 32 == 0
-        if ((threadIdx.x&31)==0) atomicAdd(answer, input);
+        if ((threadIdx.x&31) == 0) atomicAdd(answer, input);
     }
     
     // Could put the Reduction code in here
@@ -380,12 +383,15 @@ class Accumulator {
 
     __device__ void coadd_and_sync(Accumulator *A, int nAcc, int n_sources) {
         for (int n=1; n<nAcc; n++) addto(A[n], n_sources);
+            __syncthreads();
     }
 };
 
 // ================= Primary Proposal Kernel ========================
 
+
 /// We are being handed pointers to a Patch structure, a Proposal structure,
+
 /// a scalar chi2 response, and a vector dchi2_dp response.
 /// The proposal is a pointer to Source[n_sources] sources.
 /// The response is a pointer to [band][MaxSource] Responses.
@@ -398,7 +404,6 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
                                  void *pchi2, void *pdchi2_dp) {
     // We will use a block of shared memory
     extern __shared__ char shared[];
-    int shared_counter = 0;
     //char *shared = (char *)_shared;
 
     // Get the patch set up
@@ -406,11 +411,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
-	
-    // Now figure out which Accumulator this thread should use
-    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
-    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
-	
+
     // Allocate the ImageGaussians for this band (same number for all exposures)
     __shared__ int n_gal_gauss;   // Number of image gaussians per galaxy
     __shared__ int band_N;   // The number of exposures in this band
@@ -421,6 +422,8 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     __shared__ Accumulator *accum;   // [NUMACCUMS]
     
     if (threadIdx.x==0) {
+        int shared_counter = 0;
+
         n_gal_gauss = patch->n_psf_per_source[THISBAND];
         band_N = patch->band_N[THISBAND];
         band_start = patch->band_start[THISBAND];
@@ -435,6 +438,12 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
     for (int j=0; j<NUMACCUMS; j++) accum[j].zero();
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
+
+    // Now figure out which one this thread should use
+    int threads_per_accum = ceilf(blockDim.x/warpSize/NUMACCUMS)*warpSize;
+    int accumnum = threadIdx.x / threads_per_accum;  // We are accumulating each warp separately. 
+	
+    // TODO: Would this be better as a #define?  I.e., perhaps the blockIdx is faster/lighter
 
     // Loop over Exposures
     for (int e = 0; e < band_N; e++) {
@@ -477,6 +486,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 
 	__syncthreads();
     }
+
     // Now we're done with all exposures, but we need to sum the Accumulators
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
