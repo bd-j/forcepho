@@ -142,13 +142,7 @@ CUDA_CALLABLE_MEMBER inline matrix22 operator * (const matrix22& A, const matrix
 
 ///Compute A B A, return matrix
 CUDA_CALLABLE_MEMBER inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
-	
-	
-	
-	
-	
-	
-    float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 	
+	float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 	
     float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v12 * A.v12 * B.v21 + A.v12 * A.v22 * B.v22; 	
     float v21 = A.v11 * A.v21 * B.v11 + A.v21 * A.v21 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 	
     float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v22 * A.v22 * B.v22; 
