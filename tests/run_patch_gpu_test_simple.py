@@ -1,9 +1,21 @@
 #!/usr/bin/env python
 
+'''
+
+A simple test sccript to set up one patch and launch many proposals on it.
+
+On Ascent with CUDA MPS, one could run this with 16 processes on 7 cores using 1 GPU with:
+
+$ jsrun -n1 -a16 -c7 -g1 ./run_patch_gpu_test_simple.py
+
+'''
+
 import os
 import sys
-sys.path.append('..')
 from os.path import join as pjoin
+import time
+
+sys.path.append('..')
 
 import numpy as np
 
@@ -17,6 +29,9 @@ import pycuda.autoinit
 scratch_dir = pjoin('/gpfs/wolf/gen126/scratch', os.environ['USER'], 'residual_images')
 os.makedirs(scratch_dir, exist_ok=True)
 
+_print = print
+print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
+
 
 def plot_residuals(patch, residuals, vmin=None, vmax=None):
     print('Plotting residuals...')
@@ -25,10 +40,10 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
     import matplotlib.pyplot as plt
 
     # find global residual min and max for colorbar purposes
-    #if not vmin:
-    #    vmin = np.min([np.min(r) for r in residuals])
-    #if not vmax:
-    #    vmax = np.max([np.max(r) for r in residuals])
+    if not vmin:
+        vmin = np.min([np.min(r) for r in residuals])
+    if not vmax:
+        vmax = np.max([np.max(r) for r in residuals])
 
     n_exp_max = np.max(patch.band_N)
 
@@ -53,9 +68,46 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
     print(f'Plotted to {savefn}')
 
 
+def time_proposals(n_repeat=100, mpi_barrier=True):
+    '''
+    Launch a proposal n_repeat times.
+
+    mpi_barrier will wait until all processes are ready to run
+    proposals, in hope of getting everything to hit the GPU
+    at the same time.
+    '''
+
+    try:
+        from mpi4py import MPI
+        have_mpi = True
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+    except:
+        have_mpi = False
+        assert not mpi_barrier
+
+    if mpi_barrier:
+        # use subcommunicator per-GPU?
+        comm.barrier()
+        if rank == 0:
+            print(f'Passed MPI barrier with {size} ranks')
+
+    start = time.time()
+
+    for i in range(n_repeat):
+        ret = proposer.evaluate_proposal(proposal)
+
+    # barrier at the end?
+
+    end = time.time()
+
+    print(f'Elapsed: {end-start:.3g}s for {n_repeat} proposals')
+
+
 if __name__ == '__main__':
     path_to_data = '/gpfs/wolf/gen126/proj-shared/jades/patch_conversion_data'
-    patch_name = os.path.join(path_to_data, "test_patch_large.h5")
+    patch_name = os.path.join(path_to_data, "test_patch_mini.h5")  # "test_patch_large.h5" or test_patch.h5 or "test_patch_mini.h5"
     splinedata = os.path.join(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
     psfpath = path_to_data
     nradii = 9
@@ -80,20 +132,9 @@ if __name__ == '__main__':
     else:
         chi2, chi2_derivs = ret
 
-    #exit(0)
+    #print(chi2, chi2_derivs)
 
-    import time
-
-    niter = 10
-
-    start = time.time()
-
-    for i in range(niter):
-        ret = proposer.evaluate_proposal(proposal)
-
-    end = time.time()
-
-    print(f'Elapsed: {end-start:.3g}s for {niter} proposals')
+    time_proposals()
 
     #print(residuals[0][110,5])
 

@@ -89,7 +89,7 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 		float vy = g->fyy * dy + g->fxy * dx;
 		float exparg = dx*vx + dy*vy;
 
-		if (exparg>MAX_EXP_ARG) continue;
+		if (exparg>(float)MAX_EXP_ARG) continue;
 		float Gp = expf(-0.5f * exparg);
 
 		// Here are the second-order corrections to the pixel integral
@@ -124,7 +124,7 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float vy = g->fyy * dy + g->fxy * dx;
 		
 		float exparg = dx*vx + dy*vy; 
-		if (exparg>MAX_EXP_ARG) continue;
+		if (exparg>(float)MAX_EXP_ARG) continue;
 		
 		float Gp = expf(-0.5f * exparg);
 		float H = 1.0f + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0f/24.0f); 
