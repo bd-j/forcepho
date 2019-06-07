@@ -12,6 +12,7 @@
 
 #include "kernel_limits.h"
 
+#include <stdio.h>
 #include <cstdint>
 #include <math.h>
 #include "matrix22.cc"

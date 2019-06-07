@@ -122,7 +122,11 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float dy = yp - g->ycen; 
 		float vx = g->fxx * dx + g->fxy * dy;
 		float vy = g->fyy * dy + g->fxy * dx;
-		float Gp = exp(-0.5 * (dx*vx + dy*vy));
+		
+		float exparg = dx*vx + dy*vy; 
+		if (exparg>MAX_EXP_ARG) continue;
+		
+		float Gp = exp(-0.5 * exparg);
 		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0/24.0); 
 	
         // Old code: this had divisions
@@ -189,6 +193,7 @@ typedef struct {
 
 __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaussian & psfgauss, ImageGaussian & gauss){
 
+    // sersicgauss.covar is the square of the radius; it's a scalar
 	sersicgauss.scovar_im = sersicgauss.covar * AAt(sersicgauss.T); 
 		
 	matrix22 covar = sersicgauss.scovar_im + matrix22(psfgauss.Cxx, psfgauss.Cxy, psfgauss.Cxy, psfgauss.Cyy); 
@@ -316,8 +321,11 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 		sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
 		sersicgauss.da_dr = galaxy->damplitude_drh[s] ; 
 		sersicgauss.flux = galaxy->fluxes[band]; 		//pull the correct flux from the multiband array
+        // G is the conversion of flux units to image counts
 		sersicgauss.G = G; 
+        // T is a unit circle, stretched by q, rotated by PA, and then distorted to the pixel scale
 		sersicgauss.T = D * R * S; 
+        // And now we have the derivatives of T wrt q and PA.
 		sersicgauss.dT_dq  = D * R * dS_dq; 
 		sersicgauss.dT_dpa = D * dR_dpa * S; 
 
@@ -353,7 +361,7 @@ class Accumulator {
         input += __shfl_down_sync(FULL_MASK, input,  4);
         input += __shfl_down_sync(FULL_MASK, input,  2);
         input += __shfl_down_sync(FULL_MASK, input,  1);
-
+        // threadIdx.x % 32 == 0
         if ((threadIdx.x&31) == 0) atomicAdd(answer, input);
     }
     

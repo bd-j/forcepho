@@ -52,7 +52,7 @@ class matrix22 {
 	
 	CUDA_CALLABLE_MEMBER inline void debug_print(){
 		printf(" %f %f\n", v11, v12);
-		printf(" %f %f\n\n", v21, v22); 
+		printf(" %f %f\n\n", v21, v22);
 	}
 
     // --------------------------------------------------
