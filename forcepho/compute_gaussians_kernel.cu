@@ -90,10 +90,10 @@ __device__ PixFloat ComputeResidualImage(float xp, float yp, PixFloat data, Imag
 		float exparg = dx*vx + dy*vy;
 
 		if (exparg>MAX_EXP_ARG) continue;
-		float Gp = exp(-0.5 * exparg);
+		float Gp = expf(-0.5f * exparg);
 
 		// Here are the second-order corrections to the pixel integral
-		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) / 24.0; 
+		float H = 1.0f + (vx*vx + vy*vy - g->fxx - g->fyy) / 24.f; 
 		float C = g->amp * Gp * H; //count in this pixel. 
 		
 		residual -= C; 
@@ -126,8 +126,8 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 		float exparg = dx*vx + dy*vy; 
 		if (exparg>MAX_EXP_ARG) continue;
 		
-		float Gp = exp(-0.5 * exparg);
-		float H = 1.0 + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0/24.0); 
+		float Gp = expf(-0.5f * exparg);
+		float H = 1.0f + (vx*vx + vy*vy - g->fxx - g->fyy) *(1.0f/24.0f); 
 	
         // Old code: this had divisions
 		// float C = residual_ierr2 * g->amp * Gp * H;   
@@ -140,15 +140,15 @@ __device__ void ComputeGaussianDerivative(float xp, float yp, float residual_ier
 	    float C   = dC_dA * H;
 	    float dC_dx   = C*vx;
 	    float dC_dy   = C*vy;
-	    float dC_dfx  = -0.5*C*dx*dx;
-	    float dC_dfy  = -0.5*C*dy*dy;
-	    float dC_dfxy = -1.0*C*dx*dy;
+	    float dC_dfx  = -0.5f*C*dx*dx;
+	    float dC_dfy  = -0.5f*C*dy*dy;
+	    float dC_dfxy = -1.0f*C*dx*dy;
 	
-	    dC_dx    -= c_h * (g->fxx*vx + g->fxy*vy) * (1.0/12.0);
-	    dC_dy    -= c_h * (g->fyy*vy + g->fxy*vx) * (1.0/12.0);
-	    dC_dfx   -= c_h * (1.0 - 2.0*dx*vx) * (1.0/24.0);
-	    dC_dfy   -= c_h * (1.0 - 2.0*dy*vy) * (1.0/24.0);
-	    dC_dfxy  += c_h * (dy*vx + dx*vy) * (1.0/12.0);
+	    dC_dx    -= c_h * (g->fxx*vx + g->fxy*vy) * (1.0f/12.0f);
+	    dC_dy    -= c_h * (g->fyy*vy + g->fxy*vx) * (1.0f/12.0f);
+	    dC_dfx   -= c_h * (1.0f - 2.0f*dx*vx) * (1.0f/24.0f);
+	    dC_dfy   -= c_h * (1.0f - 2.0f*dy*vy) * (1.0f/24.0f);
+	    dC_dfxy  += c_h * (dy*vx + dx*vy) * (1.0f/12.0f);
 			 
 	    //Multiply by Jacobian and add to dchi2_dp	
 		dchi2_dp[0] += g->dA_dFlux * dC_dA ; 
@@ -207,7 +207,7 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	gauss.xcen = sersicgauss.xcen + psfgauss.xcen; 
 	gauss.ycen = sersicgauss.ycen + psfgauss.ycen; 
 	
-    float tmp = sersicgauss.G * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI));
+    float tmp = sersicgauss.G * psfgauss.amp * sqrtf(detF) * (1.0f/(2.0f*(float) M_PI));
     gauss.amp = tmp * sersicgauss.flux * sersicgauss.amp;
 	// gauss.amp = sersicgauss.flux * sersicgauss.G * sersicgauss.amp * psfgauss.amp * sqrt(detF) * (1.0/(2.0*M_PI)) ;
 
@@ -217,8 +217,8 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
 	matrix22 dSigma_dpa = sersicgauss.covar * symABt(sersicgauss.T, sersicgauss.dT_dpa);
     // (sersicgauss.T * sersicgauss.dT_dpa.T()+sersicgauss.dT_dpa*sersicgauss.T.T()); 
 	
-	matrix22 dF_dq      = -1.0 * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
-	matrix22 dF_dpa     = -1.0 * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
+	matrix22 dF_dq      = -1.0f * ABA (f, dSigma_dq);  // F *  dSigma_dq * F
+	matrix22 dF_dpa     = -1.0f * ABA (f, dSigma_dpa); // F * dSigma_dpa * F
 	
 	// Now get derivatives with respect to sky parameters
 	// float ddetF_dq   = detF *  (covar * dF_dq).trace(); 
@@ -227,8 +227,8 @@ __device__ void  GetGaussianAndJacobian(PixGaussian & sersicgauss, PSFSourceGaus
     // gauss.dA_dPA     = gauss.amp /(2.0*detF) * ddetF_dpa;  
     // Old code: Why do we multiply and then divide by detF?
 
-    gauss.dA_dQ      = 0.5*gauss.amp * (covar * dF_dq).trace();
-    gauss.dA_dPA     = 0.5*gauss.amp * (covar * dF_dpa).trace();
+    gauss.dA_dQ      = 0.5f*gauss.amp * (covar * dF_dq).trace();
+    gauss.dA_dPA     = 0.5f*gauss.amp * (covar * dF_dpa).trace();
     
     gauss.dA_dFlux      = tmp * sersicgauss.amp;
     gauss.dA_dSersic    = tmp * sersicgauss.flux * sersicgauss.da_dn;

@@ -25,10 +25,10 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
     import matplotlib.pyplot as plt
 
     # find global residual min and max for colorbar purposes
-    if not vmin:
-        vmin = np.min([np.min(r) for r in residuals])
-    if not vmax:
-        vmax = np.max([np.max(r) for r in residuals])
+    #if not vmin:
+    #    vmin = np.min([np.min(r) for r in residuals])
+    #if not vmax:
+    #    vmax = np.max([np.max(r) for r in residuals])
 
     n_exp_max = np.max(patch.band_N)
 
@@ -69,19 +69,31 @@ if __name__ == '__main__':
     proposal = mini_scene.get_proposal()
     proposer = Proposer(patch)
 
+    # One for burn-in before timing
+    ret = proposer.evaluate_proposal(proposal)
+
+    if len(ret) == 3:
+        chi2, chi2_derivs, residuals = ret
+
+        plot_residuals(patch, residuals)
+
+    else:
+        chi2, chi2_derivs = ret
+
+    #exit(0)
+
     import time
 
-    niter = 3
+    niter = 10
+
     start = time.time()
 
     for i in range(niter):
-        chi2, chi2_derivs, residuals = proposer.evaluate_proposal(proposal)
+        ret = proposer.evaluate_proposal(proposal)
 
     end = time.time()
 
     print(f'Elapsed: {end-start:.3g}s for {niter} proposals')
-
-    plot_residuals(patch, residuals)
 
     #print(residuals[0][110,5])
 
