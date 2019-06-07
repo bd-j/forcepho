@@ -78,6 +78,7 @@ def time_proposals(n_repeat=100, mpi_barrier=True):
     '''
 
     try:
+        raise
         from mpi4py import MPI
         have_mpi = True
         comm = MPI.COMM_WORLD
@@ -132,9 +133,9 @@ if __name__ == '__main__':
     else:
         chi2, chi2_derivs = ret
 
-    #print(chi2, chi2_derivs)
+    print(chi2, chi2_derivs)
 
-    time_proposals()
+    #time_proposals()
 
     #print(residuals[0][110,5])
 

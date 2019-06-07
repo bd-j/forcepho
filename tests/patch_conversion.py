@@ -102,7 +102,7 @@ def get_transform_mats(source, wcs):
 
     # compute D matrix
     W = np.eye(2)
-    W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))
+    W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**-1
     D_mat = 1.0/3600.0*np.matmul(W, CW_mat)
 
     return(CW_mat, D_mat)
