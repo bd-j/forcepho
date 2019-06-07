@@ -476,8 +476,11 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
 		    // Now we loop over Sources and compute the derivatives for each
 		    for (int gal = 0; gal < n_sources; gal++) {
 				for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;
-				ComputeGaussianDerivative(xp, yp, residual, 
+				ComputeGaussianDerivative(xp, yp, residual,  //1.
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
+
+                //if(gal == 0)
+                //    patch->residual[pix] = dchi2_dp[1];
 
 				accum[accumnum].SumDChi2dp(dchi2_dp, gal);
 

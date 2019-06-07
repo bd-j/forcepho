@@ -33,7 +33,7 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
     n_exp_max = np.max(patch.band_N)
 
     figsize = np.array([n_exp_max, patch.n_bands])
-    fig, axes = plt.subplots(patch.n_bands, n_exp_max, dpi=72, figsize=figsize*4)
+    fig, axes = plt.subplots(patch.n_bands, n_exp_max, dpi=72, figsize=figsize*4, squeeze=False)
     for b in range(patch.n_bands):
         axrow = axes[b]
         for e in range(patch.band_N[b]):
@@ -55,7 +55,7 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
 
 if __name__ == '__main__':
     path_to_data = '/gpfs/wolf/gen126/proj-shared/jades/patch_conversion_data'
-    patch_name = os.path.join(path_to_data, "test_patch.h5")
+    patch_name = os.path.join(path_to_data, "test_patch_large.h5")
     splinedata = os.path.join(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
     psfpath = path_to_data
     nradii = 9
@@ -68,9 +68,22 @@ if __name__ == '__main__':
 
     proposal = mini_scene.get_proposal()
     proposer = Proposer(patch)
-    chi2, chi2_derivs, residuals = proposer.evaluate_proposal(proposal)
+
+    import time
+
+    niter = 3
+    start = time.time()
+
+    for i in range(niter):
+        chi2, chi2_derivs, residuals = proposer.evaluate_proposal(proposal)
+
+    end = time.time()
+
+    print(f'Elapsed: {end-start:.3g}s for {niter} proposals')
 
     plot_residuals(patch, residuals)
+
+    #print(residuals[0][110,5])
 
     #datas = proposer.unpack_residuals(patch.data)
     #plot_residuals(patch, datas)

@@ -22,7 +22,7 @@ class Patch:
         super_pixel_size=1,  # Number of pixels in each superpixel
         return_residual=False,
         pix_dtype=np.float32,  # data type for pixel and flux data
-        meta_dtype=np.float32   # data type for non-pixel data
+        meta_dtype=np.float32,   # data type for non-pixel data
         ):
         '''
         Constructs a Patch from PostageStamps (exposures) and a MiniScene

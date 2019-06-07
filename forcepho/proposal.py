@@ -95,7 +95,7 @@ class Proposer:
             residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
             residuals = self.unpack_residuals(residuals_flat)
 
-        print(chi_out, chi_derivs_out)
+        #print(chi_out, chi_derivs_out)
 
         if self.patch.return_residual:
             return chi_out, chi_derivs_out, residuals
@@ -127,5 +127,5 @@ source_struct_dtype = np.dtype([('ra', source_float_dt),
                                 ('damplitude_dnsersic', source_float_dt, MAXRADII),],
                                 align=True)
 
-respose_float_dt = source_float_dt
-response_struct_dtype = np.dtype([('dchi2_dparam', respose_float_dt, NPARAMS*MAXSOURCES)], align=True)
+response_float_dt = source_float_dt
+response_struct_dtype = np.dtype([('dchi2_dparam', response_float_dt, NPARAMS*MAXSOURCES)], align=True)
