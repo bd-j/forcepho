@@ -50,10 +50,10 @@ class matrix22 {
         v11 = d[0]; v12 = d[1]; v21 = d[2]; v22 = d[3];
     }
 	
-	// CUDA_CALLABLE_MEMBER inline void debug_print(){
-// 		printf(" %f %f\n", v11, v12);
-// 		printf(" %f %f\n\n", v21, v22);
-// 	}
+	CUDA_CALLABLE_MEMBER inline void debug_print(){
+		printf(" %f %f\n", v11, v12);
+		printf(" %f %f\n\n", v21, v22);
+	}
 
     // --------------------------------------------------
     // The following operations are almost constructors, but require too much
