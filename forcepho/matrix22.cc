@@ -79,11 +79,11 @@ class matrix22 {
     }
     
     CUDA_CALLABLE_MEMBER inline void scale(float q) {
-        v11 = 1.0/q; v22 = q; v12 = v21 = 0.0;
+        v11 = 1.0f/q; v22 = q; v12 = v21 = 0.0;
     }
     
     CUDA_CALLABLE_MEMBER inline void scale_matrix_deriv(float q){
-        v11 = -1.0/(q*q); v22 = 1.0; v12 = v21 = 0.0;
+        v11 = -1.0f/(q*q); v22 = 1.0; v12 = v21 = 0.0;
         // return matrix22(-1.0/(q*q), 1.0);
     }
 
@@ -102,7 +102,7 @@ class matrix22 {
 
     /// The inverse
     CUDA_CALLABLE_MEMBER inline matrix22 inv() {
-        float idet = 1.0/this->det();
+        float idet = 1.0f/this->det();
         return matrix22(v22*idet, -v12*idet, -v21*idet, v11*idet);
     }
 
@@ -163,7 +163,7 @@ CUDA_CALLABLE_MEMBER inline matrix22 AtA(const matrix22& A) {
 /// Compute A B^T + B A^T.  This is symmetric and can be computed faster.
 CUDA_CALLABLE_MEMBER inline matrix22 symABt(const matrix22& A, const matrix22& B) {
     float tmp = A.v11*B.v21 + A.v12*B.v22 + A.v21*B.v11 + A.v22*B.v12;
-    return matrix22( 2.0*(A.v11*B.v11+A.v12*B.v12), tmp, tmp, 2.0*(A.v21*B.v21+A.v22*B.v22));
+    return matrix22( 2.0f*(A.v11*B.v11+A.v12*B.v12), tmp, tmp, 2.0f*(A.v21*B.v21+A.v22*B.v22));
 }
 
 
@@ -188,15 +188,13 @@ CUDA_CALLABLE_MEMBER inline float vtAv(matrix22& A, float v1, float v2) {
 /// A matrix * vector product, returning in place
 CUDA_CALLABLE_MEMBER inline void Av(matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
-    v[0] = A.v11 * v1 + A.v21 * v2; 
-    v[1] = A.v12 * v1 + A.v22 * v2; 
+    v[0] = A.v11 * v1 + A.v12 * v2; 
+    v[1] = A.v21 * v1 + A.v22 * v2; 
 }
 
 /// A matrix * vector product, returning out of place
 CUDA_CALLABLE_MEMBER inline void Av(float *w, matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
-    w[0] = A.v11 * v1 + A.v21 * v2; 
-    w[1] = A.v12 * v1 + A.v22 * v2; 
+    w[0] = A.v11 * v1 + A.v12 * v2; 
+    w[1] = A.v21 * v1 + A.v22 * v2; 
 }
-
-

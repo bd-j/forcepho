@@ -14,8 +14,8 @@
 
 // The maximum square distance in a Gaussian evaluation before we no-op.
 // Note that this refers to Y in exp(-0.5*Y)
-#define MAX_EXP_ARG 36.0
-//#define MAX_EXP_ARG 1e12
+//#define MAX_EXP_ARG 36.0
+#define MAX_EXP_ARG 1e12
 
 // The number of separate accumulators in each GPU block.
 // Using more will consume more memory, but may avoid contention

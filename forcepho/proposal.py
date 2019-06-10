@@ -24,7 +24,7 @@ class Proposer:
     It may also manage pinned memory in a future version.
     '''
 
-    def __init__(self, patch, thread_block=32, shared_size=48000, max_registers=64, show_ptxas=False,
+    def __init__(self, patch, thread_block=32, shared_size=48000, max_registers=64, show_ptxas=False, debug=True,
                     kernel_name='EvaluateProposal', kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands,1)
@@ -37,10 +37,13 @@ class Proposer:
         with open(os.path.join(thisdir, kernel_fn), 'r') as fp:
             kernel_source = fp.read()
 
-        options = ['-std=c++11', '-lineinfo']
+        options = ['-std=c++11']
 
         if show_ptxas:
             options += ['--ptxas-options=-v']
+
+        if debug:
+            options += ['-O0', '--ptxas-options=-O0','-lineinfo']
 
         if max_registers:
             options += [f'-maxrregcount={max_registers}']

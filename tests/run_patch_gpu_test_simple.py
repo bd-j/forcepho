@@ -78,7 +78,6 @@ def time_proposals(n_repeat=100, mpi_barrier=True):
     '''
 
     try:
-        raise
         from mpi4py import MPI
         have_mpi = True
         comm = MPI.COMM_WORLD
