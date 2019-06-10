@@ -59,7 +59,7 @@ def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3
     return(stamp)
 
 
-def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=False):
+def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
 
     # get all sources
     sources = []
