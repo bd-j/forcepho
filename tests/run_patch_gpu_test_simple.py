@@ -22,7 +22,7 @@ import numpy as np
 from forcepho.patch import Patch
 from forcepho.proposal import Proposer
 
-from patch_conversion import patch_conversion
+from patch_conversion import patch_conversion, zerocoords
 
 import pycuda.autoinit
 
@@ -113,6 +113,7 @@ if __name__ == '__main__':
     nradii = 9
 
     list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
+    zerocoords(list_of_stamps, mini_scene)
 
     patch = Patch(stamps=list_of_stamps, miniscene=mini_scene, return_residual=True)
     gpu_patch = patch.send_to_gpu()
