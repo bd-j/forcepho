@@ -108,6 +108,22 @@ def get_transform_mats(source, wcs):
     return(CW_mat, D_mat)
 
 
+def zerocoords(stamps, scene, sky_zero=(53.0, -28.0)):
+    zero = np.array(sky_zero)
+    for source in scene.sources:
+        source.ra -= zero[0]
+        source.dec -= zero[1]
+        new_crv = []
+        for crv in source.stamp_crvals:
+            new_crv.append(crv - zero)
+        source.stamp_crvals = new_crv
+    
+    for stamp in stamps:
+        stamp.crval -= zero
+        
+        
+
+
 def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
 
     # read file

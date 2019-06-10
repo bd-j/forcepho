@@ -69,11 +69,15 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     # get info for this stamp
     if type(stamp) is int:
         D = source.stamp_scales[stamp]
-        psf = source.stamp_psfs[stamp]
+        psf = source.stamp_psfs[stamp][0]
         CW = source.stamp_cds[stamp] # dpix/dra, dpix/ddec
         crpix = source.stamp_crpixs[stamp]
         crval = source.stamp_crvals[stamp]
         G = source.stamp_zps[stamp]
+        stampid = stamp
+        #### THIS IS A HACK ######
+        filter_index = 0#source.stamp_filternum[stamp]
+
     else:
         D = stamp.scale  # pix/arcsec
         psf = stamp.psf
@@ -81,6 +85,10 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         crpix = stamp.crpix
         crval = stamp.crval
         G = stamp.photocounts
+        stampid = stamp.id
+        #### THIS IS A HACK ######
+        filter_index = 0#source.stamp_filternum[stamp]
+
 
     # Get the transformation matrix
     R = rotation_matrix(source.pa)
@@ -96,7 +104,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     if len(flux) == 1:
         flux = flux[0]
     else:
-        flux = flux[source.filter_index(stamp.filtername)]
+        flux = flux[filter_index]
 
     # Convert flux to counts
     flux *= G
@@ -113,7 +121,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         pamps = psf.amplitudes
 
     gig = GaussianImageGalaxy(source.ngauss, psf.ngauss,
-                              id=(source.id, stamp.id))
+                              id=(source.id, stampid))
     
     gig.gaussians = _convert_to_gaussians(source.ngauss, psf.ngauss, scovar, pcovar,
                                           smean, samps, pmeans, pamps, flux)
@@ -183,12 +191,13 @@ def get_gaussian_gradients(source, stamp, gig):
     # get info for this stamp
     if type(stamp) is int:
         D = source.stamp_scales[stamp]
-        psf = source.stamp_psfs[stamp]
+        psf = source.stamp_psfs[stamp][0]
         CW = source.stamp_cds[stamp] #dpix/dra, dpix/ddec
         #crpix = source.stamp_crpixs[stamp]
         #crval = source.stamp_crvals[stamp]
         G = source.stamp_zps[stamp] # physical to counts
-        filter_index = source.stamp_filternum[stamp]
+        #### THIS IS A HACK ######
+        filter_index = 0#source.stamp_filternum[stamp]
     else:
         D = stamp.scale  # pix/arcsec
         psf = stamp.psf

@@ -48,7 +48,7 @@ def lnlike_multi(Theta, scene, plans, grad=True):
     lnp_grad = np.zeros_like(Theta)
     
     for k, plan in enumerate(plans):
-        plan, theta_inds, grad_inds = plan_sources(plan, scene)
+        plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=k)
         lnp_stamp, lnp_stamp_grad = plan.lnlike()
         lnp += lnp_stamp
         # TODO: test that flat[] does the right thing here
@@ -85,7 +85,7 @@ def make_image(scene, stamp, Theta=None, use_sources=slice(None),
     return im, grad
 
 
-def plan_sources(plan, scene):
+def plan_sources(plan, scene, stamp_index=None):
     """Add the sources in a scene to a work plan as lists of active and fixed
     `gaussmodel.GaussianImageGalaxies`.  Additionally returns useful arrays of
     indices for accumulating likelihood gradients in the correct elements of
@@ -114,6 +114,11 @@ def plan_sources(plan, scene):
         The indices in the flattened `(nactive, NDERIV)` array of gradients
         returend by `WorkPlan.lnlike()` of the relevant scene parameters.
     """
+    if stamp_index is None:
+        stamp = plan.stamp
+    else:
+        stamp = stamp_index
+    
     active, fixed = [], []
     theta_inds, grad_inds = [], []
     # Make list of all sources in the plan, keeping track of where they are
@@ -125,14 +130,14 @@ def plan_sources(plan, scene):
         if coverage <= 0:
             # OFF IMAGE
             continue
-        gig = convert_to_gaussians(source, plan.stamp)
+        gig = convert_to_gaussians(source, stamp)
         if coverage == 1:
             # FIXED
             fixed.append(gig)
             continue
         if coverage > 1:
             # ACTIVE
-            gig = get_gaussian_gradients(source, plan.stamp, gig)
+            gig = get_gaussian_gradients(source, stamp, gig)
             active.append(gig)
             # get indices of parameters of the source in the giant Theta array
             theta_inds += scene.param_indices(j, plan.stamp.filtername)
