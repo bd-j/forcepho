@@ -8,7 +8,6 @@ The corresponding GPU-side CUDA struct is in patch.cu.
 """
 
 import numpy as np
-import h5py
 
 import pycuda
 import pycuda.driver as cuda

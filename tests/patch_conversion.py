@@ -17,16 +17,24 @@ from astropy.wcs import WCS
 __all__ = ["make_individual_stamp", "set_scene", "get_transform_mats", "patch_conversion"]
 
 
-def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3.0, background=0.0):
+def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, background=0.0):
+    """Make a stamp object (including relevant metadata) for a certain exposure.
+    
+    Returns
+    -------
+    stamp: A Stamp() object
+    """
+
+    data = hdf5_file['images'][filter_name][exp_name]
 
     # get meta data about exposure
-    dict_info = dict(zip(hdf5_file['images'][filter_name][exp_name].attrs.keys(), hdf5_file['images'][filter_name][exp_name].attrs.values()))
+    dict_info = dict(zip(data.attrs.keys(), data.attrs.values()))
 
     # add image and uncertainty data to Stamp, flipping axis order
     stamp = PostageStamp()
-    stamp.pixel_values = np.array(hdf5_file['images'][filter_name][exp_name]['sci']).T - background
-    stamp.ierr = 1.0 / np.array(hdf5_file['images'][filter_name][exp_name]['rms']).T
-    mask = np.array(hdf5_file['images'][filter_name][exp_name]['mask']).T
+    stamp.pixel_values = np.array(data['sci']).T - background
+    stamp.ierr = 1.0 / np.array(data['rms']).T
+    mask = np.array(data['mask']).T
     stamp.nx, stamp.ny = stamp.pixel_values.shape
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
@@ -44,11 +52,12 @@ def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3
     stamp.scale = dict_info['scale']
     stamp.CD = dict_info['CD']
     stamp.W = dict_info['W']
-    hdr = json.loads(hdf5_file['images'][filter_name][exp_name]['header'][()])
+    hdr = json.loads(data['header'][()])
     stamp.wcs = WCS(hdr)
 
     # add the PSF
-    stamp.psf = pointspread.get_psf(os.path.join(psfpath, hdf5_file['images'][filter_name][exp_name]['psf_name'][0].decode("utf-8")), fwhm)
+    psfname = data['psf_name'][0].decode("utf-8")
+    stamp.psf = pointspread.get_psf(os.path.join(psfpath, psfname))
 
     # add extra information
     stamp.photocounts = dict_info['phot']
@@ -60,11 +69,19 @@ def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, fwhm=3
 
 
 def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
+    """Build a scene from a set of source parameters and fluxes through a set of filters.
+    
+    Returns
+    -------
+    scene: Scene object
+    """
+    sourcepars = sourcepars.astype(np.float)
 
     # get all sources
     sources = []
     for ii_gal in range(len(sourcepars)):
         gal_id, x, y, q, pa, n, rh = sourcepars[ii_gal]
+        #print(x, y, type(pa), pa)
         s = Galaxy(filters=filters.tolist(), splinedata=splinedata, free_sersic=free_sersic)
         s.global_id = gal_id
         s.sersic = n
@@ -83,9 +100,8 @@ def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
 
 
 def get_transform_mats(source, wcs):
-    '''
-    get coordinate transformation matrices CW and D
-    '''
+    """Get source specific coordinate transformation matrices CW and D
+    """
 
     # get dsky for step dx, dy = 1, 1
     pos0_sky = np.array([source.ra, source.dec])
@@ -109,6 +125,23 @@ def get_transform_mats(source, wcs):
 
 
 def zerocoords(stamps, scene, sky_zero=(53.0, -28.0)):
+    """Reset (in-place) the celestial zero point of the image metadata and the source 
+    coordinates to avoid catastrophic cancellation errors in coordinates when
+    using single precision.
+    
+    Parameters
+    ----------
+    stamps: iterable
+        A list of Stamp objects
+    
+    scene:
+        A Scene object, where each source has the attributes `ra`, `dec`,
+        `stamp_crvals`.
+        
+    sky_zero: optional, 2-tuple of float64
+        The (ra, dec) values defining the new central coordinates.  These will
+        be subtracted from the relevant source and stamp coordinates
+    """
     zero = np.array(sky_zero)
     for source in scene.sources:
         source.ra -= zero[0]
@@ -120,12 +153,43 @@ def zerocoords(stamps, scene, sky_zero=(53.0, -28.0)):
     
     for stamp in stamps:
         stamp.crval -= zero
-        
-        
 
 
 def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
+    """Reads an HDF5 file with exposure data and metadata and source parameters 
+    and returns a list of Stamp objects and a Scene object with appropriate
+    attributes. This method determines source specific exposure metadata and
+    attaches lists of this metadata (in the same order as the output stamp list)
+    as attributes of the individual source objects in the Scene.
 
+    Parameters
+    ----------
+    patch_name: string 
+        The full patch to the HDF file containing the exposure and source
+        infomation.
+
+    splinedata: string 
+        The full path to an HDF file containing information about the gaussian
+        mixture approximations to Sersic profiles as a function of nsersic and
+        rhalf
+        
+    psfpath: string
+        Path to the directory containing the PSF gaussian mixtures referred to
+        in the HDF file.
+        
+    nradii: optional, int, default: 9
+        The number of Sersic radii (i.e. the number of circular gaussians used
+        to approximate the Sersic profile)
+        
+    Returns
+    -------
+    
+    stamps: list
+        A list of Stamp objects, one for each exposure in this patch
+        
+    miniscene:
+        A Scene object, containing a list of sources for this patch.
+    """
     # read file
     hdf5_file = h5py.File(patch_name, 'r')
 
@@ -133,14 +197,18 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
     filter_list = hdf5_file['images'].attrs['filters']
 
     # create scene
-    mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:], hdf5_file['mini_scene']['sourceflux'][:], filter_list, splinedata=splinedata)
+    mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:],
+                           hdf5_file['mini_scene']['sourceflux'][:],
+                           filter_list, splinedata=splinedata)
 
     # make list of stamps
     stamp_list = []
     stamp_filter_list = []
     for filter_name in hdf5_file['images'].attrs['filters']:
         for exp_name in hdf5_file['images'][filter_name].attrs['exposures']:
-            stamp_list.append(make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=psfpath, fwhm=3.0, background=0.0))
+            stamp = make_individual_stamp(hdf5_file, filter_name, exp_name, 
+                                          psfpath=psfpath, background=0.0)
+            stamp_list.append(stamp)
             stamp_filter_list.append(filter_name)
 
     # loop over sources to add additional information
