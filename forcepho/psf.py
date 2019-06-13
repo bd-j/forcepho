@@ -131,7 +131,7 @@ def params_to_gauss(answer, oversample=8, start=0, center=504):
     """
     params = answer['fitted_params'].copy()
     ngauss = len(params) / 6
-    params = params.reshape(ngauss, 6)
+    params = params.reshape(int(ngauss), 6)
     # is this right?
     #TODO: work out zero index vs 0.5 index issues
     # need to flip x and y here

@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: future_fstrings -*-
+
 '''
 proposal.py
 
@@ -67,9 +70,9 @@ class Proposer:
         chi2: float
             The chi^2 for this proposal
 
-        chi2_derivs: ndarray of dtype `response_struct_dtype`
+        chi2_derivs: ndarray of dtype `source_float_dt`
             The derivatives of chi^2 with respect to proposal parameters.
-            Length of the array is nbands; each element is 7*MAXSOURCES floats.
+            This is an array with shape (nband, nactive_sources, 7)
 
         residuals: list of ndarray of shape of original exposures
             The residual image (data - model) for each exposure.  No padding.

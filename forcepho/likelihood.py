@@ -12,7 +12,7 @@ __all__ = ["lnlike_multi", "negative_lnlike_multi",
 NDERIV = 7
 
 
-def lnlike_multi(Theta, scene, plans, grad=True):
+def lnlike_multi(Theta, scene, plans, grad=True, source_meta=False):
     """Calculate the likelihood of the `plans` given the `scene` with
     parameters `Theta` This propagates the `Theta` vector into the scene, and
     then loops over the plans accumulating the likelhood (and gradients
@@ -48,7 +48,11 @@ def lnlike_multi(Theta, scene, plans, grad=True):
     lnp_grad = np.zeros_like(Theta)
     
     for k, plan in enumerate(plans):
-        plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=k)
+        if source_meta:
+            ind = k
+        else:
+            ind = None
+        plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=ind)
         lnp_stamp, lnp_stamp_grad = plan.lnlike()
         lnp += lnp_stamp
         # TODO: test that flat[] does the right thing here

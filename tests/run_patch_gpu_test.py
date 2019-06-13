@@ -2,7 +2,7 @@ import sys, os, time
 import numpy as np
 from scipy.optimize import minimize
 
-from frocepho.posterior import Posterior
+from forcepho.posterior import Posterior
 from forcepho.patch import Patch
 
 from patch_conversion import patch_conversion

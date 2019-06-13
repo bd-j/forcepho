@@ -1,17 +1,23 @@
-# --------
-# Script to fit a PSF image with a mixture of gaussians using EM
-# --------
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Script to fit a PSF image with a mixture of gaussians using EM
+"""
 
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.cm import get_cmap
 from matplotlib.backends.backend_pdf import PdfPages
 
-import cPickle as pickle
+try:
+    import cPickle as pickle
+except(ImportError):
+    import pickle
 from astropy.io import fits
 import h5py, json
 
-from .gaussian_psf import fit_mvn_mix
+from .psf_mix_em import fit_mvn_mix
 from ..psf import params_to_gauss
 
 __all__ = ["psf_mixture"]
@@ -83,7 +89,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
 
     # --- Plotting -----
     outroot = 'gmpsf_{}_ng{}'.format(band, nmix)
-    plot_model(results, outroot)
+    plot_model(results, outroot, log_resid=False)
 
     if not newstyle:
         return {nmix: results}
@@ -131,7 +137,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     return output
 
 
-def plot_model(results, outroot, log_resid=True):
+def plot_model(results, outroot, log_resid=True, cmap="viridis"):
     # set up the gaussian colorbar
     gcmap = get_cmap('viridis')
     Z = [[0,0],[0,0]]
@@ -142,12 +148,12 @@ def plot_model(results, outroot, log_resid=True):
     for j, result in enumerate(results):
         fig, axes = pl.subplots(2, 2, sharex=True, sharey=True)
         ax = axes[0, 0]
-        d = ax.imshow(result['original_image'], origin='lower')
+        d = ax.imshow(result['original_image'], origin='lower', cmap=cmap)
         fig.colorbar(d, ax=ax)
         ax.text(0.1, 0.9, 'Truth', transform=ax.transAxes)
 
         ax = axes[0, 1]
-        m1 = ax.imshow(result['recon_image'], origin='lower')
+        m1 = ax.imshow(result['recon_image'], origin='lower', cmap=cmap)
         fig.colorbar(m1, ax=ax)
         ax.text(0.1, 0.9, 'Model', transform=ax.transAxes)
         ax = axes[1, 0]
@@ -155,9 +161,10 @@ def plot_model(results, outroot, log_resid=True):
         # plot log of ratio?
         if log_resid:
             r = ax.imshow(np.log10((result['original_image'] / result['recon_image'])),
-                          origin='lower', vmin=-0.5, vmax=0.5)
+                          origin='lower', vmin=-0.5, vmax=0.5, cmap="coolwarm")
         else:
-            r = ax.imshow((result['original_image'] - result['recon_image']), origin='lower')
+            r = ax.imshow((result['original_image'] - result['recon_image']), 
+                          origin='lower', cmap=cmap)
         fig.colorbar(r, ax=ax)
         ax.text(0.1, 0.9, 'Residual', transform=ax.transAxes)
         gax = axes[1, 1]
@@ -174,7 +181,7 @@ def draw_ellipses(answer, ax, cmap=get_cmap('viridis')):
     from matplotlib.patches import Ellipse
 
     params = answer['fitted_params'].copy()
-    ngauss = len(params) / 6
+    ngauss = int(len(params) / 6)
     params = params.reshape(ngauss, 6)
     for i in range(ngauss):
         # need to swap axes here, not sure why

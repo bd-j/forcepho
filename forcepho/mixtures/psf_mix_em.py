@@ -30,8 +30,8 @@ def mean_params(image_data):
 def cov_params(image_data):
     mean_x, mean_y = mean_params(image_data)
     x_max, y_max = image_data.shape
-    loc_x = np.array([[x for y in xrange(y_max)] for x in xrange(x_max)])
-    loc_y = np.array([[y for y in xrange(y_max)] for x in xrange(x_max)])
+    loc_x = np.array([[x for y in range(y_max)] for x in range(x_max)])
+    loc_y = np.array([[y for y in range(y_max)] for x in range(x_max)])
     sigma_x = np.sqrt(np.sum(image_data * (loc_x - mean_x)**2) / np.sum(image_data))
     sigma_y = np.sqrt(np.sum(image_data * (loc_y - mean_y)**2) / np.sum(image_data))
     rho = np.sum(image_data * (loc_x-mean_x) * (loc_y-mean_y) / np.sum(image_data)) / (sigma_x*sigma_y)
@@ -68,7 +68,7 @@ def mvn_pdf_2d(params, x_max, y_max): # 0,1,...,x_max-1
 def mvn_pdf_2d_mix_fn(num_mix, x_max, y_max):
     def ret_func(params):
         ans = np.zeros([x_max, y_max])
-        for i in xrange(num_mix):
+        for i in range(num_mix):
             ans += mvn_pdf_2d(params[(6*i):(6*i+6)], x_max, y_max)
         return ans
     return ret_func
@@ -105,7 +105,7 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
         ans.update(new_dict)
         return ans
 
-    for _ in xrange(repeat):
+    for _ in range(repeat):
 
         # --- Initialization ---
         if method_init == 'random':
@@ -150,8 +150,8 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
                 # update params
                 new_params = np.zeros(6*num_mix)
                 # value at p=(x,y) is x for loc_x and y for loc_y (for efficient operations)
-                loc_x = np.array([[x for y in xrange(y_max)] for x in xrange(x_max)])
-                loc_y = np.array([[y for y in xrange(y_max)] for x in xrange(x_max)])
+                loc_x = np.array([[x for y in range(y_max)] for x in range(x_max)])
+                loc_y = np.array([[y for y in range(y_max)] for x in range(x_max)])
                 # we update with for loop over k because we think num_mix is small
                 # if this is a time choke we can try to rewrite this with numpy parallelization
                 # note that amp_k, mu_{k,x}, mu_{k,y}, sigma_{k,x}, sigma_{k,y}, rho_k
