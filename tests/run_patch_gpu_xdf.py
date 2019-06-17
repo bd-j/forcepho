@@ -165,7 +165,7 @@ splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
 psfpath = path_to_data
 
 def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, 
-              nwarm=200, niter=500, sample=True):
+              nwarm=100, niter=200, runtype="sample", ntime=10):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -192,6 +192,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
     pra = np.median([s.ra for s in miniscene.sources])
     pdec = np.median([s.dec for s in miniscene.sources])
     zerocoords(stamps, miniscene, sky_zero=np.array([pra, pdec]))
+
     patch = Patch(stamps=stamps, miniscene=miniscene, return_residual=True)
     p0 = miniscene.get_all_source_params().copy()
 
@@ -207,7 +208,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
     # --- Subtract off the fixed sources ---
     # TODO
 
-    if sample:
+    if runtype == "sample":
         # -- Launch HMC ---
         # wrap the loglike and grad in theano tensor ops
         model.proposer.patch.return_residuals = False
@@ -253,16 +254,25 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
 
         save_results(result, resultname)
 
-    else:
+    elif runtype == "optimize":
         # --- Launch an optimization ---
         opts = {'ftol': 1e-6, 'gtol': 1e-6, 'factr': 10.,
                 'disp':False, 'iprint': 1, 'maxcor': 20}
-        theta0 = miniscene.get_all_source_params().copy()
+        theta0 = p0
         t = time()
         scires = minimize(model.nll, theta0, jac=True,  method='BFGS',
                           options=opts, bounds=None)
         ts = time() - t
-        chain = scires       
+        chain = scires
+
+    elif runtype == "timing":
+        # --- Time a single call ---
+        t = time()
+        for i in range(ntime):
+            model.evaluate(p0)
+        ts = time() - t
+        chain = [model._lnp, model._lnp_grad]
+        print("took {}s for a single call".format(ts / ntime))
     
     return chain, (r, model.ncall, ts)
 
