@@ -55,7 +55,7 @@ class Proposer:
             options=options, no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
-    def evaluate_proposal(self, proposal):
+    def evaluate_proposal(self, proposal, verbose=False):
         '''
         Call the GPU kernel to evaluate the likelihood of a parameter proposal.
 
@@ -83,13 +83,14 @@ class Proposer:
         chi_out = np.empty(1, dtype=np.float32)
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
 
-        print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}',
-            file=sys.stderr, flush=True)
+        if verbose:
+            print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}',
+                  file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
-        self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),              # inputs
-                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out),  # outputs
-                                      grid=self.grid, block=self.block, shared=self.shared_size,           # launch config
+        self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),                    # inputs
+                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out),                # outputs
+                                      grid=self.grid, block=self.block, shared=self.shared_size,  # launch config
                                       )
 
         # Is this the right shape?
@@ -100,8 +101,6 @@ class Proposer:
         if self.patch.return_residual:
             residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
             residuals = self.unpack_residuals(residuals_flat)
-
-        #print(chi_out, chi_derivs_out)
 
         if self.patch.return_residual:
             return chi_out, chi_derivs_out, residuals

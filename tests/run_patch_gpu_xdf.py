@@ -35,15 +35,13 @@ logger = logging.getLogger("pymc3")
 logger.propagate = False
 logger.setLevel(logging.ERROR)
 
-try:
-    import pycuda.autoinit
-    scratch_dir = pjoin('/gpfs/wolf/gen126/scratch', os.environ['USER'], 'residual_images')
-    os.makedirs(scratch_dir, exist_ok=True)
-except:
-    HAS_GPU = False
+
+import pycuda.autoinit
+scratch_dir = pjoin('/gpfs/wolf/gen126/scratch', os.environ['USER'], 'residual_images')
+os.makedirs(scratch_dir, exist_ok=True)
+
 _print = print
 print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
-
 
 def save_results(result, rname):
    if rname is not None:
@@ -69,7 +67,7 @@ class GPUPosterior:
         case these are these are the same as thetaprime, i.e. the transformation
         is the identity.
         """
-        self.scene.set_all_parameters(z)
+        self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
         
         # send to gpu and collect result   
@@ -79,12 +77,13 @@ class GPUPosterior:
         else:
             chi2, chi2_derivs = ret
 
+        mtwo = np.array(-2, dtype=np.float64)
         # turn into log-like and accumulate grads correctly
-        ll = -2 * chi2
-        ll_grad = -2 * self.stack_grad(chi2_derivs)
-     
+        ll = mtwo * np.array(chi2[0], dtype=np.float64)
+        ll_grad = mtwo * self.stack_grad(chi2_derivs)
+    
         self.ncall += 1
-        self._lnp = ll 
+        self._lnp = ll
         self._lnp_grad = ll_grad
         self._z = z
 
@@ -96,7 +95,7 @@ class GPUPosterior:
         """
         nsources = self.proposer.patch.n_sources
         nbands = self.proposer.patch.n_bands #len(chi2_derivs)
-        grads = np.zeros([nbands, nsources, nbands + (NPARAMS-1)])
+        grads = np.zeros([nsources, nbands + (NPARAMS-1)])
         for band, derivs in enumerate(chi2_derivs):            
             # shape params
             grads[:, nbands:] += derivs[:, 1:]
@@ -122,7 +121,7 @@ class GPUPosterior:
     
     def residuals(self, z):
         assert self.proposer.patch.return_residuals
-        self.scene.set_all_parameters(z)
+        self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal)
         chi2, chi2_derivs, self.residuals = ret
@@ -178,6 +177,8 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
         Full path to the patchdata hdf5 file.
     """
 
+    print(patchname)
+
     resultname = os.path.basename(patchname).replace("h5", "pkl")
     resultname = pjoin(path_to_results, resultname)
     try:
@@ -212,8 +213,9 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
         model.proposer.patch.return_residuals = False
         logl = LogLikeWithGrad(model)
         # Get upper and lower bounds for variables
-        lower, upper = prior_bounds(scene)
-        pnames = scene.parameter_names
+        lower, upper = prior_bounds(miniscene)
+        print(lower.dtype, upper.dtype)
+        pnames = miniscene.parameter_names
         # The pm.sample() method below will draw an initial theta, 
         # then call logl.perform and logl.grad multiple times
         # in a loop with different theta values.
@@ -266,16 +268,16 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
 
 # Create an MPI process pool.  Each worker process will sit here waiting for input from master
 # after it is done it will get the next value from master.
-try:
-    from emcee.utils import MPIPool
-    pool = MPIPool(debug=False, loadbalance=False)
-    if not pool.is_master():
+#try:
+#    from emcee.utils import MPIPool
+#    pool = MPIPool(debug=False, loadbalance=False)
+#    if not pool.is_master():
         # Wait for instructions from the master process.
-        pool.wait()
-        sys.exit(0)
-except(ImportError, ValueError):
-    pool = None
-    print('Not using MPI')
+#        pool.wait()
+#        sys.exit(0)
+#except(ImportError, ValueError):
+#    pool = None
+#    print('Not using MPI')
 
 
 def halt(message):
@@ -290,17 +292,19 @@ def halt(message):
 
 
 if __name__ == "__main__":
-    patches = [23, 530]
-    allpatches = [pjoin(path_to_data, "patches", "patch_udf_withcat_{}.h5".format(pid)) 
+    patches = [1]
+    allpatches = [pjoin(path_to_data, "patch_with_cat", "patch_udf_withcat_{}.h5".format(pid)) 
                   for pid in patches]
-    
-    try:
-        M = pool.map
-    except:
-        M = map
+    print(allpatches)    
+    #try:
+    #    M = pool.map
+    #except:
+    #    M = map
 
+    M = map
     t = time()
-    allchains = M(run_patch, allpatches)
+    #allchains = M(run_patch, allpatches)
+    chain = run_patch(allpatches[0])
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))
