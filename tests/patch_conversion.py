@@ -14,7 +14,8 @@ from forcepho import psf as pointspread
 from astropy.wcs import WCS
 
 
-__all__ = ["make_individual_stamp", "set_scene", "get_transform_mats", "patch_conversion"]
+__all__ = ["make_individual_stamp", "set_scene", "get_transform_mats", "patch_conversion",
+           "zerocoords", "set_inactive"]
 
 
 def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, background=0.0):
@@ -89,7 +90,7 @@ def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
         s.flux = fluxpars[ii_gal]
         s.ra = x
         s.dec = y
-        s.q = q
+        s.q = np.clip(q, 0.2, 0.9)
         s.pa = np.deg2rad(pa)
         sources.append(s)
 
@@ -153,6 +154,24 @@ def zerocoords(stamps, scene, sky_zero=(53.0, -28.0)):
     
     for stamp in stamps:
         stamp.crval -= zero
+
+
+def set_inactive(scene, stamps, pad=5, nmax=0):
+    # set outside sources to be fixed.
+    for stamp in stamps:
+        for source in scene.sources:
+            x, y = stamp.sky_to_pix([source.ra, source.dec])
+            good = ((x < stamp.nx + pad) & (x > -pad) &
+                    (y < stamp.ny + pad) & (y > -pad))
+            if ~good:
+                source.fixed = True
+
+    insources = [s for s in scene.sources if not s.fixed]
+    fluxes = np.array([s.flux for s in insources])
+    order = np.argsort(fluxes.max(axis=-1))
+    use = order[-nmax:]
+    use_sources = [insources[i] for i in use]
+    return Scene(use_sources)
 
 
 def patch_conversion(patch_name, splinedata, psfpath, nradii=9):

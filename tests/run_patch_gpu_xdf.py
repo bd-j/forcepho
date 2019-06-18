@@ -16,6 +16,7 @@ try:
     import cPickle as pickle
 except(ImportError):
     import pickle
+import h5py
 
 from forcepho.patch import Patch
 from forcepho.proposal import Proposer
@@ -23,7 +24,7 @@ from forcepho.kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 from forcepho.posterior import LogLikeWithGrad
 from forcepho.fitting import Result
 
-from patch_conversion import patch_conversion, zerocoords
+from patch_conversion import patch_conversion, zerocoords, set_inactive
 
 import theano
 import pymc3 as pm
@@ -43,19 +44,28 @@ os.makedirs(scratch_dir, exist_ok=True)
 _print = print
 print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
 
+
 def save_results(result, rname):
    if rname is not None:
-        with open("{}.pkl".format(rname), "wb") as f:
-            pickle.dump(result, f)
+        with h5py.File("{}.h5".format(rname), "w") as f:
+            f.create_dataset("chain", data=result.chain)
+            f.attrs["ncall"] = result.ncall
+            f.attrs["wall_time"] = result.wall_time
+            f.attrs["patchname"] = result.patchname
+            f.attrs["sky_reference"] = result.sky_reference
+            f.attrs["nbands"] = result.nbands
+            f.attrs["parameters"] = result.parameter_names.astype("S")
 
 
 class GPUPosterior:
 
-    def __init__(self, proposer, scene):
+    def __init__(self, proposer, scene, name="", verbose=False):
         self.proposer = proposer
         self.scene = scene
         self.ncall = 0
         self._z = -99
+        self.verbose = verbose
+        self.name = name
 
     def evaluate(self, z):
         """
@@ -81,7 +91,12 @@ class GPUPosterior:
         # turn into log-like and accumulate grads correctly
         ll = mtwo * np.array(chi2[0], dtype=np.float64)
         ll_grad = mtwo * self.stack_grad(chi2_derivs)
-    
+
+        if self.verbose:
+            if np.mod(self.ncall, 1000) == 0.:
+                print("-------\n {} @ {}".format(self.name, self.ncall))
+                print(self.scene)
+
         self.ncall += 1
         self._lnp = ll
         self._lnp_grad = ll_grad
@@ -129,7 +144,7 @@ class GPUPosterior:
 
 
 
-def prior_bounds(scene, npix=3, flux_factor=20):
+def prior_bounds(scene, npix=4, flux_factor=20):
     """ Priors and scale guesses:
     
     :param scene:
@@ -160,12 +175,11 @@ def prior_bounds(scene, npix=3, flux_factor=20):
 
 path_to_data = "/gpfs/wolf/gen126/proj-shared/jades/udf/data/"
 path_to_results = "/gpfs/wolf/gen126/proj-shared/jades/udf/results/"
-#patch_name = pjoin(path_to_data, "test_patch_mini.h5")  # "test_patch_large.h5" or test_patch.h5 or "test_patch_mini.h5"
 splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
 psfpath = path_to_data
 
-def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, 
-              nwarm=100, niter=200, runtype="sample", ntime=10):
+def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
+              nwarm=50, niter=50, runtype="sample", ntime=10, verbose=True):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -179,7 +193,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
 
     print(patchname)
 
-    resultname = os.path.basename(patchname).replace("h5", "pkl")
+    resultname = os.path.basename(patchname).replace(".h5", "_result")
     resultname = pjoin(path_to_results, resultname)
     try:
         r = pool.rank
@@ -189,6 +203,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
 
     # --- Prepare Patch Data ---
     stamps, miniscene = patch_conversion(patchname, splinedata, psfpath, nradii=9)
+    miniscene = set_inactive(miniscene, [stamps[0], stamps[-1]], nmax=maxactive)
     pra = np.median([s.ra for s in miniscene.sources])
     pdec = np.median([s.dec for s in miniscene.sources])
     zerocoords(stamps, miniscene, sky_zero=np.array([pra, pdec]))
@@ -203,7 +218,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
     # --- Instantiate the ln-likelihood object ---
     # This object splits the lnlike_function into two, since that computes 
     # both lnp and lnp_grad, and we need to wrap them in separate theano ops.
-    model = GPUPosterior(gpu_proposer, miniscene)
+    model = GPUPosterior(gpu_proposer, miniscene, name=patchname, verbose=verbose)
 
     # --- Subtract off the fixed sources ---
     # TODO
@@ -237,17 +252,21 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
         
         result = Result()
         result.ndim = len(p0)
-        result.pinitial = p0.copy()
+        result.nactive = miniscene.nactive
+        result.nband = patch.n_bands
+        result.nexp = patch.n_exp
+        #result.pinitial = p0.copy()
         result.chain = chain
-        result.trace = trace
-        result.ncall = model.ncall
+        #result.trace = trace
+        result.ncall = np.copy(model.ncall)
         result.wall_time = ts
-        result.scene = miniscene
-        result.lower = lower
-        result.upper = upper
+        #result.scene = miniscene
+        #result.lower = lower
+        #result.upper = upper
         result.patchname = patchname
         result.sky_reference = (pra, pdec)
-        
+        result.parameter_names = pnames
+
         #last = chain[:, -1]
         #model.proposer.patch.return_residuals = True
         #result.residuals = model.residuals(last)
@@ -282,7 +301,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath,
 #    from emcee.utils import MPIPool
 #    pool = MPIPool(debug=False, loadbalance=False)
 #    if not pool.is_master():
-        # Wait for instructions from the master process.
+#        # Wait for instructions from the master process.
 #        pool.wait()
 #        sys.exit(0)
 #except(ImportError, ValueError):
@@ -308,13 +327,14 @@ if __name__ == "__main__":
     print(allpatches)    
     #try:
     #    M = pool.map
+    #    print("Using MPI")
     #except:
     #    M = map
+    #    print("Not using MPI")
 
-    M = map
     t = time()
     #allchains = M(run_patch, allpatches)
-    chain = run_patch(allpatches[0])
+    chain = run_patch(allpatches[0]) #, runtype="timing")
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))

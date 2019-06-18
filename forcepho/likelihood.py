@@ -73,14 +73,14 @@ def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
 
 
 def make_image(scene, stamp, Theta=None, use_sources=slice(None),
-               compute_kwargs={}):
+               compute_kwargs={}, stamp_index=None):
     """This only works with WorkPlan object, not FastWorkPlan
     """
     if Theta is not None:
         scene.set_all_source_params(Theta)
     plan = WorkPlan(stamp)
     plan.compute_keywords = compute_kwargs
-    plan, theta_inds, grad_inds = plan_sources(plan, scene)
+    plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=stamp_index)
     plan.reset()
     plan.process_pixels()
     im = -plan.residual[use_sources].sum(axis=0).reshape(plan.stamp.nx, plan.stamp.ny)
