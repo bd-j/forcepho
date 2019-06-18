@@ -171,7 +171,12 @@ def set_inactive(scene, stamps, pad=5, nmax=0):
     order = np.argsort(fluxes.max(axis=-1))
     use = order[-nmax:]
     use_sources = [insources[i] for i in use]
-    return Scene(use_sources)
+    microscene = Scene(use_sources)
+    try:
+        microscene.npsf_per_source = scene.npsf_per_source
+    except(AttributeError):
+        pass
+    return microscene
 
 
 def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
