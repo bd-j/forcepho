@@ -498,7 +498,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *)pchi2, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
+    accum[0].store((float *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
     return;
 }
 
