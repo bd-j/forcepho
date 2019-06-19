@@ -45,7 +45,7 @@ class Scene(object):
         :returns theta:
             An array with elements [flux, (shape_params)]
         """
-        npar_per_source = [s.nparam for s in self.sources[:sid]]
+        npar_per_source = [s.nparam for s in self.active_sources[:sid]]
         # get all the shape parameters
         source = self.sources[sid]
         start = int(np.sum(npar_per_source))
@@ -56,19 +56,22 @@ class Scene(object):
         return inds
 
     def set_all_source_params(self, Theta):
-        """Loop over sources in the scene, setting the parameters in each
+        """Loop over active sources in the scene, setting the parameters in each
         source based on the relevant subset of Theta parameters.
         """
         start = 0
-        for source in self.sources:
+        for source in self.active_sources:
             end = start + source.nparam
             source.set_params(Theta[start:end])
             start += source.nparam
 
-    def get_all_source_params(self):
-        """Get the total scene parameter vector
+    def get_all_source_params(self, active=True):
+        """Get the scene parameter vector for active sources
         """
-        plist = [s.get_param_vector() for s in self.sources if not s.fixed]
+        if active:
+            plist = [s.get_param_vector() for s in self.sources if not s.fixed]
+        else:
+            plist = [s.get_param_vector() for s in self.sources]
         params = np.concatenate(plist)
         return params
 
@@ -80,14 +83,21 @@ class Scene(object):
 
         return np.array(plist)
 
+    @property
+    def active_sources(self):
+        return [s for s in self.sources if not s.fixed]
+    
+    @property
+    def fixed_sources(self):
+        return [s for s in self.sources if s.fixed]
 
     @property
     def nactive(self):
-        return len([s for s in self.sources if not s.fixed])
-    
+        return len(self.active_sources)
+
     @property
     def nfixed(self):
-        return len([s for s in self.sources if s.fixed])
+        return len(self.fixed_sources)
 
     @property
     def parameter_names(self):

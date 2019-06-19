@@ -45,18 +45,6 @@ _print = print
 print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
 
 
-def save_results(result, rname):
-   if rname is not None:
-        with h5py.File("{}.h5".format(rname), "w") as f:
-            f.create_dataset("chain", data=result.chain)
-            f.attrs["ncall"] = result.ncall
-            f.attrs["wall_time"] = result.wall_time
-            f.attrs["patchname"] = result.patchname
-            f.attrs["sky_reference"] = result.sky_reference
-            f.attrs["nbands"] = result.nbands
-            f.attrs["parameters"] = result.parameter_names.astype("S")
-
-
 class GPUPosterior:
 
     def __init__(self, proposer, scene, name="", verbose=False):
@@ -87,15 +75,17 @@ class GPUPosterior:
         else:
             chi2, chi2_derivs = ret
 
-        mtwo = np.array(-2, dtype=np.float64)
+        mhalf = np.array(-0.5, dtype=np.float64)
         # turn into log-like and accumulate grads correctly
-        ll = mtwo * np.array(chi2[0], dtype=np.float64)
-        ll_grad = mtwo * self.stack_grad(chi2_derivs)
+        ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
+        ll_grad = mhalf * self.stack_grad(chi2_derivs)
 
         if self.verbose:
             if np.mod(self.ncall, 1000) == 0.:
                 print("-------\n {} @ {}".format(self.name, self.ncall))
-                print(self.scene)
+                print(z)
+                print(ll)
+                print(ll_grad)
 
         self.ncall += 1
         self._lnp = ll
@@ -178,7 +168,7 @@ path_to_results = "/gpfs/wolf/gen126/proj-shared/jades/udf/results/"
 splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
 psfpath = path_to_data
 
-def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
+def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
               nwarm=50, niter=50, runtype="sample", ntime=10, verbose=True):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
@@ -232,6 +222,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
         lower, upper = prior_bounds(miniscene)
         print(lower.dtype, upper.dtype)
         pnames = miniscene.parameter_names
+        start = dict(zip(pnames, p0))
         # The pm.sample() method below will draw an initial theta, 
         # then call logl.perform and logl.grad multiple times
         # in a loop with different theta values.
@@ -244,7 +235,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
             # instantiate target density and start sampling.
             pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
             trace = pm.sample(draws=niter, tune=nwarm, progressbar=False,
-                              cores=1, discard_tuned_samples=True)
+                              cores=1, discard_tuned_samples=True, start=start)
 
         ts = time() - t
         # yuck.
@@ -253,16 +244,15 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
         result = Result()
         result.ndim = len(p0)
         result.nactive = miniscene.nactive
-        result.nband = patch.n_bands
+        result.nbands = patch.n_bands
         result.nexp = patch.n_exp
-        #result.pinitial = p0.copy()
+        result.pinitial = p0.copy()
         result.chain = chain
-        #result.trace = trace
         result.ncall = np.copy(model.ncall)
         result.wall_time = ts
         #result.scene = miniscene
-        #result.lower = lower
-        #result.upper = upper
+        result.lower = lower
+        result.upper = upper
         result.patchname = patchname
         result.sky_reference = (pra, pdec)
         result.parameter_names = pnames
@@ -295,6 +285,22 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=2,
     
     return chain, (r, model.ncall, ts)
 
+
+def save_results(result, rname):
+   if rname is not None:
+        with h5py.File("{}.h5".format(rname), "w") as f:
+            f.create_dataset("chain", data=result.chain)
+            f.attrs["ncall"] = result.ncall
+            f.attrs["wall_time"] = result.wall_time
+            f.attrs["patchname"] = result.patchname
+            f.attrs["sky_reference"] = result.sky_reference
+            f.attrs["nactive"] = result.nactive
+            f.attrs["nbands"] = result.nbands
+            f.attrs["parameters"] = result.parameter_names.astype("S")
+            f.attrs["lower_bounds"] = result.lower
+            f.attrs["upper_bounds"] = result.upper
+
+
 # Create an MPI process pool.  Each worker process will sit here waiting for input from master
 # after it is done it will get the next value from master.
 #try:
@@ -321,7 +327,7 @@ def halt(message):
 
 
 if __name__ == "__main__":
-    patches = [1]
+    patches = [100]
     allpatches = [pjoin(path_to_data, "patch_with_cat", "patch_udf_withcat_{}.h5".format(pid)) 
                   for pid in patches]
     print(allpatches)    

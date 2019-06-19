@@ -86,7 +86,7 @@ def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
         s = Galaxy(filters=filters.tolist(), splinedata=splinedata, free_sersic=free_sersic)
         s.global_id = gal_id
         s.sersic = n
-        s.rh = rh
+        s.rh = np.clip(rh, 0.05, 0.10)
         s.flux = fluxpars[ii_gal]
         s.ra = x
         s.dec = y
