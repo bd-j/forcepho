@@ -179,7 +179,8 @@ def set_inactive(scene, stamps, pad=5, nmax=0):
     return microscene
 
 
-def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
+def patch_conversion(patch_name, splinedata, psfpath, nradii=9,
+                     use_bands=slice(None)):
     """Reads an HDF5 file with exposure data and metadata and source parameters 
     and returns a list of Stamp objects and a Scene object with appropriate
     attributes. This method determines source specific exposure metadata and
@@ -218,17 +219,17 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9):
     hdf5_file = h5py.File(patch_name, 'r')
 
     # get filter list
-    filter_list = hdf5_file['images'].attrs['filters']
+    filter_list = hdf5_file['images'].attrs['filters'][use_bands]
 
     # create scene
     mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:],
-                           hdf5_file['mini_scene']['sourceflux'][:],
+                           hdf5_file['mini_scene']['sourceflux'][:, use_bands],
                            filter_list, splinedata=splinedata)
 
     # make list of stamps
     stamp_list = []
     stamp_filter_list = []
-    for filter_name in hdf5_file['images'].attrs['filters']:
+    for filter_name in filter_list:
         for exp_name in hdf5_file['images'][filter_name].attrs['exposures']:
             stamp = make_individual_stamp(hdf5_file, filter_name, exp_name, 
                                           psfpath=psfpath, background=0.0)
