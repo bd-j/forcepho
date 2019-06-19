@@ -80,7 +80,7 @@ class Proposer:
 
         '''
 
-        chi_out = np.empty(1, dtype=np.float32)
+        chi_out = np.empty(self.patch.n_bands, dtype=np.float32)
         chi_derivs_out = np.empty(self.patch.n_bands, dtype=response_struct_dtype)
 
         if verbose:
