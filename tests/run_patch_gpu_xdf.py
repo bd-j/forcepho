@@ -192,8 +192,10 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
     print("Rank {} writing to {}".format(r, resultname))
 
     # --- Prepare Patch Data ---
-    stamps, miniscene = patch_conversion(patchname, splinedata, psfpath, nradii=9)
-    miniscene = set_inactive(miniscene, [stamps[0], stamps[-1]], nmax=maxactive)
+    use_bands = slice(0, 1)
+    stamps, scene = patch_conversion(patchname, splinedata, psfpath, 
+                                     nradii=9, use_bands=use_bands)
+    miniscene = set_inactive(scene, [stamps[0], stamps[-1]], nmax=maxactive)
     pra = np.median([s.ra for s in miniscene.sources])
     pdec = np.median([s.dec for s in miniscene.sources])
     zerocoords(stamps, miniscene, sky_zero=np.array([pra, pdec]))
@@ -340,7 +342,7 @@ if __name__ == "__main__":
 
     t = time()
     #allchains = M(run_patch, allpatches)
-    chain = run_patch(allpatches[0]) #, runtype="timing")
+    chain = run_patch(allpatches[0], runtype="timing")
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))
