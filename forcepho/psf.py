@@ -29,7 +29,9 @@ class PointSpreadFunction(object):
         self.amplitudes = parameters["amp"]
 
     def as_tuplelist(self):
-        """Return the parameters of the gaussians in the PSF mixture as a list of tuples.  Each element of the list is a tuple of (a, x, y, cxx, cyy, cxy)
+        """Return the parameters of the gaussians in the PSF mixture as a list
+        of tuples.  Each element of the list is a tuple of (a, x, y, cxx, cyy,
+        cxy)
         """
         params = []
         for i in range(self.ngauss):

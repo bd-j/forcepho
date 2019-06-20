@@ -99,7 +99,9 @@ class Proposer:
 
         # Unpack return values
         if self.patch.return_residual:
-            residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'], shape=self.patch.xpix.shape, dtype=self.patch.pix_dtype)
+            residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'],
+                                              shape=self.patch.xpix.shape,
+                                              dtype=self.patch.pix_dtype)
             residuals = self.unpack_residuals(residuals_flat)
 
         if self.patch.return_residual:

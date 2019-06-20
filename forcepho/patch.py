@@ -88,9 +88,9 @@ class Patch:
         will know which bin they belong to.
 
         Fills in the following arrays:
-        - self.n_psf_per_source
-        - self.psfgauss
-        - self.psfgauss_start
+        - self.n_psf_per_source   [NBAND]  number of PSFGaussians per source in each band
+        - self.psfgauss           [NPSFG]  An array of PSFGaussian parameters
+        - self.psfgauss_start     [NEXP]   PSFGaussian index corresponding to the start of each exposure.
         '''
 
         if not dtype:
@@ -203,10 +203,10 @@ class Patch:
         - self.ypix
         - self.data
         - self.ierr
-        - self.band_start
-        - self.band_N
-        - self.exposure_start
-        - self.exposure_N
+        - self.band_start     [NBAND] exposure index corresponding to the start of each band
+        - self.band_N         [NBAND] number of exposures in each band
+        - self.exposure_start [NEXP]  pixel index corresponding to the start of each exposure
+        - self.exposure_N     [NEXP]  number of pixels (including warp padding) in each exposure
         '''
 
         # TODO: use mask

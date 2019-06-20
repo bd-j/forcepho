@@ -100,6 +100,7 @@ class GPUPosterior:
         """
         nsources = self.proposer.patch.n_sources
         nbands = self.proposer.patch.n_bands #len(chi2_derivs)
+        print(nsources, nbands, len(chi2_derivs))
         grads = np.zeros([nsources, nbands + (NPARAMS-1)])
         for band, derivs in enumerate(chi2_derivs):            
             # shape params
@@ -134,7 +135,7 @@ class GPUPosterior:
 
 
 
-def prior_bounds(scene, npix=4, flux_factor=20):
+def prior_bounds(scene, npix=4, flux_factor=4):
     """ Priors and scale guesses:
     
     :param scene:
@@ -168,8 +169,9 @@ path_to_results = "/gpfs/wolf/gen126/proj-shared/jades/udf/results/"
 splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
 psfpath = path_to_data
 
-def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
-              nwarm=50, niter=50, runtype="sample", ntime=10, verbose=True):
+def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
+              nwarm=250, niter=100, runtype="sample", ntime=10, verbose=True,
+              rank=0):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -185,20 +187,20 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
 
     resultname = os.path.basename(patchname).replace(".h5", "_result")
     resultname = pjoin(path_to_results, resultname)
-    try:
-        r = pool.rank
-    except:
-        r = 0
-    print("Rank {} writing to {}".format(r, resultname))
+
+    print("Rank {} writing to {}".format(rank, resultname))
 
     # --- Prepare Patch Data ---
-    use_bands = slice(0, 1)
+    use_bands = slice(None)
     stamps, scene = patch_conversion(patchname, splinedata, psfpath, 
                                      nradii=9, use_bands=use_bands)
     miniscene = set_inactive(scene, [stamps[0], stamps[-1]], nmax=maxactive)
     pra = np.median([s.ra for s in miniscene.sources])
     pdec = np.median([s.dec for s in miniscene.sources])
     zerocoords(stamps, miniscene, sky_zero=np.array([pra, pdec]))
+
+    for s in miniscene.sources:
+        s.flux = np.arange(1, len(s.filternames) + 1) * 0.1    
 
     patch = Patch(stamps=stamps, miniscene=miniscene, return_residual=True)
     p0 = miniscene.get_all_source_params().copy()
@@ -237,7 +239,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
             # instantiate target density and start sampling.
             pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
             trace = pm.sample(draws=niter, tune=nwarm, progressbar=False,
-                              cores=1, discard_tuned_samples=True, start=start)
+                              cores=1, discard_tuned_samples=True)#, start=start)
 
         ts = time() - t
         # yuck.
@@ -278,14 +280,17 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=1,
 
     elif runtype == "timing":
         # --- Time a single call ---
+        model.proposer.patch.return_residuals = False
         t = time()
         for i in range(ntime):
             model.evaluate(p0)
+            print(model._lnp)
+            print(model._lnp_grad)
         ts = time() - t
         chain = [model._lnp, model._lnp_grad]
         print("took {}s for a single call".format(ts / ntime))
     
-    return chain, (r, model.ncall, ts)
+    return chain, (rank, model.ncall, ts)
 
 
 def save_results(result, rname):
@@ -303,18 +308,27 @@ def save_results(result, rname):
             f.attrs["upper_bounds"] = result.upper
 
 
-# Create an MPI process pool.  Each worker process will sit here waiting for input from master
-# after it is done it will get the next value from master.
-#try:
-#    from emcee.utils import MPIPool
-#    pool = MPIPool(debug=False, loadbalance=False)
-#    if not pool.is_master():
-#        # Wait for instructions from the master process.
-#        pool.wait()
-#        sys.exit(0)
-#except(ImportError, ValueError):
-#    pool = None
-#    print('Not using MPI')
+def distribute_patches(allpatches, mpi_barrier=False, run_kwargs={}):
+    try:
+        from mpi4py import MPI
+        have_mpi = True
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+    except:
+        have_mpi = False
+        rank = 0
+        size = 1
+        assert not mpi_barrier
+
+    if rank == 0:
+        print("{} ranks handling {} patches".format(size, len(allpatches)))
+        print(allpatches)
+
+    for i in range(rank, len(allpatches), size):
+        patch = allpatches[i]
+        out = run_patch(patch, rank=rank, **run_kwargs)
+
 
 
 def halt(message):
@@ -329,20 +343,14 @@ def halt(message):
 
 
 if __name__ == "__main__":
-    patches = [100]
+    patches = [100, 183, 274, 382, 441, 510, 653]
     allpatches = [pjoin(path_to_data, "patch_with_cat", "patch_udf_withcat_{}.h5".format(pid)) 
                   for pid in patches]
-    print(allpatches)    
-    #try:
-    #    M = pool.map
-    #    print("Using MPI")
-    #except:
-    #    M = map
-    #    print("Not using MPI")
+    
 
     t = time()
-    #allchains = M(run_patch, allpatches)
-    chain = run_patch(allpatches[0], runtype="timing")
+    #distribute_patches(allpatches)
+    chain = run_patch(allpatches[1], runtype="timing", maxactive=2)
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))

@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+""" sources.py - Module for objects describing individual sources and collections of sources (Scenes)
+"""
+
 import numpy as np
 from scipy.interpolate import SmoothBivariateSpline
 import warnings
@@ -81,7 +87,7 @@ class Scene(object):
         else:
             plist = [s.proposal() for s in self.sources if s.fixed]
 
-        return np.array(plist)
+        return np.concatenate(plist)
 
     @property
     def active_sources(self):
@@ -245,6 +251,29 @@ class Source(object):
         return np.zeros(self.ngauss)
 
     def psfgauss(self, e, psf_dtype=None):
+        """Pack the source and exposure specific PSF parameters into a simple array.
+        This assumes that the `stamp_psfs` attribute has been populated with an
+        NEXPOSURE length list, where each element of the list is in turn a list
+        of the the `ngauss` PointSpreadFunction objects for this source and
+        exposure.
+
+        Parameters
+        ----------
+        e: int
+            The exposure number
+
+        psf_dtype: optional
+            The data type of the returned array
+
+        Returns
+        -------
+        psf_params: list of tuples or ndarray
+            The PSF parameters, in the format:
+            `[((a, x, y, cxx, cyy, cxy), radius_index),
+              ((a, x, y, cxx, cyy, cxy), radius_index),
+              .....]
+            `
+        """
         psfs = self.stamp_psfs[e]
         assert len(psfs) == len(self.radii)
         this_exposure = []
