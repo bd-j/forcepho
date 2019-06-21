@@ -75,8 +75,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         crval = source.stamp_crvals[stamp]
         G = source.stamp_zps[stamp]
         stampid = stamp
-        #### THIS IS A HACK ######
-        filter_index = 0#source.stamp_filternum[stamp]
+        filter_index = source.stamp_filterindex[stamp]
 
     else:
         D = stamp.scale  # pix/arcsec
@@ -86,8 +85,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         crval = stamp.crval
         G = stamp.photocounts
         stampid = stamp.id
-        #### THIS IS A HACK ######
-        filter_index = 0#source.stamp_filternum[stamp]
+        source.filter_index(stamp.filtername)
 
 
     # Get the transformation matrix
@@ -196,8 +194,7 @@ def get_gaussian_gradients(source, stamp, gig):
         #crpix = source.stamp_crpixs[stamp]
         #crval = source.stamp_crvals[stamp]
         G = source.stamp_zps[stamp] # physical to counts
-        #### THIS IS A HACK ######
-        filter_index = 0#source.stamp_filternum[stamp]
+        filter_index = source.stamp_filterindex[stamp]
     else:
         D = stamp.scale  # pix/arcsec
         psf = stamp.psf

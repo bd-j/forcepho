@@ -220,6 +220,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9,
 
     # get filter list
     filter_list = hdf5_file['images'].attrs['filters'][use_bands]
+    filter_list_list = filter_list.tolist()
 
     # create scene
     mini_scene = set_scene(hdf5_file['mini_scene']['sourcepars'][:],
@@ -248,6 +249,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9,
         crpix_list = []
         crval_list = []
         G_list = []
+        find_list = []
 
         # loop over all stamps (i.e. filters and exposures) to add source specific information
         for s in stamp_list:
@@ -260,6 +262,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9,
             crpix_list.append(s.crpix)
             crval_list.append(s.crval)
             G_list.append(s.photocounts)
+            find_list.append(filter_list_list.index(s.filtername))
 
         source.stamp_scales = D_list
         source.stamp_psfs = psf_list
@@ -267,6 +270,7 @@ def patch_conversion(patch_name, splinedata, psfpath, nradii=9,
         source.stamp_crpixs = crpix_list
         source.stamp_crvals = crval_list
         source.stamp_zps = G_list
+        source.stamp_filterindex = find_list
 
     # loop over stamps, count gaussian components in psf for each band
     npsf_list = []
