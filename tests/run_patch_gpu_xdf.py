@@ -67,7 +67,7 @@ class GPUPosterior:
         """
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
-        
+        print(proposal["fluxes"]) 
         # send to gpu and collect result   
         ret = self.proposer.evaluate_proposal(proposal)
         if len(ret) == 3:
@@ -79,7 +79,8 @@ class GPUPosterior:
         # turn into log-like and accumulate grads correctly
         ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
-
+        print("chi2:")
+        print(chi2)
         if self.verbose:
             if np.mod(self.ncall, 1000) == 0.:
                 print("-------\n {} @ {}".format(self.name, self.ncall))
@@ -107,7 +108,7 @@ class GPUPosterior:
             grads[:, nbands:] += derivs[:, 1:]
             # flux params
             grads[:, band] += derivs[:, 0]
-            
+            print(band, derivs[0, :])
         return grads.reshape(-1)
 
     def lnprob(self, z):
@@ -171,7 +172,7 @@ psfpath = path_to_data
 
 def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
               nwarm=250, niter=100, runtype="sample", ntime=10, verbose=True,
-              rank=0):
+              rank=0, scatter_fluxes=False):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -199,8 +200,9 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
     pdec = np.median([s.dec for s in miniscene.sources])
     zerocoords(stamps, miniscene, sky_zero=np.array([pra, pdec]))
 
-    for s in miniscene.sources:
-        s.flux = np.arange(1, len(s.filternames) + 1) * 0.1    
+    if scatter_fluxes:
+        for s in miniscene.sources:
+            s.flux += np.arange(len(s.filternames)) * 0.1   
 
     patch = Patch(stamps=stamps, miniscene=miniscene, return_residual=True)
     p0 = miniscene.get_all_source_params().copy()
@@ -350,7 +352,7 @@ if __name__ == "__main__":
 
     t = time()
     #distribute_patches(allpatches)
-    chain = run_patch(allpatches[1], runtype="timing", maxactive=2)
+    chain = run_patch(allpatches[1], runtype="timing", maxactive=2, ntime=2, scatter_fluxes=True)
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))

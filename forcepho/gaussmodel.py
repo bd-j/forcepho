@@ -85,7 +85,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         crval = stamp.crval
         G = stamp.photocounts
         stampid = stamp.id
-        source.filter_index(stamp.filtername)
+        filter_index = source.filter_index(stamp.filtername)
 
 
     # Get the transformation matrix
