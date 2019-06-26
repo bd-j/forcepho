@@ -47,12 +47,13 @@ print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=Tru
 
 class GPUPosterior:
 
-    def __init__(self, proposer, scene, name="", verbose=False):
+    def __init__(self, proposer, scene, name="", verbose=False, debug=False):
         self.proposer = proposer
         self.scene = scene
         self.ncall = 0
         self._z = -99
         self.verbose = verbose
+        self.debug = debug
         self.name = name
 
     def evaluate(self, z):
@@ -67,7 +68,9 @@ class GPUPosterior:
         """
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
-        print(proposal["fluxes"]) 
+        if self.debug:
+            print(proposal["fluxes"])
+        
         # send to gpu and collect result   
         ret = self.proposer.evaluate_proposal(proposal)
         if len(ret) == 3:
@@ -79,8 +82,9 @@ class GPUPosterior:
         # turn into log-like and accumulate grads correctly
         ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
-        print("chi2:")
-        print(chi2)
+        if self.debug:
+            print("chi2: {}".fromat(chi2))
+
         if self.verbose:
             if np.mod(self.ncall, 1000) == 0.:
                 print("-------\n {} @ {}".format(self.name, self.ncall))
@@ -101,14 +105,16 @@ class GPUPosterior:
         """
         nsources = self.proposer.patch.n_sources
         nbands = self.proposer.patch.n_bands #len(chi2_derivs)
-        print(nsources, nbands, len(chi2_derivs))
+        #print(nsources, nbands, len(chi2_derivs))
         grads = np.zeros([nsources, nbands + (NPARAMS-1)])
         for band, derivs in enumerate(chi2_derivs):            
             # shape params
             grads[:, nbands:] += derivs[:, 1:]
             # flux params
             grads[:, band] += derivs[:, 0]
-            print(band, derivs[0, :])
+            if self.debug:
+                print(band, derivs[0, :])
+
         return grads.reshape(-1)
 
     def lnprob(self, z):
@@ -172,7 +178,7 @@ psfpath = path_to_data
 
 def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
               nwarm=250, niter=100, runtype="sample", ntime=10, verbose=True,
-              rank=0, scatter_fluxes=False):
+              rank=0, scatter_fluxes=False, tag=""):
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -186,7 +192,10 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
 
     print(patchname)
 
-    resultname = os.path.basename(patchname).replace(".h5", "_result")
+    #if tag is not None:
+    #    tail = "_{}_result"
+
+    resultname = tag + "-" + os.path.basename(patchname).replace(".h5", "_result")
     resultname = pjoin(path_to_results, resultname)
 
     print("Rank {} writing to {}".format(rank, resultname))
@@ -202,7 +211,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
 
     if scatter_fluxes:
         for s in miniscene.sources:
-            s.flux += np.arange(len(s.filternames)) * 0.1   
+            s.flux = s.flux + np.arange(0, len(s.filternames)) * 0.1    
 
     patch = Patch(stamps=stamps, miniscene=miniscene, return_residual=True)
     p0 = miniscene.get_all_source_params().copy()
@@ -323,12 +332,14 @@ def distribute_patches(allpatches, mpi_barrier=False, run_kwargs={}):
         size = 1
         assert not mpi_barrier
 
+    import time
     if rank == 0:
         print("{} ranks handling {} patches".format(size, len(allpatches)))
         print(allpatches)
 
     for i in range(rank, len(allpatches), size):
         patch = allpatches[i]
+        time.sleep(rank * 2)
         out = run_patch(patch, rank=rank, **run_kwargs)
 
 
@@ -345,14 +356,23 @@ def halt(message):
 
 
 if __name__ == "__main__":
-    patches = [100, 183, 274, 382, 441, 510, 653]
+    patches = [100, 183, 274, 382, 653]
+    patches2 = [90, 91, 157, 159, 160, 172, 212]
+    patches3 = [217, 323, 328, 391, 464]
     allpatches = [pjoin(path_to_data, "patch_with_cat", "patch_udf_withcat_{}.h5".format(pid)) 
-                  for pid in patches]
+                  for pid in patches3]
     
+    run_kwargs = {"maxactive": 15,
+                  "tag": "max10",
+                  "nwarm": 250,
+                  "niter": 100,
+                  "runtype": "sample",
+                  "scatter_fluxes": False,
+                  }
 
     t = time()
-    #distribute_patches(allpatches)
-    chain = run_patch(allpatches[1], runtype="timing", maxactive=2, ntime=2, scatter_fluxes=True)
+    distribute_patches(allpatches, run_kwargs=run_kwargs)
+    #chain = run_patch(allpatches[6], **run_kwargs)
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))
