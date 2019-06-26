@@ -1,7 +1,16 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+""" sources.py - Module for objects describing individual sources and collections of sources (Scenes)
+"""
+
 import numpy as np
 from scipy.interpolate import SmoothBivariateSpline
-import h5py
-
+import warnings
+try:
+    import h5py
+except(ImportError):
+    warnings.warn("h5py could not be imported")
 # For rendering
 from .gaussmodel import convert_to_gaussians, compute_gig
 
@@ -23,6 +32,9 @@ class Scene(object):
         ss = [str(s) for s in self.sources]
         return "\n".join(ss)
 
+    def __len__(self):
+        return len(self.sources)
+
     def param_indices(self, sid, filtername=None):
         """Get the indices of the relevant parameters in the giant Theta
         vector.  Assumes that the order of parameters for each source is
@@ -39,7 +51,7 @@ class Scene(object):
         :returns theta:
             An array with elements [flux, (shape_params)]
         """
-        npar_per_source = [s.nparam for s in self.sources[:sid]]
+        npar_per_source = [s.nparam for s in self.active_sources[:sid]]
         # get all the shape parameters
         source = self.sources[sid]
         start = int(np.sum(npar_per_source))
@@ -50,21 +62,48 @@ class Scene(object):
         return inds
 
     def set_all_source_params(self, Theta):
-        """Loop over sources in the scene, setting the parameters in each
+        """Loop over active sources in the scene, setting the parameters in each
         source based on the relevant subset of Theta parameters.
         """
         start = 0
-        for source in self.sources:
+        for source in self.active_sources:
             end = start + source.nparam
             source.set_params(Theta[start:end])
             start += source.nparam
 
-    def get_all_source_params(self):
-        """Get the total scene parameter vector
+    def get_all_source_params(self, active=True):
+        """Get the scene parameter vector for active sources
         """
-        plist = [s.get_param_vector() for s in self.sources if not s.fixed]
+        if active:
+            plist = [s.get_param_vector() for s in self.sources if not s.fixed]
+        else:
+            plist = [s.get_param_vector() for s in self.sources]
         params = np.concatenate(plist)
         return params
+
+    def get_proposal(self, active=True):
+        if active:
+            plist = [s.proposal() for s in self.sources if not s.fixed]
+        else:
+            plist = [s.proposal() for s in self.sources if s.fixed]
+
+        return np.concatenate(plist)
+
+    @property
+    def active_sources(self):
+        return [s for s in self.sources if not s.fixed]
+    
+    @property
+    def fixed_sources(self):
+        return [s for s in self.sources if s.fixed]
+
+    @property
+    def nactive(self):
+        return len(self.active_sources)
+
+    @property
+    def nfixed(self):
+        return len(self.fixed_sources)
 
     @property
     def parameter_names(self):
@@ -99,6 +138,7 @@ class Source(object):
     radii = np.zeros(1)
 
     # Parameters
+    npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
     ra = 0.
@@ -209,6 +249,41 @@ class Source(object):
         """
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
+
+    def psfgauss(self, e, psf_dtype=None):
+        """Pack the source and exposure specific PSF parameters into a simple array.
+        This assumes that the `stamp_psfs` attribute has been populated with an
+        NEXPOSURE length list, where each element of the list is in turn a list
+        of the the `ngauss` PointSpreadFunction objects for this source and
+        exposure.
+
+        Parameters
+        ----------
+        e: int
+            The exposure number
+
+        psf_dtype: optional
+            The data type of the returned array
+
+        Returns
+        -------
+        psf_params: list of tuples or ndarray
+            The PSF parameters, in the format:
+            `[((a, x, y, cxx, cyy, cxy), radius_index),
+              ((a, x, y, cxx, cyy, cxy), radius_index),
+              .....]
+            `
+        """
+        psfs = self.stamp_psfs[e]
+        assert len(psfs) == len(self.radii)
+        this_exposure = []
+        for r, p in enumerate(psfs):
+            params = p.as_tuplelist()
+            this_exposure += [(par, r) for par in params]
+        if psf_dtype is not None:
+            return np.array(this_exposure, dtype=psf_dtype)
+        else:
+            return this_exposure
 
     def render(self, stamp, compute_deriv=True, **compute_keywords):
         """Render a source on a PostageStamp.
@@ -396,14 +471,21 @@ class Galaxy(Source):
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
-        if splinedata is None:
-            raise(ValueError, "Galaxies must have information to make A(r, n) bivariate splines")
-        else:
+        try:
             self.initialize_splines(splinedata)
+        except:
+            message = ("Could not load `splinedata`." 
+                       "Galaxies must have `splinedata` information "
+                       "to make A(r, n) bivariate splines")
+            warnings.warn(message)
 
         if not free_sersic:
             # Fix the sersic parameters n_sersic and r_h
             self.nshape = 2
+
+        from .proposal import source_struct_dtype
+        self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
+
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
@@ -498,6 +580,22 @@ class Galaxy(Source):
         """
         # ngauss array of da/drh
         return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines]))
+
+    def proposal(self):
+        """A parameter proposal in the form required for transfer to the GPU
+        """
+        self.proposal_struct["fluxes"][0, :self.nband] = self.flux
+        self.proposal_struct["ra"] = self.ra
+        self.proposal_struct["dec"] = self.dec
+        self.proposal_struct["q"] = self.q
+        self.proposal_struct["pa"] = self.pa
+        self.proposal_struct["nsersic"] = self.sersic
+        self.proposal_struct["rh"] = self.rh
+        self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
+        self.proposal_struct["damplitude_drh"][0, :self.ngauss] = self.damplitude_drh
+        self.proposal_struct["damplitude_dnsersic"][0, :self.ngauss] = self.damplitude_dsersic
+
+        return self.proposal_struct
 
 
 class ConformalGalaxy(Galaxy):

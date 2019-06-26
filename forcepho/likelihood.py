@@ -12,7 +12,7 @@ __all__ = ["lnlike_multi", "negative_lnlike_multi",
 NDERIV = 7
 
 
-def lnlike_multi(Theta, scene, plans, grad=True):
+def lnlike_multi(Theta, scene, plans, grad=True, source_meta=False):
     """Calculate the likelihood of the `plans` given the `scene` with
     parameters `Theta` This propagates the `Theta` vector into the scene, and
     then loops over the plans accumulating the likelhood (and gradients
@@ -48,7 +48,11 @@ def lnlike_multi(Theta, scene, plans, grad=True):
     lnp_grad = np.zeros_like(Theta)
     
     for k, plan in enumerate(plans):
-        plan, theta_inds, grad_inds = plan_sources(plan, scene)
+        if source_meta:
+            ind = k
+        else:
+            ind = None
+        plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=ind)
         lnp_stamp, lnp_stamp_grad = plan.lnlike()
         lnp += lnp_stamp
         # TODO: test that flat[] does the right thing here
@@ -69,14 +73,14 @@ def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
 
 
 def make_image(scene, stamp, Theta=None, use_sources=slice(None),
-               compute_kwargs={}):
+               compute_kwargs={}, stamp_index=None):
     """This only works with WorkPlan object, not FastWorkPlan
     """
     if Theta is not None:
         scene.set_all_source_params(Theta)
     plan = WorkPlan(stamp)
     plan.compute_keywords = compute_kwargs
-    plan, theta_inds, grad_inds = plan_sources(plan, scene)
+    plan, theta_inds, grad_inds = plan_sources(plan, scene, stamp_index=stamp_index)
     plan.reset()
     plan.process_pixels()
     im = -plan.residual[use_sources].sum(axis=0).reshape(plan.stamp.nx, plan.stamp.ny)
@@ -85,7 +89,7 @@ def make_image(scene, stamp, Theta=None, use_sources=slice(None),
     return im, grad
 
 
-def plan_sources(plan, scene):
+def plan_sources(plan, scene, stamp_index=None):
     """Add the sources in a scene to a work plan as lists of active and fixed
     `gaussmodel.GaussianImageGalaxies`.  Additionally returns useful arrays of
     indices for accumulating likelihood gradients in the correct elements of
@@ -114,6 +118,11 @@ def plan_sources(plan, scene):
         The indices in the flattened `(nactive, NDERIV)` array of gradients
         returend by `WorkPlan.lnlike()` of the relevant scene parameters.
     """
+    if stamp_index is None:
+        stamp = plan.stamp
+    else:
+        stamp = stamp_index
+    
     active, fixed = [], []
     theta_inds, grad_inds = [], []
     # Make list of all sources in the plan, keeping track of where they are
@@ -125,14 +134,14 @@ def plan_sources(plan, scene):
         if coverage <= 0:
             # OFF IMAGE
             continue
-        gig = convert_to_gaussians(source, plan.stamp)
+        gig = convert_to_gaussians(source, stamp)
         if coverage == 1:
             # FIXED
             fixed.append(gig)
             continue
         if coverage > 1:
             # ACTIVE
-            gig = get_gaussian_gradients(source, plan.stamp, gig)
+            gig = get_gaussian_gradients(source, stamp, gig)
             active.append(gig)
             # get indices of parameters of the source in the giant Theta array
             theta_inds += scene.param_indices(j, plan.stamp.filtername)
@@ -234,7 +243,7 @@ class WorkPlan(object):
 
     @property
     def ierr(self):
-        return self.stamp.ierr
+        return self.stamp.ierr.reshape(-1)
 
 
 class FastWorkPlan(WorkPlan):
@@ -245,6 +254,7 @@ class FastWorkPlan(WorkPlan):
     def reset(self):
         self.residual = self.stamp.pixel_values.flatten()
         self.gradients = np.zeros([self.nactive, self.nparam])
+        self.chi = None
         
     def process_pixels(self, blockID=None, threadID=None):
         """Here we are doing all pixels at once instead of one superpixel at a
@@ -257,6 +267,8 @@ class FastWorkPlan(WorkPlan):
                 self.compute_keywords['compute_deriv'] = False
                 self.residual -= compute_gaussian(g, self.stamp.xpix.flat, self.stamp.ypix.flat,
                                                   **self.compute_keywords)
+        self.chi = self.residual * self.ierr
+        self.chivar = self.chi * self.ierr
         # Loop only over active to get the chisq gradients
         for i, gig in enumerate(self.active):
             for j, g in enumerate(gig.gaussians):
@@ -266,7 +278,7 @@ class FastWorkPlan(WorkPlan):
                                               **self.compute_keywords)
                 # Accumulate the *chisq* derivatives w.r.t. theta from each gaussian
                 # This matrix multiply can be optimized (many zeros in g.derivs)
-                self.gradients[i, :] += np.matmul(g.derivs, np.matmul(dI_dphi, self.residual * self.ierr))
+                self.gradients[i, :] += np.matmul(g.derivs, np.matmul(dI_dphi, self.chivar))
 
     def lnlike(self, active=None, fixed=None):
         if active is not None:
@@ -275,6 +287,5 @@ class FastWorkPlan(WorkPlan):
             self.fixed = fixed
         self.reset()
         self.process_pixels()
-        chi = self.residual * self.ierr
 
-        return -0.5 * np.dot(chi*chi.T), self.gradients
+        return -0.5 * np.dot(self.chi, self.chi.T), self.gradients

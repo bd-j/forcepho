@@ -1,5 +1,7 @@
 import numpy as np
 try:
+    import theano
+    theano.gof.compilelock.set_lock_status(False)
     import theano.tensor as tt
     Op = tt.Op
 except:

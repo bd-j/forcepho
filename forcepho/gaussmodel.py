@@ -66,8 +66,29 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
        ImageGaussians.
     """
 
+    # get info for this stamp
+    if type(stamp) is int:
+        D = source.stamp_scales[stamp]
+        psf = source.stamp_psfs[stamp][0]
+        CW = source.stamp_cds[stamp] # dpix/dra, dpix/ddec
+        crpix = source.stamp_crpixs[stamp]
+        crval = source.stamp_crvals[stamp]
+        G = source.stamp_zps[stamp]
+        stampid = stamp
+        filter_index = source.stamp_filterindex[stamp]
+
+    else:
+        D = stamp.scale  # pix/arcsec
+        psf = stamp.psf
+        CW = stamp.dpix_dsky
+        crpix = stamp.crpix
+        crval = stamp.crval
+        G = stamp.photocounts
+        stampid = stamp.id
+        source.filter_index(stamp.filtername)
+
+
     # Get the transformation matrix
-    D = stamp.scale  # pix/arcsec
     R = rotation_matrix(source.pa)
     S = scale_matrix(source.q)
     T = fast_dot_dot_2x2(D, R, S)
@@ -75,36 +96,32 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     # get source component means, covariances, and amplitudes in the pixel space
     scovar = fast_matmul_matmul_2x2(T, source.covariances, T.T)
     samps = source.amplitudes
-    smean = stamp.sky_to_pix([source.ra, source.dec])
+    sky = np.array([source.ra, source.dec])
+    smean = np.dot(CW, sky - crval) + crpix
     flux = np.atleast_1d(source.flux)
     if len(flux) == 1:
         flux = flux[0]
     else:
-        flux = flux[source.filter_index(stamp.filtername)]
+        flux = flux[filter_index]
 
     # Convert flux to counts
-    flux *= stamp.photocounts
+    flux *= G
 
     # get PSF component means and covariances in the pixel space
-    if stamp.psf.units == 'arcsec':
-        pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
-        pmeans = np.matmul(D, stamp.psf.means)
+    if psf.units == 'arcsec':
+        pcovar = fast_matmul_matmul_2x2(D, psf.covariances, D.T)
+        pmeans = np.matmul(D, psf.means)
         # FIXME need to adjust amplitudes to still sum to one?
-        pamps = stamp.psf.amplitudes
-    elif stamp.psf.units == 'pixels':
-        pcovar = stamp.psf.covariances
-        pmeans = stamp.psf.means
-        pamps = stamp.psf.amplitudes
+        pamps = psf.amplitudes
+    elif psf.units == 'pixels':
+        pcovar = psf.covariances
+        pmeans = psf.means
+        pamps = psf.amplitudes
 
-    # convolve with the PSF for this stamp, yield Ns x Np sets of means, covariances, and amplitudes.
-    #covar = gcovar[:, None, :, :] + pcovar[None, :, :, :]
-    #amps = gamps[:, None] * pamps[None, :]
-    #means = gmean[None, :] + pmeans[None, :, :]
-
-    gig = GaussianImageGalaxy(source.ngauss, stamp.psf.ngauss,
-                              id=(source.id, stamp.id))
+    gig = GaussianImageGalaxy(source.ngauss, psf.ngauss,
+                              id=(source.id, stampid))
     
-    gig.gaussians = _convert_to_gaussians(source.ngauss, stamp.psf.ngauss, scovar, pcovar,
+    gig.gaussians = _convert_to_gaussians(source.ngauss, psf.ngauss, scovar, pcovar,
                                           smean, samps, pmeans, pamps, flux)
 
     if compute_deriv:
@@ -168,13 +185,29 @@ def get_gaussian_gradients(source, stamp, gig):
         The same as the input `gig`, but with the computed Jacobians assigned
         to the `deriv` attribute of each of the consitituent `ImageGaussian`s
     """
+    
+    # get info for this stamp
+    if type(stamp) is int:
+        D = source.stamp_scales[stamp]
+        psf = source.stamp_psfs[stamp][0]
+        CW = source.stamp_cds[stamp] #dpix/dra, dpix/ddec
+        #crpix = source.stamp_crpixs[stamp]
+        #crval = source.stamp_crvals[stamp]
+        G = source.stamp_zps[stamp] # physical to counts
+        filter_index = source.stamp_filterindex[stamp]
+    else:
+        D = stamp.scale  # pix/arcsec
+        psf = stamp.psf
+        CW = stamp.dpix_dsky
+        #crpix = stamp.crpix
+        #crval = stamp.crval
+        G = stamp.photocounts
+        filter_index = source.filter_index(stamp.filtername)
+
     # Get the transformation matrix and other conversions
-    D = stamp.scale  # pix/arcsec
     R = rotation_matrix(source.pa)
     S = scale_matrix(source.q)
     T = fast_dot_dot_2x2(D, R, S)
-    CW = stamp.dpix_dsky  #dpix/dra, dpix/ddec
-    G = stamp.photocounts  # physical to counts
 
     # And its derivatives with respect to scene parameters
     dS_dq = scale_matrix_deriv(source.q)
@@ -193,26 +226,24 @@ def get_gaussian_gradients(source, stamp, gig):
     if len(flux) == 1:
         flux = flux[0]
     else:
-        flux = flux[source.filter_index(stamp.filtername)]
+        flux = flux[filter_index]
 
     # get PSF component means and covariances in the pixel space
-    if stamp.psf.units == 'arcsec':
-        pcovar = fast_matmul_matmul_2x2(D, stamp.psf.covariances, D.T)
-        #pmeans = np.matmul(D, stamp.psf.means)
+    if psf.units == 'arcsec':
+        pcovar = fast_matmul_matmul_2x2(D, psf.covariances, D.T)
         # FIXME need to adjust amplitudes to still sum to one?
-        pamps = stamp.psf.amplitudes
-    elif stamp.psf.units == 'pixels':
-        pcovar = stamp.psf.covariances
-        #pmeans = stamp.psf.means
-        pamps = stamp.psf.amplitudes
+        pamps = psf.amplitudes
+    elif psf.units == 'pixels':
+        pcovar = psf.covariances
+        pamps = psf.amplitudes
 
-    derivs = _get_gaussian_gradients(source.ngauss, stamp.psf.ngauss, scovars, pcovar, samps, pamps,
+    derivs = _get_gaussian_gradients(source.ngauss, psf.ngauss, scovars, pcovar, samps, pamps,
                                      flux, G, T, dT_dq, dT_dpa, da_dn, da_dr, CW)
 
     # Unpack the results array returned by `_get_gaussian_gradients`
     for i in range(source.ngauss):
-        for j in range(stamp.psf.ngauss):
-            gig.gaussians[i*stamp.psf.ngauss + j].derivs = derivs[i,j]
+        for j in range(psf.ngauss):
+            gig.gaussians[i*psf.ngauss + j].derivs = derivs[i,j]
 
     return gig
 

@@ -3,7 +3,7 @@ from functools import partial as argfix
 import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
-from .posterior import Posterior, LogLikeWithGrad
+from .posterior import Posterior
 
 
 __all__ = ["Result", "run_pymc3", "run_opt",
@@ -29,7 +29,7 @@ def priors(scene, stamps, npix=2.0):
              [s.ra - npix * plate_scale[0], s.dec - npix * plate_scale[1],
               0.3, -np.pi/1.5, sersic_range[0], rh_range[0]]
              for s in scene.sources]
-    upper = [(np.array(g.flux) * 10).tolist() +
+    upper = [(np.array(s.flux) * 10).tolist() +
              [s.ra + npix * plate_scale[0], s.dec + npix * plate_scale[1],
               1.0, np.pi/1.5, sersic_range[-1], rh_range[-1]]
              for s in scene.sources]
@@ -47,6 +47,9 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
 
     import pymc3 as pm
     import theano.tensor as tt
+    import theano
+    theano.gof.compilelock.set_lock_status(False)
+    from .posterior import  LogLikeWithGrad
 
     model = Posterior(scene, plans)
     logl = LogLikeWithGrad(model)
@@ -83,10 +86,9 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
 
 def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
     
-    # --- hemcee ---
-
     from hemcee import NoUTurnSampler
     from hemcee.metric import DiagonalMetric
+
     metric = DiagonalMetric(scales**2)
     model = Posterior(scene, plans, upper=np.inf, lower=-np.inf)
     sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
@@ -119,7 +121,8 @@ def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
 
 def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
 
-    # --- nested ---
+    import dynesty
+    
     lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
     theta_width = (upper - lower)
     ndim = len(lower)
@@ -129,7 +132,6 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
         theta = lower + theta_width * unit_coords
         return theta
 
-    import dynesty
     sampler = dynesty.DynamicNestedSampler(lnlike, prior_transform, ndim, nlive=nlive,
                                            bound="multi", method="slice", bootstrap=0)
     t0 = time.time()
@@ -155,13 +157,13 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
 
 def run_opt(p0, scene, plans, jac=True, **extras):
 
+    from scipy.optimize import minimize
+    
     nll = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=jac)
 
-    from scipy.optimize import minimize
     opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
             'disp':True, 'iprint': 1, 'maxcor': 20}
-    def callback(x):
-        print(x, nll(x))
+    callback = None
 
     t0 = time.time()
     scires = minimize(nll, p0.copy(), jac=jac,  method='BFGS',
@@ -182,12 +184,12 @@ def run_opt(p0, scene, plans, jac=True, **extras):
 def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
             nwarm=0, niter=500, length=20):
 
-    # -- hmc ---
     from hmc import BasicHMC
+
     model = Posterior(scene, plans, upper=upper, lower=lower, verbose=True)
-    hsampler = BasicHMC(model, verbose=False)
-    hsampler.ndim = len(p0)
-    hsampler.set_mass_matrix(1/scales**2)
+    sampler = BasicHMC(model, verbose=False)
+    sampler.ndim = len(p0)
+    sampler.set_mass_matrix(1/scales**2)
 
     result = Result()
     result.pinitial = p0.copy()
@@ -198,7 +200,7 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     result.metric = scales**2
 
     if nwarm > 0:
-        pos, prob, grad = sampler.sample(pos, iterations=nwarm, mass_matrix=1/scales**2,
+        pos, prob, grad = sampler.sample(p0, iterations=nwarm, mass_matrix=1/scales**2,
                                         epsilon=use_eps, length=length, sigma_length=int(length/4),
                                         store_trajectories=True)
         use_eps = sampler.find_reasonable_stepsize(pos)
@@ -219,5 +221,6 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     result.upper = upper
     result.trajectories = sampler.trajectories
     result.accepted = sampler.accepted
+    result.ncall = (ncwarm, np.copy(model.ncall))
 
     return result
