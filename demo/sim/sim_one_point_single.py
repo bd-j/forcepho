@@ -30,7 +30,7 @@ catname = os.path.join(paths.starsims, 'sandro/star_cat_482.txt')
 def prep_stamps(ra, dec):
     # HUUGE HAAAACK
     if filters[0] == "F277W":
-        psfcenter = (496/2. - 100)
+        psfcenter = (496 / 2. - 100)
         psf_realization = 0
     else:
         psfcenter = 104.
