@@ -3,6 +3,7 @@
 
 %\usepackage{graphicx}
 \usepackage{amsmath}
+\usepackage{mathtools}
 \usepackage[normalem]{ulem}
 
 \newcommand{\transpose}[1]{{#1}^{\!\mathsf T}}
@@ -23,6 +24,13 @@
 \newcommand{\normal}{\mathcal{N}}
 \newcommand{\dx}{\Delta_x}
 \newcommand{\dy}{\Delta_y}
+
+
+%\makeatletter
+%\renewcommand*\env@matrix[1][c]{\hskip -\arraycolsep
+%  \let\@ifnextchar\new@ifnextchar
+%  \array{*\c@MaxMatrixCols #1}}
+%\makeatother
 
 
 \begin{document}
@@ -295,6 +303,7 @@ where we have used $\sqrt{q}$ so that$\det{S}=1$.
 These transformations have the problem that the position angle becomes unconstrained as $q$ goes to 1.
 In terms of a posterior distribution, this leads to a funnel shape in the $q, \varphi$ space, which can be difficult to sample from.
 
+\subsubsection{Conformal Shear}
 The lensing community has explored alternative parameterizations to describe shear that do not suffer from this problem.
 In particular \citet{bernstein02} describes the following parameterization in terms of the \emph{conformal shear}  vector $\pmb{\eta}$
 \begin{eqnarray}
@@ -327,6 +336,27 @@ d\pmb{s} & = & J \, d\pmb{\eta}
 \end{eqnarray}
 This might need to be transposed.  Also an additional factor of $\frac{1}{2 \sqrt{q}}$ is necessary in the code to account for the non-standard definition of $q$ in the code.
 
+\subsubsection{Reduced Shear}
+The conformal shear transformation can easily be implemented using the parameter and gradient transformations described above, 
+but there is another parameterization which may be easy to implement at the lowest levels.
+This is the two element \emph{reduced shear} vector $\pmb{g}$ \citep{bernstein02}.
+With this vector, the elements of which correspond to the real and imaginary parts of a complex number, we can write the shear matrix $RS$ (corresponding to the combined rotation and scale matrix) as
+\begin{eqnarray}
+RS & = & K \, \begin{pmatrix} 1+g_1 & g_2 \\ g_2 & 1 - g_1 \end{pmatrix} \\
+K & = & \frac{1}{\sqrt{1-g^2}} \\
+g & = & \sqrt{g_1^2 + g_2^2} \\
+  & = & \tanh(\frac{\eta}{2}) \\
+  & = & \frac{1-q}{1+q} \\
+g_1 & = & g \, \cos(2\varphi) \\
+g_2 & = & g \, \sin(2\varphi) \\
+\pmb{g} & = & (g_1, g_2) \\
+\end{eqnarray}
+
+In this formulation the gradients of the reduced shear matrix (or the roation and scale matrix) are fairly straightforward
+\begin{eqnarray}
+\frac{\partial RS}{\partial g_1} & = & K \, \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix} + g_1 \, K^2 \, RS \\
+\frac{\partial RS}{\partial g_2} & = & K \, \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix} + g_2 \, K^2 \, RS
+\end{eqnarray}
 
 \subsection{Analytic convolutions and transformations to pixel space}
 Assuming that we have represented the galaxy and the PRF as mixtures of Gaussians we can write the convolution of the galaxy with the PRF as
