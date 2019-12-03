@@ -17,9 +17,13 @@ import numpy as np
 
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 
-import pycuda
-import pycuda.driver as cuda
-from pycuda.compiler import SourceModule
+try:
+    import pycuda
+    import pycuda.driver as cuda
+    from pycuda.compiler import SourceModule
+except:
+    pass
+
 
 class Proposer:
     '''

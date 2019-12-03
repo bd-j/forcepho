@@ -67,8 +67,8 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
     # where integers refer to the center of a pixel
     center_full = (np.array(size)-1) / 2.
     if width is not None:
-        start = np.clip((center_full - width), *size).astype(int)
-        stop = np.clip(center_full + width, *size).astype(int)
+        start = np.clip((center_full - width), [0,0], size).astype(int)
+        stop = np.clip(center_full + width, [0,0], size).astype(int)
     else:
         start = np.zeros(2).astype(int)
         stop = size
@@ -111,7 +111,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
         lnlike.append(r["final_log_likelihood"])
 
     with h5py.File(outroot + '.h5', "w") as out:
-        
+
         out.attrs["nmix"] = nmix
         out.attrs["nrepeat"] = nrepeat
         out.attrs["image_path"] = psfimname
@@ -156,8 +156,8 @@ def plot_model(results, outroot, log_resid=True, cmap="viridis"):
         m1 = ax.imshow(result['recon_image'], origin='lower', cmap=cmap)
         fig.colorbar(m1, ax=ax)
         ax.text(0.1, 0.9, 'Model', transform=ax.transAxes)
-        ax = axes[1, 0]
 
+        ax = axes[1, 0]
         # plot log of ratio?
         if log_resid:
             r = ax.imshow(np.log10((result['original_image'] / result['recon_image'])),
