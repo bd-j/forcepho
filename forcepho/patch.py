@@ -9,8 +9,11 @@ The corresponding GPU-side CUDA struct is in patch.cu.
 
 import numpy as np
 
-import pycuda
-import pycuda.driver as cuda
+try:
+    import pycuda
+    import pycuda.driver as cuda
+except:
+    pass
 
 class Patch:
 
