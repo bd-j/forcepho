@@ -19,7 +19,7 @@ sys.path.append('..')
 
 import numpy as np
 
-from forcepho.patch import Patch
+from forcepho.patch import StaticPatch
 from forcepho.proposal import Proposer
 
 from patch_conversion import patch_conversion, zerocoords
@@ -112,10 +112,12 @@ if __name__ == '__main__':
     psfpath = path_to_data
     nradii = 9
 
-    list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata, psfpath, nradii=nradii)
+    list_of_stamps, mini_scene = patch_conversion(patch_name, splinedata,
+                                                  psfpath, nradii=nradii)
     zerocoords(list_of_stamps, mini_scene)
 
-    patch = Patch(stamps=list_of_stamps, miniscene=mini_scene, return_residual=True)
+    patch = StaticPatch(return_residual=True)
+    patch.build_patch(stamps=list_of_stamps, miniscene=mini_scene)
     gpu_patch = patch.send_to_gpu()
     #patch.test_struct_transfer(gpu_patch)
 

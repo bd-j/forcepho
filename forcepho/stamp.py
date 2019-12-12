@@ -9,7 +9,8 @@ Classes and methods for dealing with image data as python postage stamp objects
 import numpy as np
 # from astropy import wcs
 
-__all__ = ["PostageStamp"]
+__all__ = ["PostageStamp",
+           "scale_at_sky"]
 
 
 class PostageStamp(object):
