@@ -8,7 +8,7 @@ import h5py
 import json
 
 from forcepho.sources import Galaxy, Scene
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
 from forcepho import psf as pointspread
 
 from astropy.wcs import WCS

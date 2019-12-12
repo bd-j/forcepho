@@ -4,7 +4,7 @@ import matplotlib.pyplot as pl
 pl.ion()
 
 from forcepho import paths
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
 from forcepho.psf import PointSpreadFunction
 from forcepho.sources import Scene, ConformalGalaxy, Galaxy
 

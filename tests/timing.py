@@ -6,7 +6,7 @@ import inspect
 import timeit
 
 from forcepho import paths
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
 from forcepho.psf import PointSpreadFunction
 from forcepho.sources import Galaxy, Scene
 from forcepho.likelihood import WorkPlan, lnlike_multi, make_image, plan_sources

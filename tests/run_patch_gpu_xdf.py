@@ -21,7 +21,7 @@ import h5py
 from forcepho.patch import Patch
 from forcepho.proposal import Proposer
 from forcepho.kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
-from forcepho.posterior import LogLikeWithGrad
+from forcepho.model import LogLikeWithGrad
 from forcepho.fitting import Result
 
 from patch_conversion import patch_conversion, zerocoords, set_inactive
@@ -74,7 +74,7 @@ class GPUPosterior:
         # send to gpu and collect result   
         ret = self.proposer.evaluate_proposal(proposal)
         if len(ret) == 3:
-            chi2, chi2_derivs, _ = ret
+            chi2, chi2_derivs, self._residuals = ret
         else:
             chi2, chi2_derivs = ret
 
@@ -83,7 +83,7 @@ class GPUPosterior:
         ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
         if self.debug:
-            print("chi2: {}".fromat(chi2))
+            print("chi2: {}".format(chi2))
 
         if self.verbose:
             if np.mod(self.ncall, 1000) == 0.:
@@ -137,7 +137,7 @@ class GPUPosterior:
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal)
-        chi2, chi2_derivs, self.residuals = ret
+        chi2, chi2_derivs, self._residuals = ret
         return self.residuals
 
 
