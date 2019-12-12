@@ -98,7 +98,7 @@ class Proposer:
                                       )
 
         # Is this the right shape?
-        chi_derivs_out = chi_derivs_out.view(np.float32).reshape(self.patch.n_bands, MAXSOURCES, 7)
+        chi_derivs_out = chi_derivs_out.view(np.float32).reshape(self.patch.n_bands, MAXSOURCES, NPARAMS)
         chi_derivs_out = chi_derivs_out[:,:self.patch.n_sources]
 
         # Unpack return values

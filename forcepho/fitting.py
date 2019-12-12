@@ -3,7 +3,7 @@ from functools import partial as argfix
 import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
-from .posterior import Posterior
+from .model import ConstrainedTransformedPosterior as Posterior
 
 
 __all__ = ["Result", "run_pymc3", "run_opt",
@@ -49,7 +49,7 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
     import theano.tensor as tt
     import theano
     theano.gof.compilelock.set_lock_status(False)
-    from .posterior import  LogLikeWithGrad
+    from .model import LogLikeWithGrad
 
     model = Posterior(scene, plans)
     logl = LogLikeWithGrad(model)
