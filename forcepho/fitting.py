@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""fitting.py
+
+Routines for fitting a Scene model to data, using older CPU-based
+likelihood methods.
+"""
+
 import sys, os, time
 from functools import partial as argfix
 import numpy as np
@@ -13,7 +22,7 @@ __all__ = ["Result", "run_pymc3", "run_opt",
 class Result(object):
     """A simple namespace for storing information about a run.
     """
-    
+
     def __init__(self):
         self.offsets = None
 
@@ -27,11 +36,11 @@ def priors(scene, stamps, npix=2.0):
 
     lower = [s.nband * [0.] +
              [s.ra - npix * plate_scale[0], s.dec - npix * plate_scale[1],
-              0.3, -np.pi/1.5, sersic_range[0], rh_range[0]]
+              0.3, -np.pi / 1.5, sersic_range[0], rh_range[0]]
              for s in scene.sources]
     upper = [(np.array(s.flux) * 10).tolist() +
              [s.ra + npix * plate_scale[0], s.dec + npix * plate_scale[1],
-              1.0, np.pi/1.5, sersic_range[-1], rh_range[-1]]
+              1.0, np.pi / 1.5, sersic_range[-1], rh_range[-1]]
              for s in scene.sources]
     upper = np.concatenate(upper)
     lower = np.concatenate(lower)
@@ -54,20 +63,21 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
     model = Posterior(scene, plans)
     logl = LogLikeWithGrad(model)
     pnames = scene.parameter_names
-    assert len(upper) == len(lower) ==len(pnames)
+    assert len(upper) == len(lower) == len(pnames)
     t = time.time()
     with pm.Model() as opmodel:
         if priors is None:
             z0 = [pm.Uniform(p, lower=l, upper=u)
-                for p, l, u in zip(pnames, lower, upper)]
+                  for p, l, u in zip(pnames, lower, upper)]
         else:
             z0 = priors
         theta = tt.as_tensor_variable(z0)
         pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
-        trace = pm.sample(draws=niter, tune=nwarm, cores=1, discard_tuned_samples=True)
+        trace = pm.sample(draws=niter, tune=nwarm, cores=1,
+                          discard_tuned_samples=True)
 
     tsample = time.time() - t
-    
+
     result = Result()
     result.ndim = len(p0)
     result.pinitial = p0.copy()
@@ -85,7 +95,7 @@ def run_pymc3(p0, scene, plans, lower=-np.inf, upper=np.inf,
 
 
 def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
-    
+
     from hemcee import NoUTurnSampler
     from hemcee.metric import DiagonalMetric
 
@@ -96,7 +106,7 @@ def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
     result = Result()
     result.ndim = len(p0)
     result.pinitial = p0.copy()
-    
+
     t = time.time()
     pos, lnp0 = sampler.run_warmup(p0, nwarm)
     twarm = time.time() - t
@@ -120,13 +130,14 @@ def run_hemcee(p0, scene, plans, scales=1.0, nwarm=2000, niter=1000):
 
 
 def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
-
+    """Run a dynesty fit of the scene to plans
+    """
     import dynesty
-    
+
     lnlike = argfix(lnlike_multi, scene=scene, plans=plans, grad=False)
     theta_width = (upper - lower)
     ndim = len(lower)
-    
+
     def prior_transform(unit_coords):
         # now scale and shift
         theta = lower + theta_width * unit_coords
@@ -140,7 +151,7 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
     tsample = time.time() - t0
 
     dresults = sampler.results
-    
+
     result = Result()
     result.ndim = ndim
     result.chain = dresults["samples"]
@@ -156,20 +167,20 @@ def run_dynesty(scene, plans, lower=0, upper=1.0, nlive=50):
 
 
 def run_opt(p0, scene, plans, jac=True, **extras):
-
+    """Simple BFGS optimization using scipy.optimize
+    """
     from scipy.optimize import minimize
-    
-    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=jac)
-
     opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
             'disp':True, 'iprint': 1, 'maxcor': 20}
     callback = None
+
+    nll = argfix(negative_lnlike_multi, scene=scene, plans=plans, grad=jac)
 
     t0 = time.time()
     scires = minimize(nll, p0.copy(), jac=jac,  method='BFGS',
                       options=opts, bounds=None, callback=callback)
     tsample = time.time() - t0
-    
+
     result = Result()
     result.ndim = len(p0)
     result.chain = np.atleast_2d(scires.x)
@@ -180,7 +191,7 @@ def run_opt(p0, scene, plans, jac=True, **extras):
 
     return result
 
-    
+
 def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
             nwarm=0, niter=500, length=20):
 
@@ -189,28 +200,32 @@ def run_hmc(p0, scene, plans, scales=1.0, lower=-np.inf, upper=np.inf,
     model = Posterior(scene, plans, upper=upper, lower=lower, verbose=True)
     sampler = BasicHMC(model, verbose=False)
     sampler.ndim = len(p0)
-    sampler.set_mass_matrix(1/scales**2)
+    sampler.set_mass_matrix(1 / scales**2)
 
     result = Result()
     result.pinitial = p0.copy()
-    
-    eps = sampler.find_reasonable_stepsize(p0*1.0)
+
+    eps = sampler.find_reasonable_stepsize(p0 * 1.0)
     use_eps = result.step_size * 2
     result.step_size = np.copy(use_eps)
     result.metric = scales**2
 
     if nwarm > 0:
-        pos, prob, grad = sampler.sample(p0, iterations=nwarm, mass_matrix=1/scales**2,
-                                        epsilon=use_eps, length=length, sigma_length=int(length/4),
-                                        store_trajectories=True)
+        out = sampler.sample(p0, iterations=nwarm, mass_matrix=1 / scales**2,
+                             epsilon=use_eps, length=length,
+                             sigma_length=int(length / 4),
+                             store_trajectories=True)
+        pos, prob, grad = out
         use_eps = sampler.find_reasonable_stepsize(pos)
         result.step_size = np.copy(use_eps)
         ncwarm = np.copy(model.ncall)
         model.ncall = 0
 
-    pos, prob, grad = sampler.sample(pos, iterations=niter, mass_matrix=1/scales**2,
-                                     epsilon=use_eps, length=length, sigma_length=int(length/4),
-                                     store_trajectories=True)
+    out = sampler.sample(pos, iterations=niter, mass_matrix=1 / scales**2,
+                         epsilon=use_eps, length=length,
+                         sigma_length=int(length / 4),
+                         store_trajectories=True)
+    pos, prob, grad = out
 
     result.ndim = len(p0)
     result.chain = sampler.chain.copy()

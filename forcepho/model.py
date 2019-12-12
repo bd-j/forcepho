@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-model.py
+"""model.py
 
 These are the Posterior objects that take a proposal and evaluate its
 probabiility, storing the ln-probablity and gradients thereof.

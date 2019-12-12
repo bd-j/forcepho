@@ -1,9 +1,13 @@
-# Classes and methods for dealing with image data as postage stamps
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""stamp.py
+
+Classes and methods for dealing with image data as python postage stamp objects
+"""
 
 import numpy as np
-
 # from astropy import wcs
-
 
 __all__ = ["PostageStamp"]
 
@@ -61,8 +65,8 @@ class PostageStamp(object):
         return pix
 
     def pix_to_sky(self, pix):
-        sky = np.dot(np.linalg.inv(self.dpix_dsky), pix - self.crpix) + self.crval
-        return sky
+        sky = np.dot(np.linalg.inv(self.dpix_dsky), pix - self.crpix)
+        return sky + self.crval
 
     def coverage(self, source):
         """Placeholder method for determining whether a source qualifies as a
@@ -131,8 +135,8 @@ class SimpleWCS(object):
         return np.matmul(self.CDinv, intermediate)
 
     def sky_to_pix(self, sky):
-        pix = self.intermediate_to_pix(self.sky_to_intermediate(sky)) + self.crpix
-        return pix
+        pix = self.intermediate_to_pix(self.sky_to_intermediate(sky))
+        return pix + self.crpix
 
     def pix_to_intermediate(self, pix):
         return np.matmul(self.CD, pix - self.crpix)
@@ -200,7 +204,7 @@ class TanWCS(object):
                np.sin(delta)]
         m = np.matmul(self.sphere_rot, np.array(ell).T)
 
-        K = 180./np.pi
+        K = 180. / np.pi
         x =  K * m[1] / m[2]  # K * cos(phi) / tan(theta) = R_theta * cos(phi)
         y = -K * m[0] / m[2]  # -K * sin(phi) / tan(theta)
 
@@ -228,12 +232,15 @@ class TanWCS(object):
         # Set up the spherical rotation matrix
         alpha_p, delta_p = np.deg2rad(self.crval)
         phi_0, theta_0, phi_p = 0, np.pi/2, np.pi
-        num = np.sin(theta) * np.cos(delta_p) - np.cos(theta) * np.sin(delta_p) * np.cos(phi - phi_p)
+        num = (np.sin(theta) * np.cos(delta_p) -
+               np.cos(theta) * np.sin(delta_p) * np.cos(phi - phi_p))
         denom = -np.cos(theta) * np.sin(phi - phi_p)
         alpha = alpha_p + np.arctan2(num, denom)
-        delta = np.arcsin(np.sin(theta) * np.sin(delta_p) + np.cos(theta) * np.cos(delta_p) * np.cos(phi-phi_p))
+        delta = np.arcsin(np.sin(theta) * np.sin(delta_p) +
+                          np.cos(theta) * np.cos(delta_p) * np.cos(phi - phi_p))
 
-        m = [np.cos(theta) * np.cos(phi), np.cos(theta) * np.sin(phi), np.sin(theta)]
+        m = [np.cos(theta) * np.cos(phi),
+             np.cos(theta) * np.sin(phi), np.sin(theta)]
         ell = np.matmul(self.sphere_rot.T, np.array(m))
         delta = np.arcsin(ell[-1])
         cosalpha = ell[0] / np.cos(delta)
@@ -244,22 +251,25 @@ class TanWCS(object):
         return self.intermediate_to_sky(self.pix_to_intermediate(pix))
 
     def sky_to_intermediate_gradient(self, sky):
-        """Get the Jacobian matrix describing the gradients \partial x/\partial
-        sky.  This can be used to define a locally linear transformation matrix.
+        """Get the Jacobian matrix describing the gradients
+        :math:`\partial x/\partial sky`.  
+        This can be used to define a locally linear transformation matrix.
         """
         alpha, delta = np.deg2rad(sky)
-        ell = [np.cos(delta) * np.cos(alpha), np.cos(delta) * np.sin(alpha), np.sin(delta)]
+        ell = [np.cos(delta) * np.cos(alpha), np.cos(delta) * np.sin(alpha),
+               np.sin(delta)]
         m = np.matmul(self.sphere_rot, np.array(ell).T)
 
         # this is partial ell / partial alpha  AND partial ell / partial delta
         dell = [[-np.cos(delta) * np.sin(alpha), np.cos(delta) * np.cos(alpha), 0],
                 [-np.sin(delta) * np.cos(alpha), -np.sin(delta) * np.sin(alpha), np.cos(delta)]
                 ]
-        dm = np.matmul(self.sphere_rot, np.array(dell).T)  # 3 x 2 dm_i,j = partial m_i/partial c_j
+        # 3 x 2 dm_i,j = partial m_i/partial c_j
+        dm = np.matmul(self.sphere_rot, np.array(dell).T)
 
         # Could this be a matrix operation?
-        K = 180./np.pi
-        x =  K * m[1] / m[2]  # K * cos(phi) / tan(theta) = R_theta * cos(phi)
+        K = 180. / np.pi
+        x = K * m[1] / m[2]  # K * cos(phi) / tan(theta) = R_theta * cos(phi)
         y = -K * m[0] / m[2]  # -K * sin(phi) / tan(theta)
         dx_dalpha = K / m[2] * dm[1, 0] - x / m[2] * dm[2, 0]
         dx_ddelta = K / m[2] * dm[1, 1] - x / m[2] * dm[2, 1]
@@ -273,19 +283,39 @@ class TanWCS(object):
 
 
 def scale_at_sky(sky, wcs):
-    """Get the local linear approximation of the scale matrix at the celestial position given by sky
+    """Get the local linear approximation of the scale and CW matrix at the
+    celestial position given by `sky`.  This is a simple numerical calculation
     """
-    pass
+    ra, dec = sky
+    # get dsky for step dx, dy = 1, 1
+    pos0_sky = np.array([ra, dec])
+    pos0_pix = wcs.wcs_world2pix([pos0_sky], 1)[0]
+    pos1_pix = pos0_pix + np.array([1.0, 0.0])
+    pos2_pix = pos0_pix + np.array([0.0, 1.0])
+    pos1_sky = wcs.wcs_pix2world([pos1_pix], 1)
+    pos2_sky = wcs.wcs_pix2world([pos2_pix], 1)
+
+    # compute dpix_dsky matrix
+    [[dx_dra, dx_ddec]] = (pos1_pix - pos0_pix) / (pos1_sky - pos0_sky)
+    [[dy_dra, dy_ddec]] = (pos2_pix - pos0_pix) / (pos2_sky - pos0_sky)
+    CW_mat = np.array([[dx_dra, dx_ddec], [dy_dra, dy_ddec]])
+
+    # compute D matrix
+    W = np.eye(2)
+    W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
+    D_mat = 1.0 / 3600.0 * np.matmul(W, CW_mat)
+
+    return CW_mat, D_mat
 
 
 def extract_stamp(imname, errname, center=(None, None), size=(None, None),
                   center_type='pixels'):
-    """Make a postage stamp around the given position using the given image name.
-    This is more of an example than anything else.
+    """Make a postage stamp around the given position using the given image
+    name. This is more of an example than anything else.
     """
     from astropy.io import fits
     from astropy import wcs as apy_wcs
-    
+
     im = fits.getdata(imname)
     hdr = fits.getheader(imname)
     err = fits.getdata(errname)
@@ -296,7 +326,8 @@ def extract_stamp(imname, errname, center=(None, None), size=(None, None),
 
     # ---- Extract subarray -----
     center = np.array(center)
-    # here we get the center coordinates in pixels (accounting for the transpose above)
+    # here we get the center coordinates in pixels
+    # (accounting for the transpose above)
     if center_type == 'celestial':
         world = np.append(center, 0)
         #hdr.update(NAXIS=2)
@@ -317,7 +348,7 @@ def extract_stamp(imname, errname, center=(None, None), size=(None, None),
     # --- Add image and uncertainty data to Stamp ----
     stamp = PostageStamp()
     stamp.pixel_values = im[xinds, yinds]
-    stamp.ierr = 1./err[xinds, yinds]
+    stamp.ierr = 1. / err[xinds, yinds]
 
     bad = ~np.isfinite(stamp.ierr)
     stamp.pixel_values[bad] = 0.0
@@ -326,7 +357,8 @@ def extract_stamp(imname, errname, center=(None, None), size=(None, None),
     stamp.nx, stamp.ny = stamp.pixel_values.shape
     stamp.npix = stamp.nx * stamp.ny
     # note the inversion of x and y order in the meshgrid call here
-    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
+    stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny),
+                                         np.arange(stamp.nx))
 
     # --- Add WCS info to Stamp ---
     stamp.crpix = crpix_stamp
