@@ -73,9 +73,12 @@ class Patch:
                     ('psfgauss', ptr_dtype),
                     ('psfgauss_start', ptr_dtype),
 
-                    ], align=True)    
+                    ], align=True)
 
     patch_struct_dtype = pdt
+    meta_names = ["n_sources", "n_radii", "rad2",
+                  "D", "crpix", "crval", "CW", "G",
+                  "n_psf_per_source", "psfgauss", "psfgauss_start"]
 
     def __init__(self,
                  return_residual=False,
@@ -166,7 +169,7 @@ class Patch:
         self.psfgauss_start = np.zeros(n_exp, dtype=np.int32)
 
     def send_to_gpu(self):
-        """Transfer the patch data to GPU main memory.  Saves the pointers
+        """Transfer all the patch data to GPU main memory.  Saves the pointers
         and builds the Patch struct from patch.cu; sends that to GPU memory.
         Saves the struct pointer for forwarding to the likelihood call.
 
@@ -193,9 +196,45 @@ class Patch:
         if self.return_residual:
             self.cuda_ptrs['residual'] = cuda.mem_alloc(self.xpix.nbytes)
 
-        # use their pointers to fill in the patch struct
-        #assert set(self.cuda_ptrs) == set(self.patch_struct_dtype.names)
+        _ = self.send_patchstruct_to_gpu()
 
+        return self.gpu_patch
+
+    def swap_on_gpu():
+        """This method does several things:
+            1) Free existing metadata arrays on the device, and send new
+               (packed) metadata arrays to device, replacing the associated
+               CUDA pointers;
+            2) Swap the CUDA pointers for the data and the residual;
+            3) Free the existing device-side patch_struct;
+            4) Refill the patch_struct array of CUDA pointers and values,
+               and send to device
+
+        After this call the GPU will use the former "residual" vector as the "data"
+        """
+        assert self.return_residual
+        # Replace the metadata on the GPU, as well as the Cuda pointers
+        # This releases the device side arrays corresponding to metadata
+        for arrname in self.meta_names:
+            try:
+                arr = getattr(self, arrname)
+                arr_dt = self.patch_struct_dtype[arrname]
+                if arr_dt == self.ptr_dtype:
+                    self.cuda_ptrs[arrname].free()
+                    self.cuda_ptrs[arrname] = cuda.to_device(arr)
+            except AttributeError:
+                if arrname != 'residual':
+                    raise
+        # Swap Cuda pointers for data and residual
+        self.cuda_ptrs["data"], self.cuda_ptrs["residual"] = self.cuda_ptrs["residual"], self.cuda_ptrs["data"]
+        # Pack pointers into structure and send structure to device
+        _ = self.send_patchstruct_to_gpu()
+        return self.gpu_patch
+
+    def send_patchstruct_to_gpu(self):
+        """Pack the patch_struct with values and with CUDA pointers to device arrays,
+        and send the patch_struct to the GPU.
+        """
         # Get a singlet of the custom dtype
         # Is there a better way to do this?
         patch_struct = np.zeros(1, dtype=self.patch_struct_dtype)[0]
@@ -211,13 +250,21 @@ class Patch:
                 # Value? Assign directly.
                 patch_struct[arrname] = getattr(self, arrname)
 
-        # Copy the patch struct to the gpu
+        # Release the device-side patch struct, if it exists
+        # should do this before freeing and replacing meta-data arrays on device?
+        try:
+            if self.gpu_patch:
+                self.gpu_patch.free()
+        except AttributeError:
+            pass  # no gpu_patch
+
+        # Copy the new patch struct to the gpu
         self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
 
     def free(self):
-        # Release the device-side arrays
+        # Release ALL the device-side arrays
         try:
             for cuda_ptr in self.cuda_ptrs.values():
                 if cuda_ptr:
@@ -237,10 +284,9 @@ class Patch:
         self.free()  # do we want to do this?
 
     def test_struct_transfer(self, gpu_patch, cache_dir=False):
-        '''
-        Run a simple PyCUDA kernel that checks that the data sent
-        was the data received.
-        '''
+        """Run a simple PyCUDA kernel that checks that the data sent was the
+        data received.
+        """
 
         from pycuda.compiler import SourceModule
         import os
