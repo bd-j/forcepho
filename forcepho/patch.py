@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
 
 """patch.py
 
@@ -202,7 +202,7 @@ class Patch:
 
     def swap_on_gpu():
         """This method does several things:
-            1) Free existing metadata arrays on the device, and send new
+            1) Free existing meta-data arrays on the device, and send new
                (packed) metadata arrays to device, replacing the associated
                CUDA pointers;
             2) Swap the CUDA pointers for the data and the residual;
@@ -232,8 +232,8 @@ class Patch:
         return self.gpu_patch
 
     def send_patchstruct_to_gpu(self):
-        """Pack the patch_struct with values and with CUDA pointers to device arrays,
-        and send the patch_struct to the GPU.
+        """Create new patch_struct and fill with values and with CUDA pointers
+        to GPU arrays, and send the patch_struct to the GPU.
         """
         # Get a singlet of the custom dtype
         # Is there a better way to do this?
@@ -292,16 +292,16 @@ class Patch:
         import os
 
         mod = SourceModule(
-            f'''
+            """
             #include <limits.h>
             #include "patch.cu"
 
             __global__ void check_patch_struct(Patch *patch){{
-                printf("Kernel sees: sizeof(Patch) = %d (Numpy size: {self.patch_struct_dtype.itemsize})\\n", sizeof(Patch));
-                assert(sizeof(Patch) == {self.patch_struct_dtype.itemsize});
+                printf("Kernel sees: sizeof(Patch) = %d (Numpy size: {sz})\\n", sizeof(Patch));
+                assert(sizeof(Patch) == {sz});
 
                 printf("Kernel sees: patch->n_sources = %d\\n", patch->n_sources);
-                assert(patch->n_sources == {self.n_sources});
+                assert(patch->n_sources == {nsource});
 
                 printf("Kernel sees: patch->n_radii = %d\\n", patch->n_radii);
                 printf("Kernel sees: patch->rad2 = %p\\n", patch->rad2);
@@ -317,14 +317,14 @@ class Patch:
                         p.Cxx, p.Cyy, p.Cxy, p.sersic_radius_bin
                         );
             }}
-            ''',
+            """.format(sz=self.patch_struct_dtype.itemsize, nsource=self.n_sources),
             include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], 
             cache_dir=cache_dir)
 
         print(self.psfgauss[100])
         kernel = mod.get_function('check_patch_struct')
         retcode = kernel(gpu_patch, block=(1, 1, 1), grid=(1, 1, 1))
-        print(f"Kernel done.")
+        print("Kernel done.")
 
 
 class StaticPatch(Patch):

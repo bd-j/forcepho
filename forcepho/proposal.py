@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
 
 """proposal.py
 
@@ -55,7 +55,7 @@ class Proposer:
             options += ['-O0', '--ptxas-options=-O0', '-lineinfo']
 
         if max_registers:
-            options += [f'-maxrregcount={max_registers}']
+            options += ['-maxrregcount={}'.format(max_registers)]
 
         mod = SourceModule(kernel_source, cache_dir=False,
                            include_dirs=[thisdir],
@@ -90,8 +90,9 @@ class Proposer:
                                   dtype=response_struct_dtype)
 
         if verbose:
-            print(f'Launching with grid {self.grid}, block {self.block}, shared {self.shared_size}',
-                  file=sys.stderr, flush=True)
+            msg = "Launching with grid {}, block {}, shared {}"
+            msg.format(self.grid, self.block, self.shared_size)
+            print(msg, file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
         self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),     # inputs
