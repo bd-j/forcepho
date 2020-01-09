@@ -200,11 +200,11 @@ class Patch:
 
         return self.gpu_patch
 
-    def swap_on_gpu():
+    def swap_on_gpu(self):
         """This method does several things:
             1) Free existing meta-data arrays on the device, and send new
-               (packed) metadata arrays to device, replacing the associated
-               CUDA pointers;
+               (assumed already packed) metadata arrays to device,
+               replacing the associated CUDA pointers;
             2) Swap the CUDA pointers for the data and the residual;
             3) Free the existing device-side patch_struct;
             4) Refill the patch_struct array of CUDA pointers and values,
@@ -278,7 +278,6 @@ class Patch:
                 self.gpu_patch.free()
         except AttributeError:
             pass  # no gpu_patch
-
 
     def __del__(self):
         self.free()  # do we want to do this?
