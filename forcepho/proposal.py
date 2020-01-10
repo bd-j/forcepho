@@ -117,14 +117,19 @@ class Proposer:
         else:
             return chi_out, chi_derivs_out
 
-    def unpack_residuals(self, residuals_flat):
+    def unpack_residuals(self, residuals_flat, reshape=False):
         """Unpack flat, padded residuals into original images
         """
         residuals = np.split(residuals_flat, np.cumsum(self.patch.exposure_N)[:-1])
 
-        for e, residual in enumerate(residuals):
-            residual = residual[:self.patch.original_sizes[e]]
-            residuals[e] = residual.reshape(self.patch.original_shapes[e])
+        # This tries to reshape the residuals into square stamps after removing
+        # padding, if that's how the data was originally packed.  Otherwise, one
+        # would want have the xpix and ypix arrays along with the residuals to
+        # be able to reconstruct an image
+        if reshape:
+            for e, residual in enumerate(residuals):
+                residual = residual[:self.patch.original_sizes[e]]
+                residuals[e] = residual.reshape(self.patch.original_shapes[e])
 
         return residuals
 
