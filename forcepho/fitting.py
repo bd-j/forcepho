@@ -23,8 +23,22 @@ class Result(object):
     """A simple namespace for storing information about a run.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.offsets = None
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def dump_to_h5(self, filename):
+        import h5py
+        with h5py.File(filename, "w") as out:
+            for name, value in vars(self):
+                if type(value) == np.ndarray:
+                    out.create_dataset(name, data=value)
+                else:
+                    try:
+                        out.attrs[name] = value
+                    except:
+                        print("could not save {} with value {} to {}".format(name, value, filename))
 
 
 def priors(scene, stamps, npix=2.0):

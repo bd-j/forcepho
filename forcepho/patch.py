@@ -214,7 +214,7 @@ class Patch:
         """
         assert self.return_residual
         # Replace the metadata on the GPU, as well as the Cuda pointers
-        # This releases the device side arrays corresponding to metadata
+        # This releases the device side arrays corresponding to old metadata
         for arrname in self.meta_names:
             try:
                 arr = getattr(self, arrname)
