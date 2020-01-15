@@ -212,7 +212,7 @@ class Patch:
 
         After this call the GPU will use the former "residual" vector as the "data"
         """
-        assert self.return_residual
+        assert "residual" in self.cuda_ptrs
         # Replace the metadata on the GPU, as well as the Cuda pointers
         # This releases the device side arrays corresponding to old metadata
         for arrname in self.meta_names:
@@ -255,7 +255,7 @@ class Patch:
         try:
             if self.gpu_patch:
                 self.gpu_patch.free()
-        except AttributeError:
+        except(AttributeError):
             pass  # no gpu_patch
 
         # Copy the new patch struct to the gpu
@@ -269,14 +269,14 @@ class Patch:
             for cuda_ptr in self.cuda_ptrs.values():
                 if cuda_ptr:
                     cuda_ptr.free()
-        except AttributeError:
+        except(AttributeError):
             pass  # no cuda_ptrs
 
         # Release the device-side patch struct
         try:
             if self.gpu_patch:
                 self.gpu_patch.free()
-        except AttributeError:
+        except(AttributeError):
             pass  # no gpu_patch
 
     def __del__(self):
@@ -289,6 +289,7 @@ class Patch:
 
         from pycuda.compiler import SourceModule
         import os
+        thisdir = os.path.abspath(os.path.dirname(__file__))
 
         mod = SourceModule(
             """
@@ -317,7 +318,7 @@ class Patch:
                         );
             }}
             """.format(sz=self.patch_struct_dtype.itemsize, nsource=self.n_sources),
-            include_dirs=[os.environ['HOME'] + '/forcepho/forcepho'], 
+            include_dirs=[thisdir],
             cache_dir=cache_dir)
 
         print(self.psfgauss[100])

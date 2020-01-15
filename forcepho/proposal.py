@@ -107,15 +107,19 @@ class Proposer:
 
         # Unpack residuals
         if self.patch.return_residual:
-            residuals_flat = cuda.from_device(self.patch.cuda_ptrs['residual'],
-                                              shape=self.patch.xpix.shape,
-                                              dtype=self.patch.pix_dtype)
+            residuals_flat = self.retrieve_array("residual")
             residuals = self.unpack_residuals(residuals_flat)
 
         if self.patch.return_residual:
             return chi_out, chi_derivs_out, residuals
         else:
             return chi_out, chi_derivs_out
+
+    def retrieve_array(self, arrname):
+        flatdata = cuda.from_device(self.patch.cuda_ptrs[arrname],
+                                    shape=self.patch.xpix.shape,
+                                    dtype=self.patch.pix_dtype)
+        return flatdata
 
     def unpack_residuals(self, residuals_flat, reshape=False):
         """Unpack flat, padded residuals into original images

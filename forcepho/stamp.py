@@ -283,28 +283,53 @@ class TanWCS(object):
         return np.array(W)
 
 
-def scale_at_sky(sky, wcs):
+def scale_at_sky(sky, wcs, dpix=1.0, origin=1):
     """Get the local linear approximation of the scale and CW matrix at the
     celestial position given by `sky`.  This is a simple numerical calculation
+
+    Parameters
+    ---------
+    sky : iterable, length 2
+        The RA and Dec coordinates in units of degrees at which to compute the
+        linear approximation
+
+    wcs : astropy.wcs.WCS() instance
+        The wcs to which you want a local linear approximation
+
+    dpix : optional, float, default; 1.0
+        The number of pixels to offset to compute the local linear approx
+
+    origin : optiona, default; 1
+        The astropy wcs `origin` keyword
+
+    Returns
+    --------
+    CW_mat : ndarray of shape (2, 2)
+        The matrix such that (dx, dy) = CW_mat \dot (dra, ddec) where dx, dy
+        are expressed in pixels and dra, ddec are exressed in degrees
+
+    D_mat : ndarray of shape (2, 2)
+        The matrix giving pixels per second of arc in RA and dec.  Equivalent
+        to wcs.pixel_scale_matrix()
     """
     ra, dec = sky
-    # get dsky for step dx, dy = 1, 1
+    # get dsky for step dx, dy = dpix
     pos0_sky = np.array([ra, dec])
-    pos0_pix = wcs.wcs_world2pix([pos0_sky], 1)[0]
-    pos1_pix = pos0_pix + np.array([1.0, 0.0])
-    pos2_pix = pos0_pix + np.array([0.0, 1.0])
-    pos1_sky = wcs.wcs_pix2world([pos1_pix], 1)
-    pos2_sky = wcs.wcs_pix2world([pos2_pix], 1)
+    pos0_pix = wcs.all_world2pix([pos0_sky], origin)[0]
+    pos1_pix = pos0_pix + np.array([dpix, 0.0])
+    pos2_pix = pos0_pix + np.array([0.0, dpix])
+    pos1_sky = wcs.all_pix2world([pos1_pix], origin)[0]
+    pos2_sky = wcs.all_pix2world([pos2_pix], origin)[0]
 
     # compute dpix_dsky matrix
-    [[dx_dra, dx_ddec]] = (pos1_pix - pos0_pix) / (pos1_sky - pos0_sky)
-    [[dy_dra, dy_ddec]] = (pos2_pix - pos0_pix) / (pos2_sky - pos0_sky)
-    CW_mat = np.array([[dx_dra, dx_ddec], [dy_dra, dy_ddec]])
+    P = np.eye(2) * dpix
+    St = np.array([pos1_sky - pos0_sky, pos2_sky - pos0_sky])
+    CW_mat = (np.dot(np.linalg.inv(St), P)).transpose()
 
     # compute D matrix
-    W = np.eye(2)
-    W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
-    D_mat = 1.0 / 3600.0 * np.matmul(W, CW_mat)
+    Winv = np.eye(2)
+    Winv[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
+    D_mat = 1.0 / 3600.0 * np.matmul(CW_mat, Winv)
 
     return CW_mat, D_mat
 
