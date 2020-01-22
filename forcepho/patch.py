@@ -335,6 +335,66 @@ class StaticPatch(Patch):
     of `patch_conversion.py`
     """
 
+
+    def __init__(self,
+        stamps,            # A list of PostageStamp objects (exposure data) from FITS files
+        miniscene,         # All peaks identified in this patch region
+        mask=None,              # The mask that defines the nominal patch
+        super_pixel_size=1,  # Number of pixels in each superpixel
+        return_residual=False,
+        pix_dtype=np.float32,  # data type for pixel and flux data
+        meta_dtype=np.float32,   # data type for non-pixel data
+        ):
+        '''
+        Constructs a Patch from PostageStamps (exposures) and a MiniScene
+        (a list of pre-identified peaks/sources).  The Patch packs the
+        exposures and sources in a manner suitable for sending to the GPU.
+        This includes rearranging the data into (padded) super-pixel order.
+        The Patch object contains methods for sending the patch data to
+        the GPU with PyCUDA.
+        Parameters
+        ----------
+        return_residual: bool, optional
+            Whether the residual image will be returned from the GPU.
+            Default: False.
+        pix_dtype: np.dtype, optional
+            The Numpy datatype of the pixel data, like fluxes and coordinates.
+            Default: np.float32
+        meta_dtype: np.dtype, optional
+            The Numpy datatype of the non-pixel data, like transformation matrices.
+            Default: np.float32
+        '''
+
+        self.pix_dtype = pix_dtype
+        self.meta_dtype = meta_dtype
+
+        self.return_residual = return_residual
+
+        # Group stamps by band
+        # stamp.band must be an int identifier (does not need to be contiguous)
+        band_ids = [st.band for st in stamps]
+        assert (np.diff(band_ids) >= 0).all(), 'Stamps must be sorted by band'
+
+        bands = [stamp.band for stamp in stamps]
+        uniq_bands, n_exp_per_band = np.unique(bands, return_counts=True)
+
+        # Use the stamps and miniscene to populate these
+        self.n_bands = len(uniq_bands)          # Number of bands/filters
+        self.n_exp = len(stamps)           # Number of exposures covering the patch (all bands)
+
+        # Pixel Data
+        # These are arrays of pixel data for *all* pixels in a patch (i.e.
+        # multiple exposures)
+
+        # Pack the 2D stamps into 1D arrays
+        self.pack_pix(stamps, mask)
+
+        self.pack_source_metadata(miniscene)
+
+        self.pack_astrometry(miniscene.sources)
+
+        self.pack_psf(miniscene)
+
     def build_patch(self,
                     stamps=[],
                     miniscene=None,  # All peaks identified in this patch region

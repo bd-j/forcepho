@@ -74,14 +74,20 @@ class Posterior:
 
 class GPUPosterior(Posterior):
 
-    def __init__(self, proposer, scene, name="", verbose=False, debug=False):
+    def __init__(self, proposer, scene, name="", 
+                 print_interval=1000, verbose=False, debug=False):
         self.proposer = proposer
         self.scene = scene
         self.ncall = 0
         self._z = -99
         self.verbose = verbose
         self.debug = debug
+        self.print_interval = print_interval
         self.name = name
+        if self.debug:
+            self.pos_history = []
+            self.lnp_history = []
+            self.grad_history = []
 
     def evaluate(self, z):
         """
@@ -111,9 +117,12 @@ class GPUPosterior(Posterior):
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
         if self.debug:
             print("chi2: {}".format(chi2))
+            self.pos_history.append(z)
+            self.lnp_history.append(ll)
+            self.grad_history.append(ll_grad)
 
         if self.verbose:
-            if np.mod(self.ncall, 1000) == 0.:
+            if np.mod(self.ncall, self.print_interval) == 0.:
                 print("-------\n {} @ {}".format(self.name, self.ncall))
                 print(z)
                 print(ll)
