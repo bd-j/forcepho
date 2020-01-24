@@ -89,6 +89,14 @@ class Patch:
         self.meta_dtype = meta_dtype
         self.return_residual = return_residual
 
+    @property
+    def npix(self):
+        try:
+            n = self.xpix.shape[0]
+            return n
+        except(AttributeError):
+            return 0
+
     def build_patch(self, npix=1, n_sources=1, n_radii=1,
                     n_bands=1, n_exp=1):
         """This is an abstract method that takes scene and exposure data and

@@ -41,7 +41,7 @@ __all__ = ["Posterior", "GPUPosterior", "CPUPosterior",
 
 class Posterior:
     """Abstract class for models.  Includes the basic caching mechanism for
-    probabilities and gradients.
+    probabilities and gradients, as well as a numerical check on the gradients.
     """
 
     def __init__(self):
@@ -71,10 +71,44 @@ class Posterior:
     def residuals(self, z):
         raise(NotImplementedError)
 
+    def check_grad(self, z, dlnz=1e-6):
+        """Compare numerical gradients to analytic gradients.
+
+        Parameters
+        ----------
+        z : ndarray, shape (ndim,)
+            The parameter location at which to check gradients
+
+        dlnz : float, optional, default=1e-6
+            Fractional change in parameter values to use for calculating
+            numerical gradients
+
+        Returns
+        -------
+        dlnp : ndarray, shape (ndim,)
+            the analytic gradients
+
+        dlnp_num : ndarray, shape (ndim,)
+            The numerical gradients
+        """
+        z0 = z.copy()
+        dlnp = self.lnprob_grad(z)
+
+        delta = z0 * 1e-4
+        dlnp_num = np.zeros(len(z0), dtype=np.float64)
+        for i, dp in enumerate(delta):
+            theta = z0.copy()
+            theta[i] -= dp
+            imlo = self.lnprob(theta)
+            theta[i] += 2 * dp
+            imhi = self.lnprob(theta)
+            dlnp_num[i] = ((imhi - imlo) / (2 * dp))
+        return dlnp, dlnp_num
+
 
 class GPUPosterior(Posterior):
 
-    def __init__(self, proposer, scene, name="", 
+    def __init__(self, proposer, scene, name="",
                  print_interval=1000, verbose=False, debug=False):
         self.proposer = proposer
         self.scene = scene
@@ -90,14 +124,15 @@ class GPUPosterior(Posterior):
             self.grad_history = []
 
     def evaluate(self, z):
-        """
-        :param z:
-            The untransformed (sampling) parameters which have a prior
-            distribution attached.
+        """Compute the log-likelihood and its gradient, using the GPU propsoer
+        object.  These are then cached.
 
-        Theta are the transformed forcepho native parameters.  In the default
-        case these are these are the same as thetaprime; the transformation
-        is the identity.
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            The parameter vector.  This will be fed to the scene object to set
+            scene parameters and generate a GPU proposal.
+
         """
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
