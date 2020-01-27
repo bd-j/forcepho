@@ -148,7 +148,8 @@ class GPUPosterior(Posterior):
 
         mhalf = np.array(-0.5, dtype=np.float64)
         # turn into log-like and accumulate grads correctly
-        ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
+        # note type conversion before sum to avoid loss of significance
+        ll = mhalf * np.array(chi2.astype(np.float64).sum(), dtype=np.float64)
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
         if self.debug:
             print("chi2: {}".format(chi2))
