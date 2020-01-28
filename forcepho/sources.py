@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-""" sources.py - Module for objects describing individual sources and collections of sources (Scenes)
+"""sources.py
+
+Module for objects describing individual sources and collections of sources (Scenes)
 """
 
 import numpy as np
@@ -62,8 +64,8 @@ class Scene(object):
         return inds
 
     def set_all_source_params(self, Theta):
-        """Loop over active sources in the scene, setting the parameters in each
-        source based on the relevant subset of Theta parameters.
+        """Loop over active sources in the scene, setting the parameters in
+        each source based on the relevant subset of Theta parameters.
         """
         start = 0
         for source in self.active_sources:
@@ -92,7 +94,7 @@ class Scene(object):
     @property
     def active_sources(self):
         return [s for s in self.sources if not s.fixed]
-    
+
     @property
     def fixed_sources(self):
         return [s for s in self.sources if s.fixed]
@@ -117,6 +119,7 @@ class Scene(object):
         for i, source in enumerate(self.sources):
             source.id = i
 
+
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
     there are 7 parameters, only some of which may be relevant for changing the
@@ -137,7 +140,7 @@ class Source(object):
     fixed = False
     radii = np.zeros(1)
 
-    # Parameters
+    # --- Parameters ---
     npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
@@ -204,7 +207,7 @@ class Source(object):
         names = self.filternames + ["ra", "dec"] + ["q", "pa", "n", "r"][:self.nshape]
         names = ["{}_{}".format(n, self.id) for n in names]
         return names
-    
+
     def get_param_vector(self):
         raise(NotImplementedError)
 
@@ -251,11 +254,11 @@ class Source(object):
         return np.zeros(self.ngauss)
 
     def psfgauss(self, e, psf_dtype=None):
-        """Pack the source and exposure specific PSF parameters into a simple array.
-        This assumes that the `stamp_psfs` attribute has been populated with an
-        NEXPOSURE length list, where each element of the list is in turn a list
-        of the the `ngauss` PointSpreadFunction objects for this source and
-        exposure.
+        """Pack the source and exposure specific PSF parameters into a simple
+        array. This assumes that the `stamp_psfs` attribute has been populated
+        with an NEXPOSURE length list, where each element of the list is in
+        turn a list of the the `ngauss` PointSpreadFunction objects for this
+        source and exposure.
 
         Parameters
         ----------
@@ -466,7 +469,8 @@ class Galaxy(Source):
     npos = 2
     nshape = 4
 
-    def __init__(self, filters=['dummy'], radii=None, splinedata=None, free_sersic=True):
+    def __init__(self, filters=['dummy'], radii=None, splinedata=None, 
+                 free_sersic=True):
         self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
@@ -474,7 +478,7 @@ class Galaxy(Source):
         try:
             self.initialize_splines(splinedata)
         except:
-            message = ("Could not load `splinedata`." 
+            message = ("Could not load `splinedata`. "
                        "Galaxies must have `splinedata` information "
                        "to make A(r, n) bivariate splines")
             warnings.warn(message)
@@ -485,7 +489,6 @@ class Galaxy(Source):
 
         from .proposal import source_struct_dtype
         self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
-
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
@@ -544,7 +547,8 @@ class Galaxy(Source):
             self.radii = data["radii"][:]
 
         nm, ng = A.shape
-        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing) for i in range(ng)]
+        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing)
+                        for i in range(ng)]
         self.rh_range = (r.min(), r.max())
         self.sersic_range = (n.min(), n.max())
 
@@ -563,7 +567,8 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.squeeze(np.array([spline(self.sersic, self.rh) for spline in self.splines]))
+        return np.squeeze(np.array([spline(self.sersic, self.rh) 
+                                    for spline in self.splines]))
 
     @property
     def damplitude_dsersic(self):
@@ -571,7 +576,8 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1) for spline in self.splines]))
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1)
+                                    for spline in self.splines]))
 
     @property
     def damplitude_drh(self):
@@ -579,7 +585,8 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1) for spline in self.splines]))
+        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1)
+                                    for spline in self.splines]))
 
     def proposal(self):
         """A parameter proposal in the form required for transfer to the GPU

@@ -18,11 +18,12 @@ except(ImportError):
     import pickle
 import h5py
 
-from forcepho.patch import Patch
+from forcepho.patch import StaticPatch
 from forcepho.proposal import Proposer
 from forcepho.kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
-from forcepho.posterior import LogLikeWithGrad
+from forcepho.model import LogLikeWithGrad
 from forcepho.fitting import Result
+from forcepho.model import GPUPosterior
 
 from patch_conversion import patch_conversion, zerocoords, set_inactive
 
@@ -38,116 +39,20 @@ logger.setLevel(logging.ERROR)
 
 
 import pycuda.autoinit
-scratch_dir = pjoin('/gpfs/wolf/gen126/scratch', os.environ['USER'], 'residual_images')
+scratch_dir = pjoin('/gpfs/wolf/gen126/scratch',
+                    os.environ['USER'], 'residual_images')
 os.makedirs(scratch_dir, exist_ok=True)
 
 _print = print
-print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
-
-
-class GPUPosterior:
-
-    def __init__(self, proposer, scene, name="", verbose=False, debug=False):
-        self.proposer = proposer
-        self.scene = scene
-        self.ncall = 0
-        self._z = -99
-        self.verbose = verbose
-        self.debug = debug
-        self.name = name
-
-    def evaluate(self, z):
-        """
-        :param z: 
-            The untransformed (sampling) parameters which have a prior
-            distribution attached.
-
-        Theta are the transformed forcepho native parameters.  In the default
-        case these are these are the same as thetaprime, i.e. the transformation
-        is the identity.
-        """
-        self.scene.set_all_source_params(z)
-        proposal = self.scene.get_proposal()
-        if self.debug:
-            print(proposal["fluxes"])
-        
-        # send to gpu and collect result   
-        ret = self.proposer.evaluate_proposal(proposal)
-        if len(ret) == 3:
-            chi2, chi2_derivs, _ = ret
-        else:
-            chi2, chi2_derivs = ret
-
-        mhalf = np.array(-0.5, dtype=np.float64)
-        # turn into log-like and accumulate grads correctly
-        ll = mhalf * np.array(chi2.sum(), dtype=np.float64)
-        ll_grad = mhalf * self.stack_grad(chi2_derivs)
-        if self.debug:
-            print("chi2: {}".fromat(chi2))
-
-        if self.verbose:
-            if np.mod(self.ncall, 1000) == 0.:
-                print("-------\n {} @ {}".format(self.name, self.ncall))
-                print(z)
-                print(ll)
-                print(ll_grad)
-
-        self.ncall += 1
-        self._lnp = ll
-        self._lnp_grad = ll_grad
-        self._z = z
-
-    def stack_grad(self, chi2_derivs):
-        """The chi2_derivs is returned as an array of shape NBAND, NACTIVE, NPARAMS.
-        
-        final output should be [flux11, flux12, ..., flux1Nb, ra1, dec1, ..., rh1, 
-                                flux21, flux22, ..., flux2Nb, ra2, dec2, ..., rh2]
-        """
-        nsources = self.proposer.patch.n_sources
-        nbands = self.proposer.patch.n_bands #len(chi2_derivs)
-        #print(nsources, nbands, len(chi2_derivs))
-        grads = np.zeros([nsources, nbands + (NPARAMS-1)])
-        for band, derivs in enumerate(chi2_derivs):            
-            # shape params
-            grads[:, nbands:] += derivs[:, 1:]
-            # flux params
-            grads[:, band] += derivs[:, 0]
-            if self.debug:
-                print(band, derivs[0, :])
-
-        return grads.reshape(-1)
-
-    def lnprob(self, z):
-        if np.any(z != self._z):
-            self.evaluate(z)
-        return self._lnp
-
-    def lnprob_grad(self, z):
-        if np.any(z != self._z):
-            self.evaluate(z)
-        return self._lnp_grad
-    
-    def nll(self, z):
-        if np.any(z != self._z):
-            self.evaluate(z)
-        return -self._lnp, -self._lnp_grad
-    
-    def residuals(self, z):
-        assert self.proposer.patch.return_residuals
-        self.scene.set_all_source_params(z)
-        proposal = self.scene.get_proposal()
-        ret = self.proposer.evaluate_proposal(proposal)
-        chi2, chi2_derivs, self.residuals = ret
-        return self.residuals
-
+print = lambda *args, **kwargs: _print(*args, **kwargs, file=sys.stderr, flush=True)
 
 
 def prior_bounds(scene, npix=4, flux_factor=4):
     """ Priors and scale guesses:
-    
+
     :param scene:
         A Scene object.  Each source must have the `stamp_cds` attribute.
-        
+
     :param npix: (optional, default: 3)
         Number of pixels to adopt as the positional prior
     """
@@ -171,14 +76,23 @@ def prior_bounds(scene, npix=4, flux_factor=4):
     return lower, upper
 
 
-path_to_data = "/gpfs/wolf/gen126/proj-shared/jades/udf/data/"
-path_to_results = "/gpfs/wolf/gen126/proj-shared/jades/udf/results/"
-splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
-psfpath = path_to_data
-
-def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
-              nwarm=250, niter=100, runtype="sample", ntime=10, verbose=True,
+def run_patch(patchname, maxactive=3,
+              splinedata="", psfpath="",
+              resultspath="",
+              init_cov=None, start=None,
+              nwarm=250, niter=200, ntime=10,
+              runtype="sample", verbose=True,
               rank=0, scatter_fluxes=False, tag=""):
+    """
+    This runs in a single CPU process.  It dispatches the 'patch data' to the
+    device and then runs a pymc3 HMC sampler.  Each likelihood call within the
+    HMC sampler copies the proposed parameter position to the device, runs the
+    kernel, and then copies back the result, returning the summed ln-like and
+    the gradients thereof to the sampler.
+
+    :param patchname: 
+        Full path to the patchdata hdf5 file.
+    """
     """
     This runs in a single CPU process.  It dispatches the 'patch data' to the
     device and then runs a pymc3 HMC sampler.  Each likelihood call within the
@@ -202,7 +116,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
 
     # --- Prepare Patch Data ---
     use_bands = slice(None)
-    stamps, scene = patch_conversion(patchname, splinedata, psfpath, 
+    stamps, scene = patch_conversion(patchname, splinedata, psfpath,
                                      nradii=9, use_bands=use_bands)
     miniscene = set_inactive(scene, [stamps[0], stamps[-1]], nmax=maxactive)
     pra = np.median([s.ra for s in miniscene.sources])
@@ -211,7 +125,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
 
     if scatter_fluxes:
         for s in miniscene.sources:
-            s.flux = s.flux + np.arange(0, len(s.filternames)) * 0.1    
+            s.flux = s.flux + np.arange(0, len(s.filternames)) * 0.1
 
     patch = Patch(stamps=stamps, miniscene=miniscene, return_residual=True)
     p0 = miniscene.get_all_source_params().copy()
@@ -221,7 +135,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
     gpu_proposer = Proposer(patch)
 
     # --- Instantiate the ln-likelihood object ---
-    # This object splits the lnlike_function into two, since that computes 
+    # This object splits the lnlike_function into two, since that computes
     # both lnp and lnp_grad, and we need to wrap them in separate theano ops.
     model = GPUPosterior(gpu_proposer, miniscene, name=patchname, verbose=verbose)
 
@@ -250,12 +164,12 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
             # instantiate target density and start sampling.
             pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
             trace = pm.sample(draws=niter, tune=nwarm, progressbar=False,
-                              cores=1, discard_tuned_samples=True)#, start=start)
+                              cores=1, discard_tuned_samples=True)
 
         ts = time() - t
         # yuck.
         chain = np.array([trace.get_values(n) for n in pnames]).T
-        
+
         result = Result()
         result.ndim = len(p0)
         result.nactive = miniscene.nactive
@@ -300,7 +214,7 @@ def run_patch(patchname, splinedata=splinedata, psfpath=psfpath, maxactive=3,
         ts = time() - t
         chain = [model._lnp, model._lnp_grad]
         print("took {}s for a single call".format(ts / ntime))
-    
+
     return chain, (rank, model.ncall, ts)
 
 
@@ -356,23 +270,53 @@ def halt(message):
 
 
 if __name__ == "__main__":
-    patches = [100, 183, 274, 382, 653]
-    patches2 = [90, 91, 157, 159, 160, 172, 212]
-    patches3 = [217, 323, 328, 391, 464]
-    allpatches = [pjoin(path_to_data, "patch_with_cat", "patch_udf_withcat_{}.h5".format(pid)) 
-                  for pid in patches3]
-    
+
+    parser = ArgumentParser()
+    parser.add_argument("--xdf_path", type=str,
+                        default="/n/scratchlfs/eisenstein_lab/bdjohnson/xdf")
+    parser.add_argument("--patch_dir", type=str,
+                        default="")
+    parser.add_argument("--patch_number", type=int, nargs="*",
+                        default=[90, 91])
+    parser.add_argument("--patch_name", type=str,
+                        default="patch_udf_withcat_{}.h5")
+    args = parser.parse_args()
+
+    xdf_path = args.xdf_path
+    patches = args.patch_number
+    patchdir = args.patch_dir
+    if patchdir == "":
+        patchdir = pjoin(xdf_path, "data", "patches_with_cat")
+    patchname = args.patch_name
+
+    path_to_data = pjoin(xdf_path, "data")
+    results_path = pjoin(xdf_path, "results")
+    splinedata = pjoin(path_to_data, "sersic_mog_model.smooth=0.0150.h5")
+    psfpath = pjoin(path_to_data, "psfs", "mixtures")
+    #scratch_dir = pjoin(xdf_path, "cannon", "residual_images")
+    #os.makedirs(scratch_dir, exist_ok=True)
+    os.makedirs(results_path, exist_ok=True)
+
+    #patches = [100, 183, 274, 382, 653]
+    #patches2 = [90, 91, 157, 159, 160, 172, 212]
+    #patches3 = [90, 91]
+    allpatches = [pjoin(patchdir, patchname.format(pid))
+                  for pid in patches]
+
     run_kwargs = {"maxactive": 15,
-                  "tag": "max10",
-                  "nwarm": 250,
+                  "tag": "max15",
+                  "nwarm": 100,
                   "niter": 100,
+                  "ntune": 200,
                   "runtype": "sample",
                   "scatter_fluxes": False,
+                  "psfpath": psfpath,
+                  "splinedata": splinedata,
+                  "resultspath": results_path
                   }
 
     t = time()
     distribute_patches(allpatches, run_kwargs=run_kwargs)
-    #chain = run_patch(allpatches[6], **run_kwargs)
     twall = time() - t
 
     halt("finished all patches in {}s".format(twall))

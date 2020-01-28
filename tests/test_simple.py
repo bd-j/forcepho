@@ -2,7 +2,7 @@ import sys, os, time
 from copy import deepcopy
 import numpy as np
 
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
 from forcepho.psf import PointSpreadFunction
 from forcepho.sources import Galaxy, Scene
 from forcepho.likelihood import WorkPlan, lnlike_multi

@@ -25,7 +25,8 @@ parser.add_argument("--size", type=float, nargs='*', default=[30, 30],
 parser.add_argument("--scene_file", type=str, default="catalog_for_demo.dat",
                     help="file containing scene specification")
 parser.add_argument("--sersic", action="store_true",
-                    help="If set, mock and fit as Sersics, otherwise as gaussians with fixed size")
+                    help=("If set, mock and fit as Sersics, otherwise as "
+                          "gaussians with fixed size"))
 parser.add_argument("--peak_snr", type=float, default=10,
                     help="S/N of brightest pixel")
 parser.add_argument("--add_noise", action="store_false",
@@ -41,11 +42,13 @@ parser.add_argument("--niter", type=int, default=500,
 parser.add_argument("--nlive", type=int, default=-1,
                     help="number of dynesty live points")
 parser.add_argument("--results_name", type=str, default="demo_mock_many_gal_multi",
-                    help="root name and path for the output pickle.'none' results in no output.")
+                    help=("root name and path for the output pickle."
+                          "  'none' results in no output."))
 parser.add_argument("--display", action="store_true",
                     help="Whether to plot fit information after fitting")
 parser.add_argument("--plot_dir", type=str, default="",
-                    help="Where to save plots of fit infomation.  If empty, plots are not saved")
+                    help=("Where to save plots of fit infomation.  "
+                          "If empty, plots are not saved"))
 parser.add_argument("--show_model", action="store_true",
                     help="Whether to plot the model")
 parser.add_argument("--test_grad", action="store_true",
@@ -103,7 +106,7 @@ def setup_scene(sourceparams=[(1.0, 5., 5., 0.7, 30., 1.0, 0.05)],
         if add_noise:
             noise = np.random.normal(0, err)
             stamp.pixel_values += noise.reshape(stamp.nx, stamp.ny)
-            
+ 
     return scene, stamps, ptrue
 
 
@@ -116,14 +119,14 @@ def get_bounds(scene, npix=3, maxfluxfactor=20., plate_scale=[1., 1.]):
     except(AttributeError):
         sersic_low = []
         sersic_hi = []
-        
+
     lower = [s.nband * [0.] +
              [s.ra - npix * plate_scale[0], s.dec - npix * plate_scale[1],
-              0.3, -np.pi/1.5] + sersic_low
+              0.3, -np.pi / 1.5] + sersic_low
              for s in scene.sources]
     upper = [(np.array(s.flux) * maxfluxfactor).tolist() +
              [s.ra + npix * plate_scale[0], s.dec + npix * plate_scale[1],
-              1.0, np.pi/1.5] + sersic_hi
+              1.0, np.pi / 1.5] + sersic_hi
              for s in scene.sources]
 
     lower = np.concatenate(lower)
@@ -151,10 +154,10 @@ def read_scene_catalog(catname):
     offsets = np.array(offsets)
 
     # flux, ra, dec, q, pa(deg), n, sersic
-    params = [(d[:nband], d[nband], d[nband+1], d[nband+2], d[nband+3], 0.0, 0.0)
+    params = [(d[:nband], d[nband], d[nband + 1], d[nband + 2], d[nband + 3], 0.0, 0.0)
               for d in dat if len(d) >= (nband + 4)]
 
-    return params, filters, offsets   
+    return params, filters, offsets
 
 
 if __name__ == "__main__":
@@ -167,7 +170,7 @@ if __name__ == "__main__":
         splinedata = None
 
     # --- Setup Scene and Stamp(s) ---
-    sourcepars, filters, offsets = read_scene_catalog(args.scene_file)    
+    sourcepars, filters, offsets = read_scene_catalog(args.scene_file)
     stamp_kwargs = [{'size': tuple(args.size), 'psfname': psfnames[f], 'filtername': f, 'offset': o}
                     for o in offsets for f in filters]
 
@@ -193,18 +196,18 @@ if __name__ == "__main__":
         image, grad = make_image(scene, stamps[0], Theta=ptrue)
         fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
         for i in range(len(ptrue)):
-            g = grad[i,:].reshape(stamp.nx, stamp.ny)
-            c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+            g = grad[i, :].reshape(stamp.nx, stamp.ny)
+            c = axes[i, 0].imshow(grad_num[i, :, :].T, origin='lower')
             fig.colorbar(c, ax=axes[i, 0])
             c = axes[i, 1].imshow(g.T, origin='lower')
             fig.colorbar(c, ax=axes[i, 1])
-            c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+            c = axes[i, 2].imshow((grad_num[i, :, :] - g).T, origin='lower')
             fig.colorbar(c, ax=axes[i, 2])
 
         axes[0, 0].set_title('Numerical')
         axes[0, 1].set_title('Analytic')
         axes[0, 2].set_title('N - A')
-    
+
     # --- Optimization -----
     if args.backend == "opt":
         p0 = ptrue * np.random.normal(1.0, args.jitter, size=ptrue.shape)
@@ -213,11 +216,10 @@ if __name__ == "__main__":
         result.stamps = [stamp]
         plot_model_images(result.chain[-1], result.scene, result.stamps)
 
-
     # --- Sampling ---
     if args.backend == "pymc3":
-        result = fitting.run_pymc3(ptrue.copy(), scene, plans, lower=lower, upper=upper,
-                                    nwarm=args.nwarm, niter=args.niter)
+        result = fitting.run_pymc3(ptrue.copy(), scene, plans, lower=lower,
+                                   upper=upper, nwarm=args.nwarm, niter=args.niter)
 
         result.stamps = stamps
         result.args = args
@@ -225,6 +227,6 @@ if __name__ == "__main__":
 
     # --- No fitting ---
     if args.backend == "none":
-        sys.exit()        
+        sys.exit()
 
     pl.show()

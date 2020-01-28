@@ -4,7 +4,7 @@ import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
 
 from forcepho.sources import Star, Scene
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
 from forcepho.psf import PointSpreadFunction
 from forcepho.likelihood import make_image, plan_sources, WorkPlan
 

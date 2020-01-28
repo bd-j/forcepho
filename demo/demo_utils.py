@@ -5,85 +5,13 @@ import astropy.io.fits as fits
 from astropy import wcs as apy_wcs
 
 from forcepho.likelihood import lnlike_multi, make_image
-from forcepho.data import PostageStamp
+from forcepho.stamp import PostageStamp
+from forcepho.model import ConstrainedTransformedPosterior as Posterior
 
-__all__ = ["Posterior",
-           "negative_lnlike_multi", "chi_vector",
+__all__ = ["negative_lnlike_multi", "chi_vector",
            "numerical_image_gradients",
            "make_stamp", "make_real_stamp"
            ]
-
-
-class Posterior(object):
-
-    def __init__(self, scene, plans, upper=np.inf, lower=-np.inf, verbose=False):
-        self.scene = scene
-        self.plans = plans
-        self._theta = -99
-        self.lower = lower
-        self.upper = upper
-        self.verbose = verbose
-        self.ncall = 0
-
-    def evaluate(self, theta):
-        Theta = self.complete_theta(theta)
-        if self.verbose:
-            print(Theta)
-            t = time.time()
-        nll, nll_grad = negative_lnlike_multi(Theta, scene=self.scene, plans=self.plans)
-        if self.verbose:
-            print(time.time() - t)
-        self.ncall += 1
-        self._lnp = -nll
-        self._lnp_grad = -nll_grad
-        self._theta = Theta
-
-    def lnprob(self, Theta):
-        if np.any(Theta != self._theta):
-            self.evaluate(Theta)
-        return self._lnp
-
-    def lnprob_grad(self, Theta):
-        if np.any(Theta != self._theta):
-            self.evaluate(Theta)
-        return self._lnp_grad
-
-    def complete_theta(self, theta):
-        return theta
-
-    def check_constrained(self, theta):
-        """Method that checks parameter values against constraints.  If they
-        are above or below the boundaries, the sign of the momentum is flipped
-        and theta is adjusted as if the trajectory had bounced off the
-        constraint.
-
-        :param theta:
-            The parameter vector
-
-        :returns theta:
-            the new theta vector
-
-        :returns sign:
-            a vector of multiplicative signs for the momenta
-
-        :returns flag:
-            A flag for if the values are still out of bounds.
-        """
-
-        #initially no flips
-        sign = np.ones_like(theta)
-        oob = True #pretend we started out-of-bounds to force at least one check
-        #print('theta_in ={0}'.format(theta))
-        while oob:
-            above = theta > self.upper
-            theta[above] = 2*self.upper[above] - theta[above]
-            sign[above] *= -1
-            below = theta < self.lower
-            theta[below] = 2*self.lower[below] - theta[below]
-            sign[below] *= -1
-            oob = np.any(below | above)
-            #print('theta_out ={0}'.format(theta))
-        return theta, sign, oob
 
 
 def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
@@ -92,6 +20,7 @@ def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
         return -lnp, -lnp_grad
     else:
         return -lnp
+
 
 def chi_vector(theta, scene=None, stamp=None):
     stamp.residual = stamp.pixel_values.flatten()
@@ -114,7 +43,7 @@ def numerical_image_gradients(theta0, delta, scene=None, stamp=None):
 
     return np.array(dI_dp)
 
-            
+
 def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
                offset=0., filtername='dummy', oversample=8,
                psfcenter=104):
@@ -149,7 +78,6 @@ def make_stamp(size=(100, 100), fwhm=1.0, psfname=None,
     stamp.crval = np.zeros([2]) + offset
     # The pixel coordinates of the reference pixel
     stamp.crpix = np.zeros([2])
-
 
     # --- Add the PSF ---
     stamp.psf = get_psf(psfname, fwhm, 2, 6, oversample, psfcenter)
@@ -200,7 +128,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     crval_stamp = crpix_stamp + lo
     W = np.eye(2)
     if center_type == 'celestial':
-        crval_stamp = ast.wcs_pix2world(crval_stamp[None,:], 0)[0, :2]
+        crval_stamp = ast.wcs_pix2world(crval_stamp[None, :], 0)[0, :2]
         W[0, 0] = np.cos(np.deg2rad(crval_stamp[-1]))
 
     # -----------
@@ -209,7 +137,7 @@ def make_real_stamp(imname, center=(None, None), size=(None, None),
     # --- Add image and uncertainty data to Stamp ----
     stamp = PostageStamp()
     stamp.pixel_values = im[xinds, yinds]
-    stamp.ierr = 1./err[xinds, yinds]
+    stamp.ierr = 1. / err[xinds, yinds]
 
     bad = ~np.isfinite(stamp.ierr)
     stamp.pixel_values[bad] = 0.0
@@ -270,7 +198,7 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
 
     else:
         psf = PointSpreadFunction()
-        psf.covariances *= fwhm/2.355
+        psf.covariances *= fwhm / 2.355
 
     return psf
 
@@ -279,4 +207,3 @@ class Result(object):
 
     def __init__(self):
         self.offsets = None
-

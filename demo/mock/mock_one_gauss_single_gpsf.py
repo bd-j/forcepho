@@ -38,7 +38,8 @@ parser.add_argument("--niter", type=int, default=500,
                     help="number of iterations for hemcee production")
 parser.add_argument("--nlive", type=int, default=-1,
                     help="number of dynesty live points")
-parser.add_argument("--results_name", type=str, default="demo_mock_one_gauss_single_gpsf",
+parser.add_argument("--results_name", type=str,
+                    default="demo_mock_one_gauss_single_gpsf",
                     help="root name and path for the output pickle.'none' results in no output.")
 parser.add_argument("--display", action="store_true",
                     help="Whether to plot fit information after fitting")
@@ -64,7 +65,7 @@ def setup_scene(galaxy=False, fwhm=1.0, offset=0.0,
         source.pa = np.deg2rad(30.)
         theta = [100., 10., 10., 0.5, np.deg2rad(10.)]
         label = ['$\psi$', '$x$', '$y$', '$q$', '$\\varphi$']
-        bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi/2)]
+        bounds = [(0, 1e4), (0., 30), (0, 30), (0, 1), (0, np.pi / 2)]
     else:
         source = Star()
         theta = [100., 10., 10.]
@@ -93,8 +94,8 @@ def get_bounds(scene, npix=3, maxfluxfactor=20., plate_scale=[1., 1.]):
     #plate_scale = np.abs(np.linalg.eigvals(np.linalg.inv(stamps[0].dpix_dsky)))
     npix = 3.0
     if scene.sources[0].nshape == 2:
-        shape_lo = [0.3, -np.pi/1.5]
-        shape_hi = [1.0, np.pi/1.5]
+        shape_lo = [0.3, -np.pi / 1.5]
+        shape_hi = [1.0, np.pi / 1.5]
     elif scene.sources[0].nshape == 0:
         shape_lo = []
         shape_hi = []
@@ -127,23 +128,23 @@ if __name__ == "__main__":
 
     plate_scale = np.abs(np.linalg.eigvals(np.linalg.inv(stamp.dpix_dsky)))
     lower, upper = get_bounds(scene, plate_scale=plate_scale)
-    
+
     true_image, partials = make_image(scene, stamp, Theta=ptrue)
 
     # ---- Plot mock image and gradients thereof -----
     if args.show_grad:
         fig, axes = pl.subplots(3, 2)
         for i, ddtheta in enumerate(partials):
-            ax = axes.flat[i+1]
+            ax = axes.flat[i + 1]
             c = ax.imshow(ddtheta.reshape(stamp.nx, stamp.ny).T, origin='lower')
-            ax.text(0.1, 0.85, '$\partial I/\partial${}'.format(label[i]), transform=ax.transAxes)
+            ax.text(0.1, 0.85, '$\partial I/\partial${}'.format(label[i]),
+                    transform=ax.transAxes)
             fig.colorbar(c, ax=ax)
 
         ax = axes.flat[0]
         c = ax.imshow(true_image.T, origin='lower')
         ax.text(0.1, 0.85, 'Mock (I)'.format(label[i]), transform=ax.transAxes)
         fig.colorbar(c, ax=ax)
-
 
     # ---- Test Image Gradients ------
     if args.test_grad:
@@ -153,18 +154,17 @@ if __name__ == "__main__":
         image, grad = make_image(scene, stamp, Theta=ptrue)
         fig, axes = pl.subplots(len(ptrue), 3, sharex=True, sharey=True)
         for i in range(len(ptrue)):
-            g = grad[i,:].reshape(stamp.nx, stamp.ny)
-            c = axes[i, 0].imshow(grad_num[i,:,:].T, origin='lower')
+            g = grad[i, :].reshape(stamp.nx, stamp.ny)
+            c = axes[i, 0].imshow(grad_num[i, :, :].T, origin='lower')
             fig.colorbar(c, ax=axes[i, 0])
             c = axes[i, 1].imshow(g.T, origin='lower')
             fig.colorbar(c, ax=axes[i, 1])
-            c = axes[i, 2].imshow((grad_num[i,:,:] - g).T, origin='lower')
+            c = axes[i, 2].imshow((grad_num[i, :, :] - g).T, origin='lower')
             fig.colorbar(c, ax=axes[i, 2])
 
         axes[0, 0].set_title('Numerical')
         axes[0, 1].set_title('Analytic')
         axes[0, 2].set_title('N - A')
-
 
     # --- Optimization -----
     if args.backend == "opt":
@@ -173,7 +173,6 @@ if __name__ == "__main__":
         result.args = args
         result.stamps = [stamp]
         plot_model_images(result.chain[-1], result.scene, result.stamps)
-
 
     # sampling
     if args.backend == "pymc3":
@@ -189,6 +188,6 @@ if __name__ == "__main__":
         sys.exit()
 
     # --- Plotting
-    
+
     pl.show()
-    
+
