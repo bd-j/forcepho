@@ -33,12 +33,13 @@ class Proposer:
 
     def __init__(self, patch, thread_block=1024, shared_size=48000,
                  max_registers=64, show_ptxas=False, debug=False,
-                 kernel_name='EvaluateProposal',
+                 kernel_name='EvaluateProposal', chi_dtype=np.float32,
                  kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands, 1)
         self.block = (thread_block, 1, 1)
         self.shared_size = shared_size
+        self.chi_dtype = chi_dtype
         self.patch = patch
 
         thisdir = os.path.abspath(os.path.dirname(__file__))
@@ -47,6 +48,9 @@ class Proposer:
             kernel_source = fp.read()
 
         options = ['-std=c++11']
+
+        if chi_dtype is np.float64:
+            options += ["-arch sm_70"]
 
         if show_ptxas:
             options += ['--ptxas-options=-v']
@@ -85,7 +89,7 @@ class Proposer:
             Only returned if patch.return_residual.
         """
 
-        chi_out = np.empty(self.patch.n_bands, dtype=np.float32)
+        chi_out = np.empty(self.patch.n_bands, dtype=self.chi_dtype)
         chi_derivs_out = np.empty(self.patch.n_bands,
                                   dtype=response_struct_dtype)
 

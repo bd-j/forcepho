@@ -20,7 +20,7 @@
 //#include "CudaErrors.cuh"
 
 typedef float PixFloat;
-
+typedef double ChiFloat;
 
 
 #endif

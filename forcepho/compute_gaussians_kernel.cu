@@ -340,7 +340,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
 class Accumulator {
   public:
-    float chi2;
+    ChiFloat chi2;
     float dchi2_dp[NPARAMS*MAXSOURCES]; 
         //OPTION: Figure out how to make this not compile time.
 
@@ -476,7 +476,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             data *= ierr;
             // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
             // residual and avoid loss of significance 
-            float chi2 = (residual - data);
+            ChiFloat chi2 = (residual - data);
             chi2 *= (residual + data);
             // chi2 -= 36.9;
             accum[accumnum].SumChi2(chi2);
