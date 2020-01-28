@@ -465,7 +465,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             float yp = patch->ypix[pix];
             PixFloat data = patch->data[pix];
             PixFloat ierr = patch->ierr[pix];
-            PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gauss_total); 
+            PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gauss_total);
 
             // Did the CPU ask that we output the residual image?
             if(patch->residual != NULL)
@@ -474,13 +474,14 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             // Compute chi2 and accumulate it
             residual *= ierr;   // Form residual/sigma, which is chi
             data *= ierr;
-            //float chi2 = residual*residual;
             // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
             // residual and avoid loss of significance 
-            float chi2 = -(data - residual) * (data + residual);
+            float chi2 = (residual - data);
+            chi2 *= (residual + data);
+            // chi2 -= 36.9;
             accum[accumnum].SumChi2(chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
-        
+
             // Now we loop over Sources and compute the derivatives for each
             for (int gal = 0; gal < n_sources; gal++) {
                 for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;

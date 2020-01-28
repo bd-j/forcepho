@@ -151,6 +151,7 @@ class GPUPosterior(Posterior):
         # note type conversion before sum to avoid loss of significance
         ll = mhalf * np.array(chi2.astype(np.float64).sum(), dtype=np.float64)
         ll_grad = mhalf * self.stack_grad(chi2_derivs)
+
         if self.debug:
             print("chi2: {}".format(chi2))
             self.pos_history.append(z)
@@ -177,7 +178,7 @@ class GPUPosterior(Posterior):
         """
         nsources = self.proposer.patch.n_sources
         nbands = self.proposer.patch.n_bands
-        grads = np.zeros([nsources, nbands + (NPARAMS-1)])
+        grads = np.zeros([nsources, nbands + (NPARAMS-1)], dtype=np.float64)
         for band, derivs in enumerate(chi2_derivs):
             # shape params
             grads[:, nbands:] += derivs[:, 1:]
@@ -228,12 +229,13 @@ class CPUPosterior(Posterior):
         self._lnp_grad = ll_grad
         self._z = z
 
-    def residuals(self, Theta):
-        """Construct model images for the given parameter vecotrs.
+    def residuals(self, Theta=None):
+        """Construct model image (residuals) for the given parameter vecotrs.
         """
-        self.scene.set_all_source_params(Theta)
-        self._residuals = np.array([make_image(self.scene, plan)[0]
-                                    for plan in self.plans])
+        if Theta:
+            self.scene.set_all_source_params(Theta)
+        self._residuals = [plan.stamp.pixel_values - make_image(self.scene, plan.stamp)[0]
+                           for plan in self.plans]
         return self._residuals
 
 
