@@ -485,9 +485,11 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             residual *= ierr;   // Form residual/sigma, which is chi
             data *= ierr;
             // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
-            // residual and avoid loss of significance 
-            double chi2 = (residual - data);
-            chi2 *= (residual + data);
+            // residual and avoid loss of significance
+            // promoting to double on the right hand side only modestly increases the precision,
+            // but also does not measureably impact the timing
+            double chi2 = ((double) residual - (double) data);
+            chi2 *= ((double) residual + (double) data);
             // chi2 -= 36.9;
             accum[accumnum].SumChi2(chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
