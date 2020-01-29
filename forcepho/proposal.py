@@ -33,7 +33,7 @@ class Proposer:
 
     def __init__(self, patch, thread_block=1024, shared_size=48000,
                  max_registers=64, show_ptxas=False, debug=False,
-                 kernel_name='EvaluateProposal', chi_dtype=np.float32,
+                 kernel_name='EvaluateProposal', chi_dtype=np.float64,
                  kernel_fn='compute_gaussians_kernel.cu'):
 
         self.grid = (patch.n_bands, 1)

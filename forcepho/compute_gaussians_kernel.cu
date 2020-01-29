@@ -176,12 +176,12 @@ typedef struct {
     matrix22 scovar_im; 
     
     //some distortions and astrometry specific to ??source??. 
-    float flux; 
-    float G; 
+    float flux;
+    float G;
     float da_dn;
     float da_dr;
-    matrix22 CW; 
-    matrix22 T; 
+    matrix22 CW;
+    matrix22 T;
     matrix22 dT_dq;
     matrix22 dT_dpa;
 } PixGaussian; 
@@ -340,7 +340,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
 class Accumulator {
   public:
-    ChiFloat chi2;
+    double chi2;
     float dchi2_dp[NPARAMS*MAXSOURCES]; 
         //OPTION: Figure out how to make this not compile time.
 
@@ -350,7 +350,7 @@ class Accumulator {
 
     __device__ void zero() {
         if (threadIdx.x==0) chi2 = 0.0;
-        for (int j=threadIdx.x; j<NPARAMS*MAXSOURCES; j+=blockDim.x) dchi2_dp[j] = 0.0;
+        for (int j=threadIdx.x; j<NPARAMS*MAXSOURCES; j+=blockDim.x) dchi2_dp[j] = 0.0f;
         __syncthreads();
     }
 
@@ -476,15 +476,15 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             data *= ierr;
             // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
             // residual and avoid loss of significance 
-            ChiFloat chi2 = (residual - data);
+            float chi2 = (residual - data);
             chi2 *= (residual + data);
             // chi2 -= 36.9;
-            accum[accumnum].SumChi2(chi2);
+            accum[accumnum].SumChi2((double) chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 
             // Now we loop over Sources and compute the derivatives for each
             for (int gal = 0; gal < n_sources; gal++) {
-                for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0;
+                for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0f;
                 ComputeGaussianDerivative(xp, yp, residual,  //1.
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);  
 
