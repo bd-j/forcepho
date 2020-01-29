@@ -364,10 +364,20 @@ class Accumulator {
         // threadIdx.x % 32 == 0
         if ((threadIdx.x&31) == 0) atomicAdd(answer, input);
     }
-    
+
+    __device__ void warpReduceSumDbl(double *answer, double input) {
+        input += __shfl_down_sync(FULL_MASK, input, 16);
+        input += __shfl_down_sync(FULL_MASK, input,  8);
+        input += __shfl_down_sync(FULL_MASK, input,  4);
+        input += __shfl_down_sync(FULL_MASK, input,  2);
+        input += __shfl_down_sync(FULL_MASK, input,  1);
+        // threadIdx.x % 32 == 0
+        if ((threadIdx.x&31) == 0) atomicAdd(answer, input);
+    }
+
     // Could put the Reduction code in here
-    __device__ void SumChi2(float _chi2) {
-        warpReduceSum(&chi2, _chi2);
+    __device__ void SumChi2(double _chi2) {
+        warpReduceSumDbl(&chi2, _chi2);
     }
     __device__ void SumDChi2dp(float *_dchi2_dp, int gal) { 
         for (int j=0; j<NPARAMS; j++) 
@@ -375,7 +385,7 @@ class Accumulator {
     }
 
     /// This copies this Accumulator into another memory buffer
-    __device__ inline void store(float *pchi2, float *pdchi2_dp, int n_sources) {
+    __device__ inline void store(double *pchi2, float *pdchi2_dp, int n_sources) {
         if (threadIdx.x==0) *pchi2 = chi2;
         for (int j=threadIdx.x; j<n_sources*NPARAMS; j+=blockDim.x)
             pdchi2_dp[j] = dchi2_dp[j];
@@ -476,10 +486,10 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
             data *= ierr;
             // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
             // residual and avoid loss of significance 
-            float chi2 = (residual - data);
+            double chi2 = (residual - data);
             chi2 *= (residual + data);
             // chi2 -= 36.9;
-            accum[accumnum].SumChi2((double) chi2);
+            accum[accumnum].SumChi2(chi2);
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 
             // Now we loop over Sources and compute the derivatives for each
@@ -503,7 +513,7 @@ __global__ void EvaluateProposal(void *_patch, void *_proposal,
     // over all warps.
     accum[0].coadd_and_sync(accum, NUMACCUMS, n_sources);
     Response *r = (Response *)pdchi2_dp;
-    accum[0].store((float *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
+    accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
     return;
 }
 

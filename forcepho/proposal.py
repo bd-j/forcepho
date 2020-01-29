@@ -49,8 +49,8 @@ class Proposer:
 
         options = ['-std=c++11']
 
-        if chi_dtype is np.float64:
-            options += ["-arch sm_70"]
+        #if chi_dtype is np.float64:
+        #    options += ["-arch sm_70"]
 
         if show_ptxas:
             options += ['--ptxas-options=-v']
