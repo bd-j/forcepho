@@ -71,7 +71,7 @@ class Posterior:
     def residuals(self, z):
         raise(NotImplementedError)
 
-    def check_grad(self, z, dlnz=1e-6):
+    def check_grad(self, z, delta=1e-5):
         """Compare numerical gradients to analytic gradients.
 
         Parameters
@@ -79,8 +79,8 @@ class Posterior:
         z : ndarray, shape (ndim,)
             The parameter location at which to check gradients
 
-        dlnz : float, optional, default=1e-6
-            Fractional change in parameter values to use for calculating
+        delta : float or ndarray, optional, default=1e-5
+            Change in parameter values to use for calculating
             numerical gradients
 
         Returns
@@ -94,7 +94,7 @@ class Posterior:
         z0 = z.copy()
         dlnp = self.lnprob_grad(z)
 
-        delta = z0 * 1e-4
+        delta = np.zeros_like(dlnp) + delta
         dlnp_num = np.zeros(len(z0), dtype=np.float64)
         for i, dp in enumerate(delta):
             theta = z0.copy()
