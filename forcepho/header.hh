@@ -22,5 +22,4 @@
 typedef float PixFloat;
 
 
-
 #endif
