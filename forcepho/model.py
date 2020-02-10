@@ -45,25 +45,76 @@ class Posterior:
     """
 
     def __init__(self):
+        self.ncall = 0
         raise(NotImplementedError)
 
     def evaluate(self, z):
+        """Method to actually evaluate ln-probability and its gradient, at the
+        sampling aparameter position `z`, and cache these quantities. Other
+        values may be cached or actions performed at this time.  This should be
+        subclassed.
+
+        Populates the following attributes
+        * _z - the parameter posiiton
+        * _lnp - the ln-likelihood at z
+        * - lnp_grad - the gradient of the ln-likelihood with respect to z
+        * ncall - the number of likelihood calls is incremented by 1
+
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            A parameter vector.
+        """
         self._z = z
         self._lnp = 0
         self._lnp_grad = 0
+        self.ncall += 1
         raise(NotImplementedError)
 
     def lnprob(self, z):
+        """Get the ln-probability at parameter position `z`.  This uses the
+        cached value of the ln-probability if z has not chenged, and otherwise
+        calls the `evaluate` method.
+
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            The parameter position (in the sampling parameter space)
+
+        Returns
+        -------
+        lnp : np.float
+            The ln-probability at the parameter position `z`
+        """
         if np.any(z != self._z):
             self.evaluate(z)
         return self._lnp
 
     def lnprob_grad(self, z):
+        """Get the gradients of the ln-probability with respect to `z`, at
+        parameter position `z`.  This uses the cached value of the
+        ln-probability if z has not chenged, and otherwise calls the `evaluate`
+        method.
+
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            The parameter position (in the sampling parameter space)
+
+        Returns
+        -------
+        lnp_grad : ndarray of shape (ndim,)
+            The gradient of the ln-probability with repsect to `z`, at the
+            parameter position `z`
+        """
         if np.any(z != self._z):
             self.evaluate(z)
         return self._lnp_grad
 
     def nll(self, z):
+        """  A shortcut for the negative ln-likelihood, for use with
+        minimization algorithms. Returns both the NLL and it's gradient
+        """
         if np.any(z != self._z):
             self.evaluate(z)
         return -self._lnp, -self._lnp_grad
@@ -110,6 +161,9 @@ class GPUPosterior(Posterior):
 
     def __init__(self, proposer, scene, name="",
                  print_interval=1000, verbose=False, debug=False):
+        """A Posterior subclass that uses a GPU to evaluate the likelihood
+        and its gradients.
+        """
         self.proposer = proposer
         self.scene = scene
         self.ncall = 0
@@ -213,12 +267,13 @@ class CPUPosterior(Posterior):
         self._z = -99
 
     def evaluate(self, z):
-        """
-        Evaluate the probability for the given parameter vector
+        """Evaluate and chache the ln-probability for the given parameter
+        vector, and its gradient.
 
-        :param z:
-            The sampling parameters which have a prior
-            distribution attached.
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            The sampling parameters which have a prior distribution attached.
 
         """
         Theta = z

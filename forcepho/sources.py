@@ -119,6 +119,51 @@ class Scene(object):
         for i, source in enumerate(self.sources):
             source.id = i
 
+    def to_catalog(self):
+        """Get a structured array of parameters corresponding to the sources
+        in the scene. Each row of the structured array is a source, the columns
+        have the names of the source parameters, with one column for each flux
+        element.
+        """
+        rows = [s.catalog_row() for s in self.sources]
+        try:
+            rows = np.concatenate(rows)
+        except(ValueError, TypeError):
+            pass
+        return rows
+
+    def from_catalog(self, catalog, source_type=Galaxy, source_kwargs={},
+                     filternames=["band"], extra_cols=[]):
+        """Generate a scene from a structured array of source parameters.
+
+        Parameters
+        ------------
+        catalog : structured ndarray
+            The columns of this array must include the `SHAPE_COLS` of the
+            specified source type. There must also be `flux_<b>` columns where
+            <b> are the elements of the provided `filternames` list
+
+        source_type : One of the Source subclasses defined here.
+            All sources in the scene will be of this class.
+
+        source_kwargs : dictionary
+            Dictionary of keyword parameters used to instantiate each Source.
+
+        filternames : list of strings
+            A list of the filternames, corresponding to the `flux_<b>` columns
+            of the supplied `catalog`
+        """
+        self.sources = []
+        for i, row in enumerate(catalog):
+            s = source_type(filternames=filternames, **source_kwargs)
+            [setattr(s, p, row[p]) for p in s.SHAPE_COLS]
+            [setattr(s, p, row[p]) for p in extra_cols]
+            for j, b in enumerate(self.filternames):
+                s.flux[j] = row["flux_{}".format(b)]
+
+            self.sources.append(row)
+            self.identify_sources()
+
 
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
@@ -141,6 +186,9 @@ class Source(object):
     radii = np.zeros(1)
 
     # --- Parameters ---
+    ID_COL = ["id"]
+    SHAPE_COLS = ["ra", "dec", "q", "pa"]
+    FLUX_COL = ["flux"]
     npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
@@ -151,7 +199,7 @@ class Source(object):
     sersic = 0.   # sersic index
     rh = 0.       # half light radius
 
-    def __init__(self, filters=['dummy'], radii=None):
+    def __init__(self, filters=['band'], radii=None):
         """
         :param filters:
             A list of strings giving the filternames for which you want fluxes.
@@ -204,7 +252,7 @@ class Source(object):
 
     @property
     def parameter_names(self):
-        names = self.filternames + ["ra", "dec"] + ["q", "pa", "n", "r"][:self.nshape]
+        names = self.filternames + self.SHAPE_COLS
         names = ["{}_{}".format(n, self.id) for n in names]
         return names
 
@@ -307,6 +355,24 @@ class Source(object):
         else:
             return im, None
 
+    def cat_dtype(self):
+        try:
+            return self._cat_dtype
+        except(AttributeError):
+            cols = (self.ID_COL +
+                    ["flux_{}".format(b) for b in self.filternames] +
+                    self.SHAPE_COLS)
+            self._cat_dtype = np.dtype([(c, np.float) for c in cols])
+            return self._cat_dtype
+
+    def catalog_row(self):
+        row = np.zeros(1, self.cat_dtype)
+        for p in self.SHAPE_COLS + self.ID_COL:
+            row[0][p] = getattr(self, p)
+        for i, b in enumerate(self.filternames):
+            row[0]["flux_{}".format(b)] = self.flux[i]
+        return row
+
 
 class Star(Source):
     """This is a represenation of a point source in terms of Scene (on-sky)
@@ -319,6 +385,7 @@ class Star(Source):
     radii = np.zeros(1)
 
     # PointSources only have two position parameters.
+    SHAPE_COLS = ["ra", "dec"]
     npos = 2
     nshape = 0
 
@@ -386,8 +453,9 @@ class SimpleGalaxy(Source):
 
     radii = np.ones(1)
 
-    # Galaxies have two position parameters, 2 or 4 shape parameters (pa and q)
+    # SimpleGalaxies have two position parameters, 2 shape parameters (pa and q)
     # and nband flux parameters
+    SHAPE_COLS = ["ra", "dec", "q", "pa"]
     npos = 2
     nshape = 2
 
@@ -396,12 +464,12 @@ class SimpleGalaxy(Source):
         Assumes that the order of parameters in the theta vector is [flux1,
         flux2...fluxN, ra, dec, q, pa]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + 4` (if `filtername` is `None`) or 5 (if a filter is
-            specified)
+        Parameters
+        ----------
+        theta : sequence of length `5` or `nband + 4`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
+        filtername : string, optional, (default: None)
             If supplied, the theta vector is assumed to be 5-element (fluxI,
             ra, dec, q, pa) where fluxI is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
@@ -459,6 +527,9 @@ class Galaxy(Source):
 
     The amplitudes and the derivatives of the amplitudes with respect to the
     sersic index and half-light radius are based on splines.
+
+    Note that only instances of :py:class:`Galaxy` with `free_sersic = True`
+    can generate proposals for the GPU
     """
 
     radii = np.ones(1)
@@ -466,10 +537,11 @@ class Galaxy(Source):
     # Galaxies have 2 position parameters,
     #    2 or 4 shape parameters (pa and q),
     #    and nband flux parameters
+    SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
     npos = 2
     nshape = 4
 
-    def __init__(self, filters=['dummy'], radii=None, splinedata=None, 
+    def __init__(self, filters=['band'], radii=None, splinedata=None,
                  free_sersic=True):
         self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
@@ -486,7 +558,9 @@ class Galaxy(Source):
         if not free_sersic:
             # Fix the sersic parameters n_sersic and r_h
             self.nshape = 2
+            self.SHAPE_COLS = ["ra", "dec", "q", "pa"]
 
+        # For generating proposals that can be sent to the GPU
         from .proposal import source_struct_dtype
         self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
 
@@ -605,7 +679,7 @@ class Galaxy(Source):
         return self.proposal_struct
 
 
-class ConformalGalaxy(Galaxy):
+class ConformalShearGalaxy(Galaxy):
 
     """Parameters describing a source in the celestial plane, with the shape
     parameterized by the conformal shear vector instead of traditional axis
@@ -623,6 +697,9 @@ class ConformalGalaxy(Galaxy):
     """
 
     # Parameters
+    SHAPE_COLS = ["ra", "dec", "ep", "ec", "sersic", "rhalf"]
+    FLUX_COL = ["flux"]
+
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
     ra = 0.
