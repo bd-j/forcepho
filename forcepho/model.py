@@ -190,7 +190,7 @@ class GPUPosterior(Posterior):
         return grads.reshape(-1)
 
     def residuals(self, z):
-        assert self.proposer.patch.return_residuals
+        assert self.proposer.patch.return_residual
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal)

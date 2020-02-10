@@ -263,6 +263,7 @@ class Patch:
         try:
             if self.gpu_patch:
                 self.gpu_patch.free()
+                del self.gpu_patch
         except(AttributeError):
             pass  # no gpu_patch
 
@@ -284,6 +285,7 @@ class Patch:
         try:
             if self.gpu_patch:
                 self.gpu_patch.free()
+                del self.gpu_patch
         except(AttributeError):
             pass  # no gpu_patch
 
