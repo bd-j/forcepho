@@ -278,6 +278,7 @@ class Patch:
             for cuda_ptr in self.cuda_ptrs.values():
                 if cuda_ptr:
                     cuda_ptr.free()
+            self.cuda_ptrs = {}
         except(AttributeError):
             pass  # no cuda_ptrs
 
