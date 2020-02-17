@@ -119,21 +119,22 @@ class Scene(object):
         for i, source in enumerate(self.sources):
             source.id = i
 
-    def to_catalog(self):
+    def to_catalog(self, extra_cols=[]):
         """Get a structured array of parameters corresponding to the sources
         in the scene. Each row of the structured array is a source, the columns
         have the names of the source parameters, with one column for each flux
-        element.
+        element, having the name of the filter.  Extra columns or source attrinbutes
         """
-        rows = [s.catalog_row() for s in self.sources]
+        rows = [s.catalog_row(extra_cols=extra_cols) for s in self.sources]
         try:
             rows = np.concatenate(rows)
         except(ValueError, TypeError):
             pass
         return rows
 
-    def from_catalog(self, catalog, source_type=Galaxy, source_kwargs={},
-                     filternames=["band"], extra_cols=[]):
+    def from_catalog(self, catalog, filternames=["band"],
+                     extra_parameters=[], source_type=Galaxy,
+                     **source_kwargs):
         """Generate a scene from a structured array of source parameters.
 
         Parameters
@@ -146,23 +147,20 @@ class Scene(object):
         source_type : One of the Source subclasses defined here.
             All sources in the scene will be of this class.
 
-        source_kwargs : dictionary
-            Dictionary of keyword parameters used to instantiate each Source.
-
         filternames : list of strings
             A list of the filternames, corresponding to the `flux_<b>` columns
             of the supplied `catalog`
+
+        source_kwargs : optional
+            Extra keyword parameters used to instantiate each Source.
         """
         self.sources = []
         for i, row in enumerate(catalog):
             s = source_type(filternames=filternames, **source_kwargs)
-            [setattr(s, p, row[p]) for p in s.SHAPE_COLS]
-            [setattr(s, p, row[p]) for p in extra_cols]
-            for j, b in enumerate(self.filternames):
-                s.flux[j] = row["flux_{}".format(b)]
+            s.from_catalog_row(row, extra_parameters=extra_parameters)
+            self.sources.append(s)
 
-            self.sources.append(row)
-            self.identify_sources()
+        self.identify_sources()
 
 
 class Source(object):
@@ -355,23 +353,41 @@ class Source(object):
         else:
             return im, None
 
-    def cat_dtype(self):
-        try:
-            return self._cat_dtype
-        except(AttributeError):
-            cols = (self.ID_COL +
-                    ["flux_{}".format(b) for b in self.filternames] +
-                    self.SHAPE_COLS)
-            self._cat_dtype = np.dtype([(c, np.float) for c in cols])
-            return self._cat_dtype
+    def cat_dtype(self, extra_cols=[]):
+        cols = (self.ID_COL +
+                ["{}".format(b) for b in self.filternames] +
+                self.SHAPE_COLS)
+        cols += extra_cols
+        self._cat_dtype = np.dtype([(c, np.float) for c in cols])
+        return self._cat_dtype
 
-    def catalog_row(self):
-        row = np.zeros(1, self.cat_dtype)
+    def to_catalog_row(self, extra_cols=[]):
+        """Output source parameters as the row of a structured array
+        """
+        dtype = self.cat_dtype(extra_cols=extra_cols)
+        row = np.zeros(1, dtype)
         for p in self.SHAPE_COLS + self.ID_COL:
             row[0][p] = getattr(self, p)
         for i, b in enumerate(self.filternames):
-            row[0]["flux_{}".format(b)] = self.flux[i]
+            row[0]["{}".format(b)] = self.flux[i]
+        for c in extra_cols:
+            try:
+                row[0][c] = getattr(self, c)
+            except(KeyError, IndexError, AttributeError):
+                pass
         return row
+
+    def from_catalog_row(self, row, extra_parameters=[], filternames=None):
+        """Set source parameters from the row of a sstructured array
+        """
+        [setattr(self, p, row[p]) for p in self.SHAPE_COLS]
+        [setattr(self, p, row[p]) for p in extra_parameters]
+        if filternames:
+            self.filternames = filternames
+            self.flux = np.zeros(self.nband)
+        for j, b in enumerate(self.filternames):
+            s.flux[j] = row["{}".format(b)]
+
 
 
 class Star(Source):
@@ -420,7 +436,7 @@ class Star(Source):
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
         """
-        if filtername is not None:
+        if filtername:
             flux = [self.flux[self.filter_index(filtername)]]
         else:
             flux = self.flux
@@ -541,9 +557,12 @@ class Galaxy(Source):
     npos = 2
     nshape = 4
 
-    def __init__(self, filters=['band'], radii=None, splinedata=None,
-                 free_sersic=True):
-        self.filternames = filters
+    def __init__(self, filters=['band'], filternames=None, radii=None,
+                 splinedata=None, free_sersic=True):
+        if filternames:
+            self.filternames = filternames
+        else:
+            self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
