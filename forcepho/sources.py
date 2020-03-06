@@ -125,7 +125,7 @@ class Scene(object):
         have the names of the source parameters, with one column for each flux
         element, having the name of the filter.  Extra columns or source attrinbutes
         """
-        rows = [s.catalog_row(extra_cols=extra_cols) for s in self.sources]
+        rows = [s.to_catalog_row(extra_cols=extra_cols) for s in self.sources]
         try:
             rows = np.concatenate(rows)
         except(ValueError, TypeError):
@@ -133,7 +133,7 @@ class Scene(object):
         return rows
 
     def from_catalog(self, catalog, filternames=["band"],
-                     extra_parameters=[], source_type=Galaxy,
+                     extra_parameters=[], source_type=None,
                      **source_kwargs):
         """Generate a scene from a structured array of source parameters.
 
@@ -386,7 +386,7 @@ class Source(object):
             self.filternames = filternames
             self.flux = np.zeros(self.nband)
         for j, b in enumerate(self.filternames):
-            s.flux[j] = row["{}".format(b)]
+            self.flux[j] = row["{}".format(b)]
 
 
 
