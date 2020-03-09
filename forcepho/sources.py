@@ -200,7 +200,7 @@ class Source(object):
     q = 1.        # sqrt of the axis ratio, i.e.  (b/a)^0.5
     pa = 0.       # postion angle (N of E)
     sersic = 0.   # sersic index
-    rh = 0.       # half light radius
+    rhalf = 0.       # half light radius
 
     def __init__(self, filters=['band'], radii=None):
         """
@@ -296,7 +296,7 @@ class Source(object):
     @property
     def damplitude_dsersic(self):
         """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.sersic and self.rh)
+        table (dependent on self.sersic and self.rhalf)
         """
         # ngauss array of da/dsersic
         return np.zeros(self.ngauss)
@@ -304,7 +304,7 @@ class Source(object):
     @property
     def damplitude_drh(self):
         """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.sersic and self.rh)
+        table (dependent on self.sersic and self.rhalf)
         """
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
@@ -554,8 +554,8 @@ class Galaxy(Source):
       * ra: right ascension (degrees)
       * dec: declination (degrees)
       * q, pa: axis ratio squared and position angle
-      * n: sersic index
-      * r: half-light radius (arcsec)
+      * sersic: sersic index
+      * rhalf: half-light radius (arcsec)
 
     Methods are provided to return the amplitudes and covariance matrices of
     the constituent gaussians, as well as derivatives of the amplitudes with
@@ -606,7 +606,7 @@ class Galaxy(Source):
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rh]
+        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
 
         Parameters
         ----------
@@ -635,7 +635,7 @@ class Galaxy(Source):
         self.pa  = theta[nflux + 3]
         if self.nshape > 2:
             self.sersic = theta[nflux + 4]
-            self.rh = theta[nflux + 5]
+            self.rhalf = theta[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -646,12 +646,12 @@ class Galaxy(Source):
             flux = self.flux
         params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
         if self.nshape > 2:
-            params = np.concatenate([params, [self.sersic, self.rh]])
+            params = np.concatenate([params, [self.sersic, self.rhalf]])
         return params
 
     def initialize_splines(self, splinedata, spline_smoothing=None):
         """Initialize Bivariate Splines used to interpolate and get derivatives
-        for gaussian amplitudes as a function of sersic and rh
+        for gaussian amplitudes as a function of sersic and rhalf
         """
         with h5py.File(splinedata, "r") as data:
             n = data["nsersic"][:]
@@ -680,7 +680,7 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.squeeze(np.array([spline(self.sersic, self.rh) 
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf)
                                     for spline in self.splines]))
 
     @property
@@ -689,7 +689,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1)
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
                                     for spline in self.splines]))
 
     @property
@@ -698,7 +698,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1)
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
                                     for spline in self.splines]))
 
     def proposal(self):
@@ -710,7 +710,7 @@ class Galaxy(Source):
         self.proposal_struct["q"] = self.q
         self.proposal_struct["pa"] = self.pa
         self.proposal_struct["nsersic"] = self.sersic
-        self.proposal_struct["rh"] = self.rh
+        self.proposal_struct["rh"] = self.rhalf
         self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
         self.proposal_struct["damplitude_drh"][0, :self.ngauss] = self.damplitude_drh
         self.proposal_struct["damplitude_dnsersic"][0, :self.ngauss] = self.damplitude_dsersic
@@ -746,12 +746,12 @@ class ConformalShearGalaxy(Galaxy):
     ep = 0.       # eta_+ (Bernstein & Jarvis) = \eta \cos(2\phi)
     ec = 0.       # eta_x (Bernstein & Jarvis) = \eta \sin(2\phi)
     sersic = 0.   # sersic index
-    rh = 0.       # half light radius
+    rhalf = 0.       # half light radius
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, ep, ec, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rh]
+        is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rhalf]
 
         Parameters
         ----------
@@ -782,7 +782,7 @@ class ConformalShearGalaxy(Galaxy):
         self.ec  = theta[nflux + 3]
         if self.nshape > 2:
             self.sersic = theta[nflux + 4]
-            self.rh = theta[nflux + 5]
+            self.rhalf = theta[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -793,7 +793,7 @@ class ConformalShearGalaxy(Galaxy):
             flux = self.flux
         params = np.concatenate([flux, [self.ra, self.dec, self.ep, self.ec]])
         if self.nshape > 2:
-            params = np.concatenate([params, [self.sersic, self.rh]])
+            params = np.concatenate([params, [self.sersic, self.rhalf]])
         return params
 
     def etas_from_qphi(self, q, phi):
