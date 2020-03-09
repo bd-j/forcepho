@@ -18,7 +18,8 @@ from .gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
            "Star",
-           "SimpleGalaxy", "Galaxy", "ConformalGalaxy"]
+           "SimpleGalaxy", "Galaxy",
+           "ConformalShearGalaxy"]
 
 
 class Scene(object):
@@ -42,16 +43,20 @@ class Scene(object):
         vector.  Assumes that the order of parameters for each source is
         is [flux1, flux2...fluxN, pos1, pos2, shape1, shape2, ..., shapeN]
 
-        :param sid:
+        Parameters
+        ----------
+        sid : int
             Source ID
 
-        :param filtername: (optional, default: None)
+        filtername : string or None (optional, default: None)
             The name of the filter for which you want the corresponding flux
             parameter index.  If None (default) then indices for all fluxes are
             returned
 
-        :returns theta:
-            An array with elements [flux, (shape_params)]
+        Returns
+        -------
+        inds : ndarray of ints
+            Indices of the parameters for this source.
         """
         npar_per_source = [s.nparam for s in self.active_sources[:sid]]
         # get all the shape parameters
@@ -119,6 +124,49 @@ class Scene(object):
         for i, source in enumerate(self.sources):
             source.id = i
 
+    def to_catalog(self, extra_cols=[]):
+        """Get a structured array of parameters corresponding to the sources
+        in the scene. Each row of the structured array is a source, the columns
+        have the names of the source parameters, with one column for each flux
+        element, having the name of the filter.  Extra columns or source attrinbutes
+        """
+        rows = [s.to_catalog_row(extra_cols=extra_cols) for s in self.sources]
+        try:
+            rows = np.concatenate(rows)
+        except(ValueError, TypeError):
+            pass
+        return rows
+
+    def from_catalog(self, catalog, filternames=["band"],
+                     extra_parameters=[], source_type=None,
+                     **source_kwargs):
+        """Generate a scene from a structured array of source parameters.
+
+        Parameters
+        ------------
+        catalog : structured ndarray
+            The columns of this array must include the `SHAPE_COLS` of the
+            specified source type. There must also be `flux_<b>` columns where
+            <b> are the elements of the provided `filternames` list
+
+        source_type : One of the Source subclasses defined here.
+            All sources in the scene will be of this class.
+
+        filternames : list of strings
+            A list of the filternames, corresponding to the `flux_<b>` columns
+            of the supplied `catalog`
+
+        source_kwargs : optional
+            Extra keyword parameters used to instantiate each Source.
+        """
+        self.sources = []
+        for i, row in enumerate(catalog):
+            s = source_type(filternames=filternames, **source_kwargs)
+            s.from_catalog_row(row, extra_parameters=extra_parameters)
+            self.sources.append(s)
+
+        self.identify_sources()
+
 
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
@@ -141,6 +189,9 @@ class Source(object):
     radii = np.zeros(1)
 
     # --- Parameters ---
+    ID_COL = ["id"]
+    SHAPE_COLS = ["ra", "dec", "q", "pa"]
+    FLUX_COL = ["flux"]
     npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
@@ -149,16 +200,17 @@ class Source(object):
     q = 1.        # sqrt of the axis ratio, i.e.  (b/a)^0.5
     pa = 0.       # postion angle (N of E)
     sersic = 0.   # sersic index
-    rh = 0.       # half light radius
+    rhalf = 0.       # half light radius
 
-    def __init__(self, filters=['dummy'], radii=None):
+    def __init__(self, filters=['band'], radii=None):
         """
-        :param filters:
-            A list of strings giving the filternames for which you want fluxes.
-            These names should correspond to values of the `filtername`
-            attribute of PostageStamps, since they will be used to choose the
-            appropriate element of the `flux` vector for generating model pixel
-            values.
+        Parameters
+        ----------
+        filters : list of strings
+            The filternames for which you want fluxes. These names should
+            correspond to values of the `filtername` attribute of PostageStamps,
+            since they will be used to choose the appropriate element of the
+            `flux` vector for generating model pixel values.
 
             The length of the supplied `filters` list will determine the length
             of the `flux` vector, accessible via the `nband` attribute.
@@ -204,7 +256,7 @@ class Source(object):
 
     @property
     def parameter_names(self):
-        names = self.filternames + ["ra", "dec"] + ["q", "pa", "n", "r"][:self.nshape]
+        names = self.filternames + self.SHAPE_COLS
         names = ["{}_{}".format(n, self.id) for n in names]
         return names
 
@@ -215,13 +267,17 @@ class Source(object):
         """Returns the index of the element of the `flux` array that
         corresponds to the supplied `filtername`.
 
-        :param filtername:
-            String giving the name of the filter for which you want the
-            corresponding `flux` vector index.
+        Parameters
+        ----------
+        filtername : string
+            The name of the filter for which you want the corresponding `flux`
+            vector index.
 
-        :returns index:
-            An integer index that when used to subscript the `flux` attribute
-            gives the source flux in `filtername`
+        Returns
+        -------
+        index : int
+            An index that when used to subscript the `flux` attribute gives the
+            source flux in `filtername`
         """
         return self.filternames.index(filtername)
 
@@ -240,7 +296,7 @@ class Source(object):
     @property
     def damplitude_dsersic(self):
         """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.sersic and self.rh)
+        table (dependent on self.sersic and self.rhalf)
         """
         # ngauss array of da/dsersic
         return np.zeros(self.ngauss)
@@ -248,7 +304,7 @@ class Source(object):
     @property
     def damplitude_drh(self):
         """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.sersic and self.rh)
+        table (dependent on self.sersic and self.rhalf)
         """
         # ngauss array of da/drh
         return np.zeros(self.ngauss)
@@ -289,14 +345,24 @@ class Source(object):
             return this_exposure
 
     def render(self, stamp, compute_deriv=True, **compute_keywords):
-        """Render a source on a PostageStamp.
+        """Render a source on a PostageStamp.  This uses slow methods.
 
-        :param stamp:
-            A PostageStamp object
+        Parameters
+        ----------
+        stamp : An instance of stamp.PostageStamp()
 
-        :param compute_deriv: (optional, default: True)
+        compute_deriv : bool (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
+
+        Returns
+        -------
+        image : ndarray of shape (stamp.npix)
+            The flux of this source in each pixel of the stamp
+
+        gradients : ndarray of shape (nderiv, stamp.npix).  Optional.
+            The gradients of the source flux in each pixel with respect to
+            source parameters
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
         im, grad = compute_gig(gig, stamp.xpix.reshape(-1), stamp.ypix.reshape(-1),
@@ -306,6 +372,41 @@ class Source(object):
             return im, grad[self.use_gradients]
         else:
             return im, None
+
+    def cat_dtype(self, extra_cols=[]):
+        cols = (self.ID_COL +
+                ["{}".format(b) for b in self.filternames] +
+                self.SHAPE_COLS)
+        cols += extra_cols
+        self._cat_dtype = np.dtype([(c, np.float) for c in cols])
+        return self._cat_dtype
+
+    def to_catalog_row(self, extra_cols=[]):
+        """Output source parameters as the row of a structured array
+        """
+        dtype = self.cat_dtype(extra_cols=extra_cols)
+        row = np.zeros(1, dtype)
+        for p in self.SHAPE_COLS + self.ID_COL:
+            row[0][p] = getattr(self, p)
+        for i, b in enumerate(self.filternames):
+            row[0]["{}".format(b)] = self.flux[i]
+        for c in extra_cols:
+            try:
+                row[0][c] = getattr(self, c)
+            except(KeyError, IndexError, AttributeError):
+                pass
+        return row
+
+    def from_catalog_row(self, row, extra_parameters=[], filternames=None):
+        """Set source parameters from the row of a sstructured array
+        """
+        [setattr(self, p, row[p]) for p in self.SHAPE_COLS]
+        [setattr(self, p, row[p]) for p in extra_parameters]
+        if filternames:
+            self.filternames = filternames
+            self.flux = np.zeros(self.nband)
+        for j, b in enumerate(self.filternames):
+            self.flux[j] = row["{}".format(b)]
 
 
 class Star(Source):
@@ -319,6 +420,7 @@ class Star(Source):
     radii = np.zeros(1)
 
     # PointSources only have two position parameters.
+    SHAPE_COLS = ["ra", "dec"]
     npos = 2
     nshape = 0
 
@@ -327,13 +429,14 @@ class Star(Source):
         that the order of parameters in the theta vector is [flux1,
         flux2...fluxN, ra, dec]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + 2` (if `filtername` is `None`) or 3.
+        Parameters
+        ----------
+        theta : sequence of length 3 or `nband + 2`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 3-element (fluxI,
-            ra, dec) where fluxI is the source flux through the filter given by
+        filtername : None or string (optional, default: None)
+            If supplied, the theta vector is assumed to be 3-element (flux_i,
+            ra, dec) where flux_i is the source flux through the filter given by
             `filtername`.  If `None` then the theta vector is assumed to be of
             length `Source().nband + 2`, where the first `nband` elements
             correspond to the fluxes.
@@ -353,7 +456,7 @@ class Star(Source):
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
         """
-        if filtername is not None:
+        if filtername:
             flux = [self.flux[self.filter_index(filtername)]]
         else:
             flux = self.flux
@@ -386,8 +489,9 @@ class SimpleGalaxy(Source):
 
     radii = np.ones(1)
 
-    # Galaxies have two position parameters, 2 or 4 shape parameters (pa and q)
+    # SimpleGalaxies have two position parameters, 2 shape parameters (pa and q)
     # and nband flux parameters
+    SHAPE_COLS = ["ra", "dec", "q", "pa"]
     npos = 2
     nshape = 2
 
@@ -396,12 +500,12 @@ class SimpleGalaxy(Source):
         Assumes that the order of parameters in the theta vector is [flux1,
         flux2...fluxN, ra, dec, q, pa]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + 4` (if `filtername` is `None`) or 5 (if a filter is
-            specified)
+        Parameters
+        ----------
+        theta : sequence of length `5` or `nband + 4`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
+        filtername : string, optional, (default: None)
             If supplied, the theta vector is assumed to be 5-element (fluxI,
             ra, dec, q, pa) where fluxI is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
@@ -450,8 +554,8 @@ class Galaxy(Source):
       * ra: right ascension (degrees)
       * dec: declination (degrees)
       * q, pa: axis ratio squared and position angle
-      * n: sersic index
-      * r: half-light radius (arcsec)
+      * sersic: sersic index
+      * rhalf: half-light radius (arcsec)
 
     Methods are provided to return the amplitudes and covariance matrices of
     the constituent gaussians, as well as derivatives of the amplitudes with
@@ -459,6 +563,9 @@ class Galaxy(Source):
 
     The amplitudes and the derivatives of the amplitudes with respect to the
     sersic index and half-light radius are based on splines.
+
+    Note that only instances of :py:class:`Galaxy` with `free_sersic = True`
+    can generate proposals for the GPU
     """
 
     radii = np.ones(1)
@@ -466,12 +573,16 @@ class Galaxy(Source):
     # Galaxies have 2 position parameters,
     #    2 or 4 shape parameters (pa and q),
     #    and nband flux parameters
+    SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
     npos = 2
     nshape = 4
 
-    def __init__(self, filters=['dummy'], radii=None, splinedata=None, 
-                 free_sersic=True):
-        self.filternames = filters
+    def __init__(self, filters=['band'], filternames=None, radii=None,
+                 splinedata=None, free_sersic=True):
+        if filternames:
+            self.filternames = filternames
+        else:
+            self.filternames = filters
         self.flux = np.zeros(len(self.filternames))
         if radii is not None:
             self.radii = radii
@@ -486,25 +597,27 @@ class Galaxy(Source):
         if not free_sersic:
             # Fix the sersic parameters n_sersic and r_h
             self.nshape = 2
+            self.SHAPE_COLS = ["ra", "dec", "q", "pa"]
 
+        # For generating proposals that can be sent to the GPU
         from .proposal import source_struct_dtype
         self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rh]
+        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
-            npos + nshape` (if a filter is specified)
+        Parameters
+        ----------
+        theta : Sequence of length `nband+npos+nshape` or `1+npos+nshape`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (fluxI,
-            ra, dec, q, pa) where fluxI is the source flux through the filter
+        filtername : string or None (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            ra, dec, q, pa) where flux_i is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
-            to be of length `Source().nband + 6`, where the first `nband`
+            to be of length `self.nband + 6`, where the first `nband`
             elements correspond to the fluxes.
         """
         if filtername is not None:
@@ -522,7 +635,7 @@ class Galaxy(Source):
         self.pa  = theta[nflux + 3]
         if self.nshape > 2:
             self.sersic = theta[nflux + 4]
-            self.rh = theta[nflux + 5]
+            self.rhalf = theta[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -533,12 +646,12 @@ class Galaxy(Source):
             flux = self.flux
         params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
         if self.nshape > 2:
-            params = np.concatenate([params, [self.sersic, self.rh]])
+            params = np.concatenate([params, [self.sersic, self.rhalf]])
         return params
 
     def initialize_splines(self, splinedata, spline_smoothing=None):
         """Initialize Bivariate Splines used to interpolate and get derivatives
-        for gaussian amplitudes as a function of sersic and rh
+        for gaussian amplitudes as a function of sersic and rhalf
         """
         with h5py.File(splinedata, "r") as data:
             n = data["nsersic"][:]
@@ -567,7 +680,7 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.squeeze(np.array([spline(self.sersic, self.rh) 
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf)
                                     for spline in self.splines]))
 
     @property
@@ -576,7 +689,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/dsersic
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dx=1)
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
                                     for spline in self.splines]))
 
     @property
@@ -585,7 +698,7 @@ class Galaxy(Source):
         table (dependent on self.n and self.r)
         """
         # ngauss array of da/drh
-        return np.squeeze(np.array([spline(self.sersic, self.rh, dy=1)
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
                                     for spline in self.splines]))
 
     def proposal(self):
@@ -597,7 +710,7 @@ class Galaxy(Source):
         self.proposal_struct["q"] = self.q
         self.proposal_struct["pa"] = self.pa
         self.proposal_struct["nsersic"] = self.sersic
-        self.proposal_struct["rh"] = self.rh
+        self.proposal_struct["rh"] = self.rhalf
         self.proposal_struct["mixture_amplitudes"][0, :self.ngauss] = self.amplitudes
         self.proposal_struct["damplitude_drh"][0, :self.ngauss] = self.damplitude_drh
         self.proposal_struct["damplitude_dnsersic"][0, :self.ngauss] = self.damplitude_dsersic
@@ -605,7 +718,7 @@ class Galaxy(Source):
         return self.proposal_struct
 
 
-class ConformalGalaxy(Galaxy):
+class ConformalShearGalaxy(Galaxy):
 
     """Parameters describing a source in the celestial plane, with the shape
     parameterized by the conformal shear vector instead of traditional axis
@@ -623,6 +736,9 @@ class ConformalGalaxy(Galaxy):
     """
 
     # Parameters
+    SHAPE_COLS = ["ra", "dec", "ep", "ec", "sersic", "rhalf"]
+    FLUX_COL = ["flux"]
+
     flux = 0.     # flux.  This will get rewritten on instantiation to have
                   #        a length that is the number of bands
     ra = 0.
@@ -630,24 +746,26 @@ class ConformalGalaxy(Galaxy):
     ep = 0.       # eta_+ (Bernstein & Jarvis) = \eta \cos(2\phi)
     ec = 0.       # eta_x (Bernstein & Jarvis) = \eta \sin(2\phi)
     sersic = 0.   # sersic index
-    rh = 0.       # half light radius
+    rhalf = 0.       # half light radius
 
     def set_params(self, theta, filtername=None):
         """Set the parameters (flux(es), ra, dec, ep, ec, n_sersic, r_h) from a
         theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rh]
+        is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rhalf]
 
-        :param theta:
+        Parameters
+        ----------
+        theta :
             The source parameter values that are to be set.  Sequence of length
             either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
             npos + nshape` (if a filter is specified)
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (fluxI,
-            ra, dec, ep, ec) where fluxI is the source flux through the filter
+        filtername : string or None (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            ra, dec, ep, ec) where flux_i is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
-            to be of length `Source().nband + 6`, where the first `nband`
-            elements correspond to the fluxes.
+            to be of length `self.nband + 6`, where the first `nband` elements
+            correspond to the fluxes.
         """
         if filtername is not None:
             nflux = 1
@@ -664,7 +782,7 @@ class ConformalGalaxy(Galaxy):
         self.ec  = theta[nflux + 3]
         if self.nshape > 2:
             self.sersic = theta[nflux + 4]
-            self.rh = theta[nflux + 5]
+            self.rhalf = theta[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -675,14 +793,19 @@ class ConformalGalaxy(Galaxy):
             flux = self.flux
         params = np.concatenate([flux, [self.ra, self.dec, self.ep, self.ec]])
         if self.nshape > 2:
-            params = np.concatenate([params, [self.sersic, self.rh]])
+            params = np.concatenate([params, [self.sersic, self.rhalf]])
         return params
 
     def etas_from_qphi(self, q, phi):
         """Get eta vector from native shape units
 
-        :param q: (b/a)^0.5
-        :param phi: position angle (radians)
+        Parameters
+        ----------
+        q : float
+            (b/a)^0.5
+
+        phi : float
+            position angle (radians)
         """
         eta = -np.log(q**2)
         eta_plus = eta * np.cos(phi * 2.)
@@ -704,7 +827,7 @@ class ConformalGalaxy(Galaxy):
 
     @property
     def pa(self):
-        """Position angle
+        """Position angle (radians)
         """
         return np.arctan2(self.ec, self.ep) / 2.
 
@@ -731,10 +854,11 @@ class ConformalGalaxy(Galaxy):
     def render(self, stamp, compute_deriv=True, **compute_keywords):
         """Render a source on a PostageStamp.
 
-        :param stamp:
-            A PostageStamp object
+        Parameters
+        ----------
+        stamp : An instance of stamp.PostageStamp
 
-        :param withgrad: (optional, default: True)
+        compute_deriv: bool (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
         """

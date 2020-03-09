@@ -62,10 +62,35 @@ class PostageStamp(object):
         self.ypix, self.xpix = np.meshgrid(np.arange(ny), np.arange(nx))
 
     def sky_to_pix(self, sky):
+        """Convert a sky coordinate to a pixel coordinate
+
+        Parameters
+        ----------
+        sky : ndarray of floats of shape(2,)
+            The celestial coordinates (ra, dec) to convert, degrees
+
+        Returns
+        -------
+        pix : ndarray of floats of shape (2,)
+            The pixel coordinates (x, y) of the supplied celestial coordinates
+        """
         pix = np.dot(self.dpix_dsky, sky - self.crval) + self.crpix
         return pix
 
     def pix_to_sky(self, pix):
+        """Convert a pixel coordinate to a sky coordinate
+
+        Parameters
+        ----------
+        pix: ndarray of floats of shape(2,)
+            The pixel coordinates (x, y) to convert, zero-indexed
+
+        Returns
+        -------
+        sky : ndarray of floats of shape (2,)
+            The celestial coordinates (ra, dec) of the supplied pixel
+            coordinates
+        """
         sky = np.dot(np.linalg.inv(self.dpix_dsky), pix - self.crpix)
         return sky + self.crval
 
@@ -86,14 +111,24 @@ class PostageStamp(object):
 
     def render(self, source, compute_deriv=True, **compute_keywords):
         """Render a source on this PostageStamp.  Thin wrapper on
-        Source.render()
+        Source.render(), uses very slow methods.
 
-        :param source:
-            A Source object
+        Parameters
+        ----------
+        source : A sources.Source instance
 
-        :param compute_deriv: (optional, default: True)
+        compute_deriv : bool (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
+
+        Returns
+        -------
+        image : ndarray of shape (self.npix,)
+            The source flux in all the pixels of the stamp
+
+        gradients : ndarray of shape (nderiv, self.npix).  Optional.
+            The gradients of the source flux in each pixel with respect to
+            source parameters
         """
         return source.render(self, compute_deriv=compute_deriv,
                              **compute_keywords)

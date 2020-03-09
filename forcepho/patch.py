@@ -356,7 +356,7 @@ class StaticPatch(Patch):
         pix_dtype=np.float32,  # data type for pixel and flux data
         meta_dtype=np.float32,   # data type for non-pixel data
         ):
-        '''
+        """
         Constructs a Patch from PostageStamps (exposures) and a MiniScene
         (a list of pre-identified peaks/sources).  The Patch packs the
         exposures and sources in a manner suitable for sending to the GPU.
@@ -368,13 +368,15 @@ class StaticPatch(Patch):
         return_residual: bool, optional
             Whether the residual image will be returned from the GPU.
             Default: False.
+
         pix_dtype: np.dtype, optional
             The Numpy datatype of the pixel data, like fluxes and coordinates.
             Default: np.float32
+
         meta_dtype: np.dtype, optional
             The Numpy datatype of the non-pixel data, like transformation matrices.
             Default: np.float32
-        '''
+        """
 
         self.pix_dtype = pix_dtype
         self.meta_dtype = meta_dtype
@@ -629,3 +631,33 @@ class StaticPatch(Patch):
 
         self.band_start[0] = 0
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
+
+
+def patch_to_stamps(patch):
+    pixdat = ["xpix", "ypix", "data", "ierr"]
+    stamps = [PostageStamp() for i in range(patch.band_N.sum())]
+    splits = [np.split(getattr(patch, arr), np.cumsum(patch.exposure_N)[:-1])
+              for arr in pixdat]
+
+    for e, stamp in enumerate(stamps):
+        stamp.xpix = splits[0][e]
+        stamp.ypix = splits[1][e]
+        stamp.pixel_values = splits[2][e]
+        stamp.ierr = splits[3][e]
+
+        # Add metadata from first source
+        stamp.crpix = patch.crpix[e]
+        stamp.crpix = patch.crval[e]
+
+    scene = patch.scene
+    for s, source in enumerate(scene.sources):
+        source.stamp_scales = patch.D[:, s, :, :]
+        source.stamp_cds = patch.CW[:, s, :, :]  # dpix/dra, dpix/ddec
+        source.stamp_crpixs = patch.crpix[:]
+        source.stamp_crvals = patch.crval[:]
+        source.stamp_zps = patch.G[:]
+
+        # need to do something about PSFs and about Band ids
+        #source.stamp_psfs = 
+
+    return stamps, scene

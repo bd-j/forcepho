@@ -24,8 +24,8 @@ class ImageGaussian(object):
     derivatives of this Gaussian wrt to the Scene model parameters.
 
     The gaussian is described by 6 parameters
-    * Amplitude A
-    * Inverse Covariance matrix [[Fxx, Fxy], [Fxy, Fyy]]
+    * Amplitude amp
+    * Inverse Covariance matrix [[fxx, fxy], [fxy, fyy]]
     * center xcen, ycen
 
     In the Scene space there are 7 parameters, so the dgauss_dscene matrix is 6
@@ -63,23 +63,29 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     """Takes a set of source parameters into a set of ImagePlaneGaussians,
     including PSF, and keeping track of the dGaussian_dScene.
 
-    :param galaxy:
-        A Galaxy() or Star() instance, with the proper parameters.
+    Parameters
+    ----------
+    galaxy : An instance of sources.Source (or subclass)
+        The source to convert to on-image gaussians.
 
-    :param stamp:
-        A PostageStamp() instance, with a valid PointSpreadFunction and
-        scale matrix.
+    stamp : a stamps.PostageStamp() instance
+        Must have a valid PointSpreadFunction and scale matrix.
 
-    :returns gig:
-       An instance of GaussianImageGalaxy, containing an array of
-       ImageGaussians.
+    compute_deriv : bool, optional (default, False)
+        Compute the Jacobian for the on-sky to on-image parameters for each
+        ImageGaussian in the returned GaussianImageGalaxy
+
+    Returns
+    -------
+    gig : An instance of GaussianImageGalaxy
+        Effectively an array of ImageGaussians.
     """
 
     # get info for this stamp
     if type(stamp) is int:
         D = source.stamp_scales[stamp]
         psf = source.stamp_psfs[stamp][0]
-        CW = source.stamp_cds[stamp] # dpix/dra, dpix/ddec
+        CW = source.stamp_cds[stamp]  # dpix/dra, dpix/ddec
         crpix = source.stamp_crpixs[stamp]
         crval = source.stamp_crvals[stamp]
         G = source.stamp_zps[stamp]
@@ -101,7 +107,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     S = scale_matrix(source.q)
     T = fast_dot_dot_2x2(D, R, S)
 
-    # get source component means, covariances, and amplitudes in the pixel space
+    # get source component means, covariances, and amplitudes in pixel space
     scovar = fast_matmul_matmul_2x2(T, source.covariances, T.T)
     samps = source.amplitudes
     sky = np.array([source.ra, source.dec])
@@ -153,7 +159,8 @@ def _convert_to_gaussians(source_ngauss, stamp_psf_ngauss, scovar, pcovar,
         # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
         for j in range(stamp_psf_ngauss):
             gauss = ImageGaussian()
-            # is this needed or just debugging?  need to add `id` field to jitclass if needed
+            # is this needed or just debugging?
+            # ifso need to add `id` field to jitclass
             #gauss.id = (source.id, stamp.id, i, j)  
             # Convolve the jth Source component with the ith PSF component
 
@@ -179,20 +186,21 @@ def get_gaussian_gradients(source, stamp, gig):
     """Compute the Jacobian for dphi_i/dtheta_j where phi are the parameters of
     the Image Gaussian and theta are the parameters of the Source in the Scene.
 
-    :param source:
-        A source like a Galaxy() or a Star()
+    Parameters
+    ----------
+    source : An instance of sources.Source (or subclass)
+        The source to convert to on-image gaussians.
 
-    :param stamp:
-        An instance of PostageStamp with scale matrix and valid
-        PointSpreadFunction.
+    stamp : a stamps.PostageStamp() instance
+        Must have a valid PointSpreadFunction and scale matrix.
 
-    :param gig:
-        The `GaussianImageGalaxy` instance that resulted from
-        `convert_to_gaussian(source, stamp)`.  This is necessary only because
-        the computed Jacobians will be assigned to the `deriv` attribute of
-        each `ImageGaussian` in the `GaussianImageGalaxy`.
+    gig : An instance of GaussianImageGalaxy
+        Effectively an array of ImageGaussians.  The computed Jacobians will be
+        assigned to the `deriv` attribute of each `ImageGaussian` in the `gig`
 
-    :returns gig:
+    Returns
+    -------
+    gig : An instance of GaussianImageGalaxy
         The same as the input `gig`, but with the computed Jacobians assigned
         to the `deriv` attribute of each of the consitituent `ImageGaussian`s
     """
@@ -255,7 +263,7 @@ def get_gaussian_gradients(source, stamp, gig):
     # Unpack the results array returned by `_get_gaussian_gradients`
     for i in range(source.ngauss):
         for j in range(psf.ngauss):
-            gig.gaussians[i*psf.ngauss + j].derivs = derivs[i, j]
+            gig.gaussians[i * psf.ngauss + j].derivs = derivs[i, j]
 
     return gig
 
@@ -264,8 +272,8 @@ def get_gaussian_gradients(source, stamp, gig):
 def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar,
                             samps, pamps, flux, G, T,
                             dT_dq, dT_dpa, da_dn, da_dr, CW):
-    """
-    Wrap the core parts of `get_gaussian_gradients` in form suitable for numba.
+    """Wrap the core parts of `get_gaussian_gradients` in form suitable for
+    numba.
     """
 
     derivs = np.empty((source_ngauss, stamp_psf_ngauss, 7, 6))
@@ -286,7 +294,7 @@ def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar,
             # Now get derivatives
             # Of F
             dSigma_dq = fast_dot_dot_2x2(T, scovar, dT_dq.T) + \
-                         fast_dot_dot_2x2(dT_dq,scovar, T.T)
+                         fast_dot_dot_2x2(dT_dq, scovar, T.T)
             dSigma_dpa = fast_dot_dot_2x2(T, scovar, dT_dpa.T) + \
                           fast_dot_dot_2x2(dT_dpa, scovar, T.T)
             dF_dq = -fast_dot_dot_2x2(F, dSigma_dq, F)  # 3
@@ -346,42 +354,46 @@ def _compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
     the gradients with respect to the 6 input terms.  Like `computeGaussian`
     and `computeGaussianDeriv` in the C++ code.
 
-    :param g:
-        An ImageGaussian() instance, or an object that has the attributes
-        `xcen`, `ycen`, `amp`, `fxx`, `fyy` and `fxy`.
+    Parameters
+    ----------
+    g : An instance of ImageGaussian()
+        or an object that has the attributes `xcen`, `ycen`, `amp`, `fxx`,
+        `fyy` and `fxy`.
 
-    :param xpix:
+    xpix : float or ndarray of shape (npix,)
         The x coordinate of the pixel(s) where counts and gradient are desired.
         Scalar or ndarray of shape npix.
 
-    :param ypix:
+    ypix : float or ndarray of shape (npix,)
         The y coordinate of the pixel(s) where counts and gradient are desired.
         Same shape as `xpix`.
 
-    :param second_order: (optional, default: True)
+    second_order: bool, optional (default: True)
         Whether to use the 2nd order correction to the integral of the gaussian
         within a pixel.
 
-    :param compute_deriv: (optional, default: True)
+    compute_deriv : bool (optional, default: True)
         Whether to compute the derivatives of the counts with respect to the
         gaussian parameters.
 
-    :param use_det: (otional, default: False)
+    use_det : bool (otional, default: False)
         Whether to include the determinant of the covariance matrix when
         normalizing the counts and calculating derivatives.
 
-    :param oversample: (optional, default: False)
+    oversample : bool (optional, default: False)
         If this flag is set, the counts (and derivatives) will be calculated on
         a grid oversampled by a factor of two in each dimension (assuming the
         input xpix and ypix are integers), and then summed at the end to
         produce a more precise measure of the counts in a pixel.
         Not actually working yet.
 
-    :returns counts:
+    Returns
+    -------
+    counts : float or ndarray of shape (npix,)
         The counts in each pixel due to this gaussian, same shape as `xpix` and
         `ypix`.
 
-    :returns grad:
+    grad : ndarray of shape (nderiv, npix)
         The gradient of the counts with respect to the 6 parameters of the
         gaussian in image coordinates, ndarray of shape (nderiv, npix)
     """
@@ -466,6 +478,32 @@ def _compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
 def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
     """A slow loop of compute_gaussian() over all ImageGaussians in a
     GaussianImageGalaxy.
+
+    Parameters
+    ----------
+    gig : An instance of GaussianImageGalaxy
+
+    xpix : float or ndarray of shape (npix,)
+        The x-coordinates of the pixels for fluxes are desired
+
+    ypix : float or ndarray of shape (npix,)
+        The y-coordinates of the pixels for fluxes are desired
+
+    compute_deriv : bool, optional (default: True)
+        Whether to compute flux gradients with respect to source parameters
+
+    Extra Parameters
+    ----------------
+    Extra parameters are passed as keyword arguments to `compute_gaussian`
+
+    Returns
+    -------
+    image : ndarray of shape (stamp.npix)
+        The flux of this source in each pixel of the stamp
+
+    gradients : ndarray of shape (nderiv, stamp.npix).  Optional.
+        The gradients of the source flux in each pixel with respect to
+        source parameters
     """
     # Set up output
     assert len(xpix) == len(ypix)
