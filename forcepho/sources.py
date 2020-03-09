@@ -18,7 +18,8 @@ from .gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
            "Star",
-           "SimpleGalaxy", "Galaxy", "ConformalGalaxy"]
+           "SimpleGalaxy", "Galaxy",
+           "ConformalShearGalaxy"]
 
 
 class Scene(object):
@@ -42,16 +43,20 @@ class Scene(object):
         vector.  Assumes that the order of parameters for each source is
         is [flux1, flux2...fluxN, pos1, pos2, shape1, shape2, ..., shapeN]
 
-        :param sid:
+        Parameters
+        ----------
+        sid : int
             Source ID
 
-        :param filtername: (optional, default: None)
+        filtername : string or None (optional, default: None)
             The name of the filter for which you want the corresponding flux
             parameter index.  If None (default) then indices for all fluxes are
             returned
 
-        :returns theta:
-            An array with elements [flux, (shape_params)]
+        Returns
+        -------
+        inds : ndarray of ints
+            Indices of the parameters for this source.
         """
         npar_per_source = [s.nparam for s in self.active_sources[:sid]]
         # get all the shape parameters
@@ -199,12 +204,13 @@ class Source(object):
 
     def __init__(self, filters=['band'], radii=None):
         """
-        :param filters:
-            A list of strings giving the filternames for which you want fluxes.
-            These names should correspond to values of the `filtername`
-            attribute of PostageStamps, since they will be used to choose the
-            appropriate element of the `flux` vector for generating model pixel
-            values.
+        Parameters
+        ----------
+        filters : list of strings
+            The filternames for which you want fluxes. These names should
+            correspond to values of the `filtername` attribute of PostageStamps,
+            since they will be used to choose the appropriate element of the
+            `flux` vector for generating model pixel values.
 
             The length of the supplied `filters` list will determine the length
             of the `flux` vector, accessible via the `nband` attribute.
@@ -261,13 +267,17 @@ class Source(object):
         """Returns the index of the element of the `flux` array that
         corresponds to the supplied `filtername`.
 
-        :param filtername:
-            String giving the name of the filter for which you want the
-            corresponding `flux` vector index.
+        Parameters
+        ----------
+        filtername : string
+            The name of the filter for which you want the corresponding `flux`
+            vector index.
 
-        :returns index:
-            An integer index that when used to subscript the `flux` attribute
-            gives the source flux in `filtername`
+        Returns
+        -------
+        index : int
+            An index that when used to subscript the `flux` attribute gives the
+            source flux in `filtername`
         """
         return self.filternames.index(filtername)
 
@@ -335,14 +345,24 @@ class Source(object):
             return this_exposure
 
     def render(self, stamp, compute_deriv=True, **compute_keywords):
-        """Render a source on a PostageStamp.
+        """Render a source on a PostageStamp.  This uses slow methods.
 
-        :param stamp:
-            A PostageStamp object
+        Parameters
+        ----------
+        stamp : An instance of stamp.PostageStamp()
 
-        :param compute_deriv: (optional, default: True)
+        compute_deriv : bool (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
+
+        Returns
+        -------
+        image : ndarray of shape (stamp.npix)
+            The flux of this source in each pixel of the stamp
+
+        gradients : ndarray of shape (nderiv, stamp.npix).  Optional.
+            The gradients of the source flux in each pixel with respect to
+            source parameters
         """
         gig = convert_to_gaussians(self, stamp, compute_deriv=compute_deriv)
         im, grad = compute_gig(gig, stamp.xpix.reshape(-1), stamp.ypix.reshape(-1),
@@ -389,7 +409,6 @@ class Source(object):
             self.flux[j] = row["{}".format(b)]
 
 
-
 class Star(Source):
     """This is a represenation of a point source in terms of Scene (on-sky)
     parameters.  Only 3 of the 7 full Source parameters are relevant:
@@ -410,13 +429,14 @@ class Star(Source):
         that the order of parameters in the theta vector is [flux1,
         flux2...fluxN, ra, dec]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + 2` (if `filtername` is `None`) or 3.
+        Parameters
+        ----------
+        theta : sequence of length 3 or `nband + 2`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 3-element (fluxI,
-            ra, dec) where fluxI is the source flux through the filter given by
+        filtername : None or string (optional, default: None)
+            If supplied, the theta vector is assumed to be 3-element (flux_i,
+            ra, dec) where flux_i is the source flux through the filter given by
             `filtername`.  If `None` then the theta vector is assumed to be of
             length `Source().nband + 2`, where the first `nband` elements
             correspond to the fluxes.
@@ -588,16 +608,16 @@ class Galaxy(Source):
         theta array.  Assumes that the order of parameters in the theta vector
         is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rh]
 
-        :param theta:
-            The source parameter values that are to be set.  Sequence of length
-            either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
-            npos + nshape` (if a filter is specified)
+        Parameters
+        ----------
+        theta : Sequence of length `nband+npos+nshape` or `1+npos+nshape`
+            The source parameter values that are to be set.
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (fluxI,
-            ra, dec, q, pa) where fluxI is the source flux through the filter
+        filtername : string or None (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            ra, dec, q, pa) where flux_i is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
-            to be of length `Source().nband + 6`, where the first `nband`
+            to be of length `self.nband + 6`, where the first `nband`
             elements correspond to the fluxes.
         """
         if filtername is not None:
@@ -733,17 +753,19 @@ class ConformalShearGalaxy(Galaxy):
         theta array.  Assumes that the order of parameters in the theta vector
         is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rh]
 
-        :param theta:
+        Parameters
+        ----------
+        theta :
             The source parameter values that are to be set.  Sequence of length
             either `nband + npos + nshape` (if `filtername` is `None`) or `1 +
             npos + nshape` (if a filter is specified)
 
-        :param filtername: (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (fluxI,
-            ra, dec, ep, ec) where fluxI is the source flux through the filter
+        filtername : string or None (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            ra, dec, ep, ec) where flux_i is the source flux through the filter
             given by `filtername`.  If `None` then the theta vector is assumed
-            to be of length `Source().nband + 6`, where the first `nband`
-            elements correspond to the fluxes.
+            to be of length `self.nband + 6`, where the first `nband` elements
+            correspond to the fluxes.
         """
         if filtername is not None:
             nflux = 1
@@ -777,8 +799,13 @@ class ConformalShearGalaxy(Galaxy):
     def etas_from_qphi(self, q, phi):
         """Get eta vector from native shape units
 
-        :param q: (b/a)^0.5
-        :param phi: position angle (radians)
+        Parameters
+        ----------
+        q : float
+            (b/a)^0.5
+
+        phi : float
+            position angle (radians)
         """
         eta = -np.log(q**2)
         eta_plus = eta * np.cos(phi * 2.)
@@ -800,7 +827,7 @@ class ConformalShearGalaxy(Galaxy):
 
     @property
     def pa(self):
-        """Position angle
+        """Position angle (radians)
         """
         return np.arctan2(self.ec, self.ep) / 2.
 
@@ -827,10 +854,11 @@ class ConformalShearGalaxy(Galaxy):
     def render(self, stamp, compute_deriv=True, **compute_keywords):
         """Render a source on a PostageStamp.
 
-        :param stamp:
-            A PostageStamp object
+        Parameters
+        ----------
+        stamp : An instance of stamp.PostageStamp
 
-        :param withgrad: (optional, default: True)
+        compute_deriv: bool (optional, default: True)
             If True, return the gradients of the image with respect to the
             relevant free parameters for the source.
         """

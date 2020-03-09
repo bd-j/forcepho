@@ -356,7 +356,7 @@ class StaticPatch(Patch):
         pix_dtype=np.float32,  # data type for pixel and flux data
         meta_dtype=np.float32,   # data type for non-pixel data
         ):
-        '''
+        """
         Constructs a Patch from PostageStamps (exposures) and a MiniScene
         (a list of pre-identified peaks/sources).  The Patch packs the
         exposures and sources in a manner suitable for sending to the GPU.
@@ -368,13 +368,15 @@ class StaticPatch(Patch):
         return_residual: bool, optional
             Whether the residual image will be returned from the GPU.
             Default: False.
+
         pix_dtype: np.dtype, optional
             The Numpy datatype of the pixel data, like fluxes and coordinates.
             Default: np.float32
+
         meta_dtype: np.dtype, optional
             The Numpy datatype of the non-pixel data, like transformation matrices.
             Default: np.float32
-        '''
+        """
 
         self.pix_dtype = pix_dtype
         self.meta_dtype = meta_dtype

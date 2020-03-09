@@ -316,7 +316,9 @@ class ConstrainedTransformedPosterior(CPUPosterior):
 
     def evaluate(self, z):
         """
-        :param z:
+        Parameters
+        ----------
+        z : ndarray of shape (self.ndim,)
             The untransformed (sampling) parameters which have a prior
             distribution attached.
 
@@ -360,17 +362,17 @@ class ConstrainedTransformedPosterior(CPUPosterior):
         and theta is adjusted as if the trajectory had bounced off the
         constraint.  This is only useful for bd-j/hmc backends.
 
-        :param theta:
-            The parameter vector
+        Parameters
+        ----------
+        theta : The parameter vector
 
-        :returns theta:
-            the new theta vector
+        Returns
+        -------
+        theta : The new theta vector
 
-        :returns sign:
-            a vector of multiplicative signs for the momenta
+        sign : A vector of multiplicative signs for the momenta
 
-        :returns flag:
-            A flag for if the values are still out of bounds.
+        flag : A flag for if the values are still out of bounds.
         """
         # initially no flips
         sign = np.ones_like(theta)
