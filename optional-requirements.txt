@@ -1,4 +1,5 @@
+astropy
+pycuda
 pymc3
 dynesty
 matplotlib
-astropy
