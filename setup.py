@@ -28,7 +28,7 @@ setup(
     description="Image Forward Modeling",
     long_description=open("README.md").read(),
     package_data={"": ["README.md", "LICENSE"],
-                  "forcepho/src": ["*.cu", "*.cc", "*.h", "*.hh"]},
+                  "forcepho": ["src/*.cu", "src/*.cc", "src/*.h", "src/*.hh"]},
     #scripts=glob.glob("scripts/*.py"),
     include_package_data=True,
     install_requires=["numpy"],
