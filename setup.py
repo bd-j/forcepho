@@ -13,7 +13,7 @@ except ImportError:
     from distutils.core import setup
     setup
 
-    
+
 setup(
     name="forcepho",
     url="https://github.com/bd-j/forcepho",
@@ -27,8 +27,9 @@ setup(
     license="LICENSE",
     description="Image Forward Modeling",
     long_description=open("README.md").read(),
-    package_data={"": ["README.md", "LICENSE"]},
-    scripts=glob.glob("scripts/*.py"),
+    package_data={"": ["README.md", "LICENSE"],
+                  "forcepho/src": ["*.cu", "*.cc", "*.h", "*.hh"]},
+    #scripts=glob.glob("scripts/*.py"),
     include_package_data=True,
     install_requires=["numpy"],
 )

@@ -9,6 +9,8 @@ in patch.cu.
 
 import numpy as np
 
+from .. import source_dir
+
 try:
     import pycuda
     import pycuda.driver as cuda
@@ -329,7 +331,7 @@ class Patch:
                         );
             }}
             """.format(sz=self.patch_struct_dtype.itemsize, nsource=self.n_sources),
-            include_dirs=[thisdir],
+            include_dirs=[source_dir, thisdir],
             cache_dir=cache_dir)
 
         print(self.psfgauss[100])

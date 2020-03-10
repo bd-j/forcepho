@@ -14,6 +14,7 @@ import os.path
 
 import numpy as np
 
+from . import source_dir
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 
 try:
@@ -62,7 +63,7 @@ class Proposer:
             options += ['-maxrregcount={}'.format(max_registers)]
 
         mod = SourceModule(kernel_source, cache_dir=False,
-                           include_dirs=[thisdir],
+                           include_dirs=[source_dir, thisdir],
                            options=options, no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
