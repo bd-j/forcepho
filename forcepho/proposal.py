@@ -45,7 +45,7 @@ class Proposer:
 
         thisdir = os.path.abspath(os.path.dirname(__file__))
 
-        with open(os.path.join(thisdir, kernel_fn), 'r') as fp:
+        with open(os.path.join(source_dir, kernel_fn), 'r') as fp:
             kernel_source = fp.read()
 
         options = ['-std=c++11']
