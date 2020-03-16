@@ -418,3 +418,137 @@ class MPIQueue:
         """
         for child in list(range(self.n_children + 1))[1:]:
             self.comm.send(None, dest=child, tag=0)
+
+
+if __name__ == "__main__":
+    # Demo usage of the queue
+    import time
+    from argparse import Namespace
+
+    def do_work(region, active, fixed, mm):
+        """Pretend to do work, but sleep for 1 second
+
+        Returns
+        -------
+        result : Namespace() instance
+            A simple namespace object with niter=75
+        """
+        time.sleep(1)
+        result = Namespace()
+        result.niter = 75
+        result.active = active
+        result.fixed = fixed
+        return result
+
+    # MPI communicator
+    comm = MPI.COMM_WORLD
+    child = comm.Get_rank()
+    parent = 0
+    status = MPI.Status()
+
+    n_child = comm.Get_size() - 1
+
+    if (not child):
+        tstart = time.time()
+        patchcat = {}
+
+        # Make Queue
+        queue = MPIQueue(comm, n_child)
+
+        # Do it in context so failure still writes current superscene
+        with SuperScene(initial_catalog) as sceneDB:
+            patchid = 0
+            # EVENT LOOP
+            while True:
+                # Generate patch proposals and send to idle children
+                work_to_do = ((len(queue.idle) > 0)
+                               & sceneDB.sparse
+                               & sceneDB.undone
+                              )
+                print(work_to_do)
+
+                while work_to_do:
+                    # keep asking for patches until a valid one is found
+                    ntry, active = 0, None
+                    while active is None:
+                        region, active, fixed = sceneDB.checkout_region()
+                        mass = None  # TODO: this should be returned by the superscene
+                        ntry += 1
+
+                    # construct the task
+                    patchid += 1
+                    chore = (region, (active, fixed, mass))
+                    patchcat[patchid] = {"ra": region.ra,
+                                         "dec": region.dec,
+                                         "radius": region.radius,
+                                         "sources": active["source_index"].tolist()}
+                    # submit the task
+                    assigned_to = queue.submit(chore, tag=patchid)
+
+                    # TODO: Log the submission
+                    msg = "Sent patch {} with {} active sources and ra {} to child {}"
+                    #log.info(_VERBOSE, msg.format(patchid, region.ra, assigned_to))
+                    print(msg.format(patchid, len(active), region.ra, assigned_to))
+                    # Check if we can submit to more children
+                    work_to_do = ((len(queue.idle) > 0)
+                                  & sceneDB.sparse
+                                  & sceneDB.undone
+                                  )
+
+                # collect from a single child and set it idle
+                c, result = queue.collect_one()
+                # TODO: Log the collection
+                # Check results back in
+                sceneDB.checkin_region(result.active, result.fixed,
+                                       result.niter, mass_matrix=None)
+
+                # End criterion
+                end = len(queue.idle) == queue.n_children
+                if end:
+                    ttotal = time.time() - tstart
+                    print("finished in {}s".format(ttotal))
+                    break
+
+        import json
+        with open("patchlog.dat", "w") as f:
+            json.dump(patchcat, f)
+        queue.closeout()
+
+    elif child:
+        # Event Loop
+        status = MPI.Status()
+        while True:
+            # probe: do we need to do this?
+
+            # wait or receive
+            # TODO: irecv ?
+            task = comm.recv(source=parent, tag=MPI.ANY_TAG,
+                             status=status)
+            # if shutdown break and quit
+            if task is None:
+                break
+
+            region, cats = task
+            active, fixed, mm = cats
+            patchid = status.tag
+
+            msg = "Child {} received {} with tag {}"
+            #log.log(_VERBOSE, msg.format(child, region.ra, status.tag))
+            print(msg.format(child, region.ra, patchid))
+
+            # pretend we did something
+            result = do_work(region, active, fixed, mm)
+            print(result.active["n_iter"].min(),
+                  result.active["n_iter"].max())
+            # develop the payload
+            payload = result
+
+            # send to parent, free GPU memory
+            # TODO: isend?
+            comm.ssend(payload, parent, status.tag)            
+            #patcher.free()
+
+            msg = "Child {} sent {} for patch {}"
+            #log.log(_VERBOSE, msg.format(child, region.ra, status.tag))
+            print(msg.format(child, region.ra, patchid))
+
