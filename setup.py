@@ -13,22 +13,23 @@ except ImportError:
     from distutils.core import setup
     setup
 
-    
+
 setup(
     name="forcepho",
     url="https://github.com/bd-j/forcepho",
-    version="0.2",
+    version="0.3",
     author="Ben Johnson",
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",
-              "forcepho.boneyard",
+              "forcepho.patches",
               "forcepho.mixtures"],
 
     license="LICENSE",
     description="Image Forward Modeling",
     long_description=open("README.md").read(),
-    package_data={"": ["README.md", "LICENSE"]},
-    scripts=glob.glob("scripts/*.py"),
+    package_data={"": ["README.md", "LICENSE"],
+                  "forcepho": ["src/*.cu", "src/*.cc", "src/*.h", "src/*.hh"]},
+    #scripts=glob.glob("scripts/*.py"),
     include_package_data=True,
     install_requires=["numpy"],
 )

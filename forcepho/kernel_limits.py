@@ -11,11 +11,12 @@ file to extract the necessary info.
 
 import re
 import os.path
+from . import source_dir
 
 fn = 'kernel_limits.h'
 
 # TODO: Make this package resources or another way to avoid using __file__?
-with open(os.path.join(os.path.dirname(__file__), fn), 'r') as fp:
+with open(os.path.join(source_dir, fn), 'r') as fp:
     lines = fp.readlines()
 
 regexp = re.compile(r'^\s*#define\s+(?P<name>\w+)\s+(?P<value>.+)')
