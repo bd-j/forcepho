@@ -159,11 +159,12 @@ class Posterior:
 
 class GPUPosterior(Posterior):
 
+    """A Posterior subclass that uses a GPU to evaluate the likelihood
+    and its gradients.
+    """
+
     def __init__(self, proposer, scene, name="",
                  print_interval=1000, verbose=False, debug=False):
-        """A Posterior subclass that uses a GPU to evaluate the likelihood
-        and its gradients.
-        """
         self.proposer = proposer
         self.scene = scene
         self.ncall = 0
@@ -186,7 +187,6 @@ class GPUPosterior(Posterior):
         z : ndarray of shape (ndim,)
             The parameter vector.  This will be fed to the scene object to set
             scene parameters and generate a GPU proposal.
-
         """
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
@@ -429,11 +429,14 @@ class LogLikeWithGrad(Op):
 
 # --- TRANSFORMS ---
 
+
 def sigmoid(x):
     return 1. / (1. + np.exp(-x))
 
+
 def logit(y):
     return -np.log(1./y - 1.)
+
 
 def sigmoid_grad(z):
     return sigmoid(z) * (1 - sigmoid(z))

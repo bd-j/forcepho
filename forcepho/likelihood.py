@@ -74,6 +74,8 @@ def lnlike_multi(Theta, scene, plans, grad=True, source_meta=False):
 
 
 def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
+    """This wrapper that just returns the negative of lnlike_multi
+    """
     lnp, lnp_grad = lnlike_multi(Theta, scene=scene, plans=plans)
     if grad:
         return -lnp, -lnp_grad
@@ -84,6 +86,14 @@ def negative_lnlike_multi(Theta, scene=None, plans=None, grad=True):
 def make_image(scene, stamp, Theta=None, use_sources=slice(None),
                compute_kwargs={}, stamp_index=None):
     """This only works with WorkPlan object, not FastWorkPlan
+
+    Returns
+    -------
+    im : ndarray of shape (stamp.nx, stamp.ny)
+        The model image
+
+    grad : ndarray of shape (nparams, stamp.npix)
+        The model image gradients
     """
     if Theta is not None:
         scene.set_all_source_params(Theta)
@@ -180,19 +190,20 @@ class WorkPlan(object):
     def __init__(self, stamp, active=[], fixed=[]):
         """Constructor.
 
-        :param stamp:
-            A `data.PostageStamp` object.
+        Parameters
+        ----------
+        stamp : A `data.PostageStamp` object.
+            The stamp with pixel and meta data
 
-        :param active: (optional):
-            A list of `gaussmodel.GaussianImageGalaxies` for sources whose
-            likelihood gradients contribute the total likelihood gradient
-            (i.e. active sources)
+        active :  A list of `gaussmodel.GaussianImageGalaxies` (optional)
+            Sources whose likelihood gradients contribute the total likelihood
+            gradient (i.e. active sources)
 
-        :param fixed: (optional)
-            A list of `gaussmodel.GaussianImageGalaxies` for sources that might
-            contribute to the stamp but are assumed not to contribute to the
-            total likelihood gradient (either because they are truly fixed or
-            because only the far wings are contributing to the stamp).
+        fixed : A list of `gaussmodel.GaussianImageGalaxies` (optional)
+            Sources that might contribute to the stamp but are assumed not to
+            contribute to the total likelihood gradient (either because they are
+            truly fixed or because only the far wings are contributing to the
+            stamp).
         """
         self.stamp = stamp
         self.active = active
@@ -201,7 +212,7 @@ class WorkPlan(object):
         self.pixel_values = self.stamp.pixel_values.flatten()
 
     def reset(self):
-        """Reinitializ the `residual` and `gradient` arrays to zeros.
+        """Reinitialize the `residual` and `gradient` arrays to zeros.
         """
         self.residual = np.zeros([self.nactive + self.nfixed, self.stamp.npix])
         self.gradients = np.zeros([self.nactive, self.nparam, self.stamp.npix])

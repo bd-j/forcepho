@@ -27,8 +27,10 @@ class Scene(object):
     array of parameters and the parameters of each source in each band/image
     """
 
-    def __init__(self, sources=[]):
+    def __init__(self, sources=[], catalog=None, **catkwargs):
         self.sources = sources
+        if catalog is not None:
+            self.from_catalog(catalog, **catkwargs)
         self.identify_sources()
 
     def __repr__(self):
@@ -71,6 +73,11 @@ class Scene(object):
     def set_all_source_params(self, Theta):
         """Loop over active sources in the scene, setting the parameters in
         each source based on the relevant subset of Theta parameters.
+
+        Parameters
+        ----------
+        Theta : list or ndarray
+            List of all active source parameters
         """
         start = 0
         for source in self.active_sources:
@@ -80,6 +87,11 @@ class Scene(object):
 
     def get_all_source_params(self, active=True):
         """Get the scene parameter vector for active sources
+
+        Returns
+        -------
+        Theta : ndarray of shape (n_source*n_param_per_source)
+            The source parameters for all (active) sources.
         """
         if active:
             plist = [s.get_param_vector() for s in self.sources if not s.fixed]
@@ -98,10 +110,14 @@ class Scene(object):
 
     @property
     def active_sources(self):
+        """A list of the active source objects
+        """
         return [s for s in self.sources if not s.fixed]
 
     @property
     def fixed_sources(self):
+        """A list of the fixed source objects
+        """
         return [s for s in self.sources if s.fixed]
 
     @property

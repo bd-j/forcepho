@@ -108,7 +108,7 @@ def make_psf(answer, **kwargs):
     psf = PointSpreadFunction()
     x, y, vx, vy, vxy, amps = params_to_gauss(answer, **kwargs)
     # Build the covariance matrices
-    cov = [np.array([[xv, xyv], [xyv, yv]]) 
+    cov = [np.array([[xv, xyv], [xyv, yv]])
            for xv, yv, xyv in zip(vx, vy, vxy)]
     psf.ngauss = len(x)
     psf.means = np.array([x, y]).T

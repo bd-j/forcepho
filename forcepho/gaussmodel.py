@@ -14,8 +14,8 @@ __all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
            "compute_gaussian"]
 
-image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'], 
-                                     [numba.float64,]*6)) + [('derivs',numba.float64[:,:])]
+image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'],
+                                     [numba.float64, ]*6)) + [('derivs', numba.float64[:, :])]
 
 
 @numba.jitclass(image_gaussian_numba_spec)
@@ -161,7 +161,7 @@ def _convert_to_gaussians(source_ngauss, stamp_psf_ngauss, scovar, pcovar,
             gauss = ImageGaussian()
             # is this needed or just debugging?
             # ifso need to add `id` field to jitclass
-            #gauss.id = (source.id, stamp.id, i, j)  
+            #gauss.id = (source.id, stamp.id, i, j)
             # Convolve the jth Source component with the ith PSF component
 
             # Covariance matrix
@@ -293,10 +293,10 @@ def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar,
 
             # Now get derivatives
             # Of F
-            dSigma_dq = fast_dot_dot_2x2(T, scovar, dT_dq.T) + \
-                         fast_dot_dot_2x2(dT_dq, scovar, T.T)
-            dSigma_dpa = fast_dot_dot_2x2(T, scovar, dT_dpa.T) + \
-                          fast_dot_dot_2x2(dT_dpa, scovar, T.T)
+            dSigma_dq = (fast_dot_dot_2x2(T, scovar, dT_dq.T) +
+                         fast_dot_dot_2x2(dT_dq, scovar, T.T))
+            dSigma_dpa = (fast_dot_dot_2x2(T, scovar, dT_dpa.T) +
+                          fast_dot_dot_2x2(dT_dpa, scovar, T.T))
             dF_dq = -fast_dot_dot_2x2(F, dSigma_dq, F)  # 3
             dF_dpa = -fast_dot_dot_2x2(F, dSigma_dpa, F)  # 3
             ddetF_dq = detF * fast_trace_2x2(np.dot(Sigma, dF_dq))
@@ -552,6 +552,7 @@ def scale_matrix_deriv(q):
     """
     return np.array([[-1./q**2, 0], [0., 1]])
 
+
 @numba.njit
 def rotation_matrix_deriv(theta):
     """theta: position angle in radians
@@ -627,11 +628,11 @@ def fast_dot_dot_2x2(a, b, c):
 def fast_matmul_matmul_2x2(A, B, C, res):
     """Fast matmul(A, matmul(B,C)) for 2x2 matrices. Obeys np.matmul
     broadcasting semantics as long as the last two dimensions are shape (2,2).
-    
+
     This is implemented as a generalized ufunc on fast_dot_dot_2x2, which
     automatically provides the broadcasting.  It does mean that we have to
     specify the type signatures manually, though.
-    
+
     >>> A,B = np.random.rand(2,2,2)
     >>> C = np.random.rand(9,2,2)
     >>> np.allclose(fast_matmul_matmul_2x2(A,B,C), np.matmul(A, np.matmul(B,C)))
@@ -641,4 +642,4 @@ def fast_matmul_matmul_2x2(A, B, C, res):
     >>> np.allclose(fast_matmul_matmul_2x2(C,B,A), np.matmul(C, np.matmul(B,A)))
     True
     """
-    res[:] = fast_dot_dot_2x2(A,B,C)
+    res[:] = fast_dot_dot_2x2(A, B, C)

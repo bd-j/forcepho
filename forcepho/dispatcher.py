@@ -111,6 +111,22 @@ class SuperScene:
     def sky_to_scene(self, ra, dec):
         """Generate scene coordinates, which are anglular offsets (lat, lon)
         from the median ra, dec in units of arcsec.
+
+        Parameters
+        ----------
+        ra : float or ndarray
+            The right ascension (degrees)
+
+        dec : float or ndarray
+            The declination (degrees)
+
+        Returns
+        -------
+        lat : float or ndarray
+            The scene latitude coordinate of the input coordinates.  Arcsec.
+
+        lon : float or ndarray
+            The scene longitude coordinate of the input coordinates.  Arcsec.
         """
         c = SkyCoord(ra, dec, unit="deg")
         xy = c.transform_to(self.scene_frame)
@@ -121,6 +137,11 @@ class SuperScene:
         """Generate and cache (or return cached version) of the scene frame,
         which is a lat-lon coordinate frame centered on the median RA and Dec
         of the sources.
+
+        Returns
+        -------
+        frame : an astropy.corrdinates.Frame() instance
+            The coordinate frame centered on the middle of the superscene.
         """
         try:
             return self._scene_frame
@@ -159,6 +180,11 @@ class SuperScene:
         to that region.  Active sources are marked as such in the `sourcecat`
         and both active and fixed sources are marked as invalid for further
         patches.  The count of active and fixed sources is updated.
+
+        Parameters
+        ----------
+        seed_index : int (optional)
+            If provided, use this (zero-indexed) source to seed the region.
 
         Returns
         -------
@@ -320,7 +346,6 @@ class SuperScene:
         return w / w.sum()
 
     def sigmoid_weight(self):
-
         # just one for inactive, zero if active
         w = (~self.sourcecat["is_active"]).astype(np.float)
 
@@ -357,15 +382,17 @@ class MPIQueue:
     ----------
     comm : An MPI communicator
 
-    n_children : The number of child processes
+    n_children : int
+        The number of child processes
 
     Attributes
     ----------
-    busy : A list of 2-tuples, each giving the child id and the request object
-        for the submitted task
+    busy : A list of 2-tuples
+        Each tuple gives the child id and the request object for the submitted
+        task
 
-    idle : A list of integers giving the idle children. This is initialized
-        to be all children.
+    idle : list of ints
+        The idle children. This is initialized to be all children.
     """
 
     def __init__(self, comm, n_children):
@@ -387,7 +414,8 @@ class MPIQueue:
             A 2-tuple of the child number and the MPI request object that was
             generated during the initial submission to that child.
 
-        result : The result generated and passed by the child.
+        result : object
+            The result generated and passed by the child.
         """
         status = MPI.Status()
         while True:
@@ -461,9 +489,9 @@ if __name__ == "__main__":
             # EVENT LOOP
             while True:
                 # Generate patch proposals and send to idle children
-                work_to_do = ((len(queue.idle) > 0)
-                               & sceneDB.sparse
-                               & sceneDB.undone
+                work_to_do = ((len(queue.idle) > 0) &
+                              sceneDB.sparse &
+                              sceneDB.undone
                               )
                 print(work_to_do)
 
@@ -490,9 +518,9 @@ if __name__ == "__main__":
                     #log.info(_VERBOSE, msg.format(patchid, region.ra, assigned_to))
                     print(msg.format(patchid, len(active), region.ra, assigned_to))
                     # Check if we can submit to more children
-                    work_to_do = ((len(queue.idle) > 0)
-                                  & sceneDB.sparse
-                                  & sceneDB.undone
+                    work_to_do = ((len(queue.idle) > 0) &
+                                  sceneDB.sparse &
+                                  sceneDB.undone
                                   )
 
                 # collect from a single child and set it idle
@@ -545,10 +573,9 @@ if __name__ == "__main__":
 
             # send to parent, free GPU memory
             # TODO: isend?
-            comm.ssend(payload, parent, status.tag)            
+            comm.ssend(payload, parent, status.tag)  
             #patcher.free()
 
             msg = "Child {} sent {} for patch {}"
             #log.log(_VERBOSE, msg.format(child, region.ra, status.tag))
             print(msg.format(child, region.ra, patchid))
-

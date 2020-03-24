@@ -24,11 +24,15 @@ class Region:
 
         Parameters
         ----------
-        x : ndarray of shape (Npixel, ...)
+        x : ndarray of shape (n_pixel, ...)
             x coordinates of the (super-)pixel
-        y : ndarray of shape (npixel, ...)
+        y : ndarray of shape (n_pixel, ...)
             y coordinates of the (super-)pixel
         wcs : astropy.wcs.WCS()
+
+        Returns
+        -------
+        is_in : ndarray of bool of shape (n_pixel)
         """
         return np.zeros(len(x), dtype=bool)
 
