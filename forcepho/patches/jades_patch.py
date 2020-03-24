@@ -26,9 +26,8 @@ class JadesPatch(Patch):
     Parameters
     ----------
 
-    Important Attributes
+    Attributes
     ----------
-
     bandlist : list of str
 
     scene : forcepho.Scene()
@@ -387,7 +386,7 @@ class JadesPatch(Patch):
 
         Returns
         ------------
-        data : ndrarry of shape (npix,) 
+        data : ndarray of shape (npix,)
             The fluxes of the valid pixels
 
         ierr : ndarray of dhape (npix,)
@@ -429,9 +428,9 @@ class JadesPatch(Patch):
         -------
         scene : An instance of sources.Scene
         """
-        scene = Scene()
-        scene.from_catalog(sourcecat, filternames=self.bandlist,
-                           source_type=Galaxy, splinedata=self.splinedata)
+        scene = Scene(catalog=sourcecat, filternames=self.bandlist,
+                      source_type=Galaxy, splinedata=self.splinedata)
+        #scene.from_catalog(sourcecat,)
         return scene
 
     def zerocoords(self, scene, sky_zero=None):
@@ -441,7 +440,7 @@ class JadesPatch(Patch):
 
         Parameters
         ----------
-        scene:
+        scene : `sources.Scene()` instance
             A Scene object, where each source has the attributes `ra`, `dec`,
 
         sky_zero: optional, 2-tuple of float64

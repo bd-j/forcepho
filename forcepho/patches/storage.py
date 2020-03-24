@@ -32,7 +32,7 @@ class PixelStore:
 
     `bandID/expID/data`
 
-    where `data` is an array of shape (nsuper, nsuper, 2*super_pixel_size**2) 
+    where `data` is an array of shape (nsuper, nsuper, 2*super_pixel_size**2)
     The first half of the trailing dimension is the pixel flux information,
     while the second half is the ierr information. Each dataset has attributes
     that describe the nominal flux calibration that was applied and some
@@ -49,6 +49,19 @@ class PixelStore:
 
     pix_dtype : numpy.dtype, optional (default: np.float32)
         The data type of the pixels.
+
+    Attributes
+    ----------
+    data : h5py.File() object
+        The h5py file handle used to access data on disk
+
+    xpix : ndarray of shape (nsuper, nsuper, super_pixel_size**2)
+        The (zero-indexed) x pixel coordinates of every pixel in an image, in
+        super-pixel order.
+
+    ypix : ndarray of shape (nsuper, nsuper, super_pixel_size**2)
+        The (zero-indexed) y pixel coordinates of every pixel in an image, in
+        super-pixel order.
     """
 
     def __init__(self, h5file, nside_full=2048, super_pixel_size=8,
@@ -180,14 +193,27 @@ class PixelStore:
                     pdat.attrs[f] = nameset[i]
 
     def superpixelize(self, im, ierr, pix_dtype=None):
-        """Take native image data and reshape into super-pixel order
+        """Take native image data and reshape into super-pixel order.
+
+        Parameters
+        ----------
+        im : ndarray of shape (nx, ny)
+            Image pixel values
+
+        ierr : ndarray of shape (nx, ny)
+            Image pixel inverse uncertainties
+
+        Returns
+        -------
+        superpixels : ndarray of shape (nsuper, nsuper, 2*super_pixel_size**2)
+            The image data and incverse uncdertainties in super-pixel order
         """
         super_pixel_size = self.super_pixel_size
         s2 = super_pixel_size**2
         nsuper = (np.array(im.shape) / super_pixel_size).astype(int)
         if not pix_dtype:
             pix_dtype = self.pix_dtype
-        superpixels = np.empty([nsuper[0], nsuper[1], 2 * super_pixel_size**2],
+        superpixels = np.empty([nsuper[0], nsuper[1], 2*super_pixel_size**2],
                                dtype=pix_dtype)
         # slow, could be done with a reshape...
         for ii in range(nsuper[0]):
@@ -222,8 +248,13 @@ class PixelStore:
 class MetaStore:
     """Storage for exposure meta data.
 
-         * headers - dictionary of FITS headers, keyed by band and then expID
-         * wcs - dictionary of wcs objects, keyed by band and expID
+    Attributes
+    ----------
+    headers : dict
+        Dictionary of FITS headers, keyed by band and then expID
+
+    wcs : dict
+        Dictionary of wcs objects, keyed by band and expID
     """
     def __init__(self, metastorefile=None):
         if not metastorefile:
