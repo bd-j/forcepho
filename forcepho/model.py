@@ -99,7 +99,8 @@ class Posterior:
         Parameters
         ----------
         z : ndarray of shape (ndim,)
-            The parameter position (in the sampling parameter space)
+            The parameter position (in the unconstrained sampling parameter
+            space)
 
         Returns
         -------
@@ -111,13 +112,68 @@ class Posterior:
             self.evaluate(z)
         return self._lnp_grad
 
+    def lnprior(self, q):
+        """The prior probability and its gradient with respect to the scene
+        parameters. By default this returns 0.0 for both, but this method can be
+        overridden.
+
+        Parameters
+        ----------
+        q : ndarray of shape (ndim,)
+            The array of parameters in the scene space
+
+        Returns
+        -------
+        lpr : float
+            The ln of the prior probability for the parameters `q`
+
+        lpr_grad : ndarray of shape (ndim,) or 0.0
+            The gradient of `lpr` with respect to the scene parameters `q`
+        """
+        return 0.0, 0.0
+
+    def make_transform(self, z):
+        """Transform the sampling parameters z in the unconstrained space to
+        the constrained scene parameters q using the `transform` attribute. This
+        also caches the jacobian of the transform, the determinant of that
+        jacobian, and the gradient of the determinant.
+
+        Parameters
+        ----------
+        z : ndarray of shape (ndim,)
+            The parameters in the (unconstrained) sampling space
+
+        Returns
+        -------
+        q : ndarray
+            The parameters in the scene space
+        """
+        if self.transform is not None:
+            self._jacobian = self.transform.jacobian(z)
+            self._lndetjac = self.transform.lndetjac(z)
+            self._lndetjac_grad = self.Transform.lndetjac_grad(z)
+            return self.transform.transform(z)
+        else:
+            self._jacobian = 1.
+            self._lndetjac = 0
+            self._lndetjac_grad = 0
+            return np.array(z)
+
     def nll(self, z):
-        """  A shortcut for the negative ln-likelihood, for use with
+        """A shortcut for the negative ln-likelihood, for use with
         minimization algorithms. Returns both the NLL and it's gradient
         """
         if np.any(z != self._z):
             self.evaluate(z)
         return -self._lnp, -self._lnp_grad
+
+    def lnprob_and_grad(self, z):
+        """Some samplers want a single functio to return lnp, dlnp.
+        This is that.
+        """
+        if np.any(z != self._z):
+            self.evaluate(z)
+        return self._lnp, self._lnp_grad
 
     def residuals(self, z):
         raise(NotImplementedError)
@@ -163,17 +219,27 @@ class GPUPosterior(Posterior):
     and its gradients.
     """
 
-    def __init__(self, proposer, scene, name="",
-                 print_interval=1000, verbose=False, debug=False):
+    def __init__(self, proposer, scene, lnprior=None, transform=None,
+                 name="", print_interval=1000, verbose=False, debug=False, logging=False):
+        # --- Assign ingredients ---
         self.proposer = proposer
         self.scene = scene
+        self.transform = transform
+        if lnprior is not None:
+            self.lnprior = lnprior
+
+        # --- initialize some things ---
         self.ncall = 0
         self._z = -99
-        self.verbose = verbose
+        self.mhalf = np.array(-0.5, dtype=np.float64)
+
+        # --- logging/debugging ---
         self.debug = debug
+        self.logging = logging
+        self.verbose = verbose
         self.print_interval = print_interval
         self.name = name
-        if self.debug:
+        if self.logging:
             self.pos_history = []
             self.lnp_history = []
             self.grad_history = []
@@ -185,29 +251,51 @@ class GPUPosterior(Posterior):
         Parameters
         ----------
         z : ndarray of shape (ndim,)
-            The parameter vector.  This will be fed to the scene object to set
-            scene parameters and generate a GPU proposal.
+            The parameter vector in the unconstrained space.  This will be
+            transformed to the constrained space and fed to the scene object to
+            set scene parameters and generate a GPU proposal.
         """
-        self.scene.set_all_source_params(z)
+
+        # --- Transform to scene parameters and get proposal vector & prior ---
+        q = self.make_transform(z)
+        self.scene.set_all_source_params(q)
         proposal = self.scene.get_proposal()
+        lpr, lpr_grad = self.lnprior(q)
         if self.debug:
             print(proposal["fluxes"])
 
-        # send to gpu and collect result
+        # --- send to gpu and collect result ---
         ret = self.proposer.evaluate_proposal(proposal)
         if len(ret) == 3:
             chi2, chi2_derivs, self._residuals = ret
         else:
             chi2, chi2_derivs = ret
 
-        mhalf = np.array(-0.5, dtype=np.float64)
-        # turn into log-like and accumulate grads correctly
+        # --- Turn into log-like and accumulate grads correctly ---
         # note type conversion before sum to avoid loss of significance
-        ll = mhalf * np.array(chi2.astype(np.float64).sum(), dtype=np.float64)
-        ll_grad = mhalf * self.stack_grad(chi2_derivs)
+        ll = self.mhalf * np.array(chi2.astype(np.float64).sum(), dtype=np.float64)
+        ll_grad = self.mhalf * self.stack_grad(chi2_derivs)
 
+        # --- Caching and computation of final lnp and lnp_grad ---
+        self.ncall += 1
+
+        # these are not actually required
+        if self.logging:
+            self._lnlike = ll
+            self._lnlike_grad = ll_grad
+            self._lnprior = lpr
+            self._lnprior_grad = lpr_grad
+
+        self._lnp = ll + lpr + self._lndetjac
+        self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
+        self._q = q
+        self._z = z
+
+        # --- Logging/Debugging ---
         if self.debug:
             print("chi2: {}".format(chi2))
+
+        if self.logging:
             self.pos_history.append(z)
             self.lnp_history.append(ll)
             self.grad_history.append(ll_grad)
@@ -215,14 +303,9 @@ class GPUPosterior(Posterior):
         if self.verbose:
             if np.mod(self.ncall, self.print_interval) == 0.:
                 print("-------\n {} @ {}".format(self.name, self.ncall))
-                print(z)
-                print(ll)
-                print(ll_grad)
-
-        self.ncall += 1
-        self._lnp = ll
-        self._lnp_grad = ll_grad
-        self._z = z
+                print("q:", q)
+                print("lnlike:", ll)
+                print("lnlike_grad:" ll_grad)
 
     def stack_grad(self, chi2_derivs):
         """The chi2_derivs is returned with shape NBAND, NACTIVE, NPARAMS.
@@ -244,6 +327,8 @@ class GPUPosterior(Posterior):
         return grads.reshape(-1)
 
     def residuals(self, z):
+        """Return residual images
+        """
         assert self.proposer.patch.return_residual
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()

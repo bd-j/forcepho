@@ -17,13 +17,13 @@ Requirements for images are:
 
 Optionally each image may also have an associated background image and pixel mask image.
 
-* The background image should be the same units as the science image, and will be subtracted from it during preprocessing.
-* The mask image can be an array of bitflags or a simple array of 0 (False, do not use this pixel) and 1 (True, use this pixel)
+* The background image should be the same units as the science image, and will be subtracted from it during preprocessing.  If not supplied then it is assumed that the images are already background subtracted.
+* The mask image can be an array of bitflags or a simple array of 0 (False, do not use this pixel) and 1 (True, use this pixel.)  If not supplied then the only pixels masked will be those with NaN or inf values for either the pixel data or the uncertainties.
 
 
 Units
 
-* Fluxes will be reported in image units (which should be 'per-pixel', not surface brightness)  Therefore, when fitting several images in a single FILTER it is highly desirable that all images be on the same flux scale.  If the `"ABMAG"` header keyword is present, pixel stores will automatically try to convert images to units of nJy/pixel.
+* Fluxes will be *reported* in image units (which should be 'per-pixel', not surface brightness)  Therefore, when fitting several images in a single FILTER it is highly desirable that all images be on the same flux scale.  If the `"ABMAG"` header keyword is present, pixel stores will automatically try to convert images to units of nJy/pixel.
 * the WCS should map pixel indices to RA,DEC pairs, in decimal degrees
 
 
