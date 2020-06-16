@@ -468,3 +468,22 @@ class JadesPatch(Patch):
         for source in scene.sources:
             source.ra -= zero[0]
             source.dec -= zero[1]
+
+    def split_pix(self, attr):
+        """Split the pixel data into separate arrays for each exposure
+
+        Parameters
+        ----------
+        attr : string
+            The Patch attribute to split into separate exposures.  One of
+            xpix | ypix | data | ierr
+
+        Returns
+        -------
+        pixdat : list of ndarray
+            List of N_exp ndarrays, each contianing the `attr` pixel
+            information for that exposure.  List order is the same as
+            `self.epaths`
+        """
+        arr = getattr(self, a)
+        return np.split(arr, np.cumsum(self.exposure_N)[:-1])
