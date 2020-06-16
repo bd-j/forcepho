@@ -485,5 +485,5 @@ class JadesPatch(Patch):
             information for that exposure.  List order is the same as
             `self.epaths`
         """
-        arr = getattr(self, a)
+        arr = getattr(self, attr)
         return np.split(arr, np.cumsum(self.exposure_N)[:-1])
