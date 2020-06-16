@@ -305,7 +305,7 @@ class GPUPosterior(Posterior):
                 print("-------\n {} @ {}".format(self.name, self.ncall))
                 print("q:", q)
                 print("lnlike:", ll)
-                print("lnlike_grad:" ll_grad)
+                print("lnlike_grad:", ll_grad)
 
     def stack_grad(self, chi2_derivs):
         """The chi2_derivs is returned with shape NBAND, NACTIVE, NPARAMS.

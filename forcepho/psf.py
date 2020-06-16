@@ -14,7 +14,13 @@ __all__ = ["PointSpreadFunction", "get_psf", "make_psf", "params_to_gauss"]
 
 class PointSpreadFunction(object):
 
-    """Gaussian Mixture approximation to a PSF.
+    """Gaussian Mixture approximation to a PSF. It has the following
+    attributes:
+
+    * ngauss - INT, number of Gaussians in the mixture
+    * covariances - [NGAUSS, 2, 2] (units: pixels**2)
+    * means - [NGAUSS, 2] (units: pixels)
+    * amplitudes [NGAUSS] (units: total flux, should sum to 1.0)
     """
 
     def __init__(self, parameters=None, units='pixels'):
@@ -39,9 +45,13 @@ class PointSpreadFunction(object):
         self.amplitudes = parameters["amp"]
 
     def as_tuplelist(self):
-        """Return the parameters of the gaussians in the PSF mixture as a list
-        of tuples.  Each element of the list is a tuple of (a, x, y, cxx, cyy,
-        cxy)
+        """The parameters of the gaussians in the PSF mixture as a list
+        of tuples.
+
+        Returns
+        -------
+        psf : list of tuples of length `ngauss`
+            Each element of the list is a tuple of (a, x, y, cxx, cyy, cxy)
         """
         params = []
         for i in range(self.ngauss):
