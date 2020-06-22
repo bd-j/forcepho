@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
+import sys, os
 import numpy as np
 
 import argparse
@@ -42,8 +42,16 @@ def get_model_cpu(region, active, patcher):
     patcher.scene.set_all_source_params(q)
     stamps = patch_to_stamps(patcher)
 
+    residuals = []
     for stamp in stamps:
         im, grad = make_image(patcher.scene, stamp)
+        residuals.append(stamp.pixel_values - im)
+
+    result = {"residual": residuals,
+              "reference_coordinates": patcher.patch_reference_coordinates.copy(),
+              "parameter_vector": q,
+              "proposal": prop}
+    return result
 
 
 def get_model_gpu(active, patcher):
@@ -100,8 +108,10 @@ if __name__ == "__main__":
         model = data - result["residual"][0]
         im[xpix, ypix, i] += model
 
+    # write out the sum
+    outfile = os.path.join("output", exp.replace("noisy", "forcemodel") + ".fits")
     image = im.sum(axis=-1).T
     with fits.HDUList(fits.PrimaryHDU(image)) as hdul:
         hdul[0].header.update(hdr[6:])
         hdul[0].header["NOISE"] = 0
-        hdul.writeto(exp.replace("noisy", "force") + ".fits", overwrite=True)
+        hdul.writeto(outfile, overwrite=True)

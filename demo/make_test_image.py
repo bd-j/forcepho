@@ -30,6 +30,8 @@ grid_points = dict(rhalf=np.arange(0.05, 0.3, 0.1),
 def make_catalog(grid_points, band="fclear", pixel_scale=0.03, noise=1.0):
     grid_keys = list(grid_points.keys())
     cols = np.unique(grid_keys + ["pa", "ra", "dec", "id", "x", "y"] + [band])
+    #from forcepho.sources import Galaxy
+    #assert np.all([c in cols for c in Galaxy.SHAPE_COLS])
     cat_dtype = np.dtype([(c, np.float64) for c in cols])
 
     grid = np.array(list(product(*[grid_points[k] for k in grid_keys])))
@@ -145,7 +147,7 @@ if __name__ == "__main__":
     fig, ax = pl.subplots()
     ax.imshow(im.array, origin="lower")
 
-    sys.exit()
+    #sys.exit()
 
     write_im("data/{}_truth.fits".format(args.name), truth.array, header, NOISE=0)
     write_im("data/{}_noisy.fits".format(args.name), noisy.array, header)

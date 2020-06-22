@@ -5,6 +5,7 @@ import numpy as np
 import time
 from astropy.io import fits
 
+from forcepho.sources import Galaxy
 
 class Logger:
 
@@ -23,10 +24,6 @@ class Logger:
         return log
 
 
-# name of GPU relevant parameters in the source catalog
-SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
-
-
 def sourcecat_dtype(source_type=np.float64, bands=[]):
     """Get a numpy.dtype object that describes the structured array
     that will hold the source parameters
@@ -36,7 +33,7 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
 
     dt = [(t, np.int32) for t in tags]
     dt += [(c, source_type)
-           for c in SHAPE_COLS]
+           for c in Galaxy.SHAPE_COLS]
     dt += [(c, source_type)
            for c in bands]
     return np.dtype(dt)
@@ -52,6 +49,7 @@ def rectify_catalog(sourcecatfile, rhrange=(0.051, 0.29), qrange=(0.2, 0.99),
     cat_dtype = sourcecat_dtype(bands=bands)
     sourcecat = np.zeros(n_sources, dtype=cat_dtype)
     sourcecat["source_index"][:] = np.arange(n_sources)
+    assert np.all([c in cat.dtype.names for c in Galaxy.SHAPE_COLS])
     for f in cat.dtype.names:
         if f in sourcecat.dtype.names:
             sourcecat[f][:] = cat[f][:]
