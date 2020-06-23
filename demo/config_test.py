@@ -45,6 +45,7 @@ config.nside_full = np.array([840, 840])         # number of pixels along one si
 # --- Patch Generation ---
 config.max_active_fraction = 0.1
 config.maxactive_per_patch = 15
+config.patch_maxradius = 8
 
 # -----------------------
 # --- HMC parameters ---

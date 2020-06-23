@@ -13,6 +13,7 @@ from littlemcmc import _sample_one_chain as sample_one
 from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
+from forcepho.dispatcher import SuperScene, MPIQueue
 
 from utils import Logger, rectify_catalog
 from config_test import config
@@ -87,7 +88,7 @@ def make_model(proposer, q, **model_kwargs):
     return model, q
 
 
-def sample(model, q, warmup=[10], z_cov=None):
+def sample(model, q, draws, warmup=[10], z_cov=None):
     """
     """
     start = model.transform.inverse_transform(q)
@@ -137,16 +138,28 @@ if __name__ == "__main__":
     iexp = 0
 
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
-    hdrs = [hdr for band in patcher.metastore.headers.keys()
-            for hdr in list(patcher.metastore.headers[band].values())[:1]]
-    region, actives = parse_image(hdrs[0], cat, n_gal=config.maxactive_per_patch)
-    patcher.build_patch(region, None, allbands=config.bandlist)
+    sceneDB = SuperScene(sourcecat=cat, bands=bands,
+                         maxactive_per_patch=config.maxactive_per_patch,
+                         maxradius=config.patch_maxradius)
 
-    data = patcher.split_pix("data")[iexp]
-    xpix = patcher.split_pix("xpix")[iexp].astype(int)
-    ypix = patcher.split_pix("ypix")[iexp].astype(int)
-    band, exp = patcher.epaths[iexp].split("/")
-    hdr = patcher.metastore.headers[band][exp]
+    while undone:
+        region, active, fixed = sceneDB.checkout_region()
+
+        # --- Build patch and fit ---
+        patcher.build_patch(region, None, allbands=bands)
+        proposer, q = prepare(patcher, active=active, fixed=fixed)
+        model = make_model(proposer, q)
+        chain, step, stats = sample(model, q, draws, warmup)
+
+        # --- Deal with results ---
+        qlast = chain[-1, :]
+        patcher.scene.set_all_source_params(qlast)
+        qcat = patcher.scene.to_catalog(extra_cols=["source_index"])
+        qcat["source_index"][:] = active["source_index"]
+
+        qcat, mass_matrix = dump(active, fixed, region, model, chain, step, stats)
+        sceneDB.checkin_region(qcat, fixed, draws, mass_matrix=None)
+
 
     im = np.zeros([hdr["NAXIS1"], hdr["NAXIS2"], len(actives)])
 

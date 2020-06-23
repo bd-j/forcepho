@@ -1,3 +1,19 @@
+# Setup
+```bash
+srun --pty -p gpu_test -t 0-01:00 --mem 1000 --gres=gpu:1 /bin/bash
+
+module purge
+module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
+module load cuda/10.1.243-fasrc01
+module load Anaconda3/5.0.1-fasrc01
+
+GROUP=eisenstein_lab
+MYSCRATCH=${SCRATCH}/${GROUP}/${USER}
+source activate jadespho
+
+cd ${MYSCRATCH}/phodemo
+```
+
 # Correctness
 
 Test against a simple image created from `galsim`
@@ -14,13 +30,7 @@ mkdir output
 python model_test_image.py
 ```
 
-Then, in python
-
-```python
-from astropy.io import fits
-truth = fits.getdata("data/galsim_galaxy_grid_truth.fits")
-noisy = fits.getdata("data/galsim_galaxy_grid_noisy.fits")
-model = fits.getdata("output/galsim_galaxy_grid_force.fits")
-unc = fits.getheader("data/galsim_galaxy_grid_noisy.fits")["NOISE"]
-chi = (noisy - model) / unc
+Then, generate images of the residuals for the S/N=100 objects
+```
+python inspect_residuals.py
 ```

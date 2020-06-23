@@ -139,6 +139,7 @@ if __name__ == "__main__":
     noisy = im.copy()
 
     header, wcs = make_header(im, args)
+    header["NPIXGAL"] = n_pix_per_gal
     ra, dec = wcs.all_pix2world(cat["x"], cat["y"], origin)
     cat["ra"] = ra
     cat["dec"] = dec
