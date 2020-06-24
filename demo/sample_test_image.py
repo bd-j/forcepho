@@ -10,6 +10,7 @@ from astropy.wcs import WCS
 
 from littlemcmc import _sample_one_chain as sample_one
 
+from forcepho.sources import Galaxy
 from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
@@ -41,7 +42,7 @@ def parse_image(hdr, cat, n_gal=16):
 
 
 def prepare(patcher, active=None, fixed=None):
-    """
+    """Prepare the patch for model making
     """
     # --- Build the things
     patcher.pack_meta(cat)
@@ -130,49 +131,33 @@ def get_step(init_cov=None, N_init=0, trace=None):
 
 if __name__ == "__main__":
 
+    # --- Wire the data ---
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
                          pixelstore=config.pixelstorefile,
                          splinedata=config.splinedatafile)
 
-    iexp = 0
-
+    # --- Get the patch dispatcher ---
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
     sceneDB = SuperScene(sourcecat=cat, bands=bands,
                          maxactive_per_patch=config.maxactive_per_patch,
-                         maxradius=config.patch_maxradius)
+                         maxradius=config.patch_maxradius,
+                         target_niter=config.sampling_draws)
+    sceneDB.parameter_columns = Galaxy.SHAPE_COLS + bands
 
-    while undone:
+    # --- Sample the patches ---
+    while sceneDB.undone:
         region, active, fixed = sceneDB.checkout_region()
+        if active is None:
+            continue
 
         # --- Build patch and fit ---
         patcher.build_patch(region, None, allbands=bands)
         proposer, q = prepare(patcher, active=active, fixed=fixed)
-        model = make_model(proposer, q)
-        chain, step, stats = sample(model, q, draws, warmup)
+        model = make_model(proposer, q.copy())
+        chain, step, stats = sample(model, q.copy(), config.sampling_draws, config.warmup)
 
         # --- Deal with results ---
-        qlast = chain[-1, :]
-        patcher.scene.set_all_source_params(qlast)
-        qcat = patcher.scene.to_catalog(extra_cols=["source_index"])
-        qcat["source_index"][:] = active["source_index"]
-
-        qcat, mass_matrix = dump(active, fixed, region, model, chain, step, stats)
-        sceneDB.checkin_region(qcat, fixed, draws, mass_matrix=None)
-
-
-    im = np.zeros([hdr["NAXIS1"], hdr["NAXIS2"], len(actives)])
-
-    #sys.exit()
-
-    for i, active in enumerate(actives):
-        # TODO: This could work by successive data/residual swaps on the GPU
-        result = get_model_gpu(active, patcher)
-        model = data - result["residual"][0]
-        im[xpix, ypix, i] += model
-
-    image = im.sum(axis=-1).T
-    with fits.HDUList(fits.PrimaryHDU(image)) as hdul:
-        hdul[0].header.update(hdr[6:])
-        hdul[0].header["NOISE"] = 0
-        hdul.writeto(exp.replace("noisy", "force") + ".fits", overwrite=True)
+        qcat, mass_matrix = dump(active, fixed, region, model, chain,
+                                 step=step, stats=stats, start=q.copy())
+        sceneDB.checkin_region(qcat, fixed, draws, mass_matrix=mass_matrix)

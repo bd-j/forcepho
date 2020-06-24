@@ -447,6 +447,12 @@ class JadesPatch(Patch):
             The (ra, dec) values defining the new central coordinates.  These
             will be subtracted from the relevant source and stamp coordinates.
             If not given, the median coordinates of the scene will be used.
+
+        Returns
+        -------
+        reference_coordinates : ndaray of shape (2,)
+            The new reference coordinates, all source positions are offsets
+            from this.  This should be subtracted from crval coordinates.
         """
         if not sky_zero:
             zra = np.median([s.ra for s in scene.sources])
@@ -468,6 +474,8 @@ class JadesPatch(Patch):
         for source in scene.sources:
             source.ra -= zero[0]
             source.dec -= zero[1]
+        #self.patch_reference_coordinates = np.array([0, 0])
+        return scene
 
     def split_pix(self, attr):
         """Split the pixel data into separate arrays for each exposure

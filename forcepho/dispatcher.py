@@ -22,6 +22,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 from .region import CircularRegion
+from .sources import Galaxy
 
 
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
@@ -55,6 +56,7 @@ class SuperScene:
         if (sourcecat is not None):
             self.set_catalog(sourcecat)
         self.bands = bands
+        self.shape_cols = Galaxy.SHAPE_COLS
 
         self.n_active = 0
         self.n_fixed = 0
@@ -85,6 +87,10 @@ class SuperScene:
     @property
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
+
+    @property
+    def parameter_columns(self):
+        return self.bands + self.shape_cols
 
     def set_catalog(self, sourcecat):
         """Set the sourcecat attribute to the given catalog, doing some checks
@@ -239,6 +245,13 @@ class SuperScene:
         self.n_active -= len(active_inds)
         self.n_fixed -= len(fixed_inds)
         # log which patch and which child ran for each source?
+
+    def reset(self):
+        """Reset active, valid, and n_iter values.
+        """
+        self.sourcecat["is_valid"][:] = True
+        self.sourcecat["is_active"][:] = False
+        self.sourcecat["n_iter"][:] = 0
 
     def get_circular_scene(self, center):
         """

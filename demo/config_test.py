@@ -49,9 +49,8 @@ config.patch_maxradius = 8
 
 # -----------------------
 # --- HMC parameters ---
-config.n_warm = 250
-config.n_iter = 100
-config.n_tune = 100
+config.sampling_draws = 128
+config.warmup = [32, 64, 128, 256, 512]
 
 # ------------------------
 # --- PSF information ----

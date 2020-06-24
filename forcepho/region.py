@@ -67,6 +67,7 @@ class CircularRegion(Region):
         self.ra = ra          # degrees
         self.dec = dec        # degrees
         self.radius = radius  # degrees of arc
+        self.shape = "CircularRegion"
 
     def contains(self, xcorners, ycorners, wcs, origin=0):
         """
@@ -142,6 +143,7 @@ class RectangularRegion(Region):
         self.dec_min = dec_min     # degrees
         self.ra_max = ra_max       # degrees
         self.dec_max = dec_max     # degrees
+        self.shape = "RectangularRegion"
 
     def contains(self, xcorners, ycorners, wcs, origin=0):
         """
