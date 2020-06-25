@@ -6,6 +6,7 @@ import time
 from astropy.io import fits
 
 from forcepho.sources import Galaxy
+from forcepho.fitting import Result
 
 
 class Logger:
@@ -37,7 +38,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
 
     # --- generate dtype ---
     colnames = bands + shapes
-    cols = [("source_index", np.int)] + [(c, np.float, (n_iter,))
+    cols = [("source_index", np.int32)] + [(c, np.float64, (n_iter,))
                                          for c in colnames + aper_bands]
     dtype = np.dtype(cols)
 
@@ -55,10 +56,9 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     return cat
 
 
-def dump(region, active, fixed, model, chain,
-         step=None, stats=None, start=None):
-    """Save the results to an HDF file
-    """
+def make_result(region, active, fixed, model, chain,
+                patchID=None, step=None, stats=None, start=None):
+
     patch = model.proposer.patch
     scene = model.scene
     bands = np.array(patch.bandlist, dtype="U")  # Bands actually present in patch
@@ -66,47 +66,50 @@ def dump(region, active, fixed, model, chain,
     ref = np.array(patch.patch_reference_coordinates)
     mass_matrix = None
 
-    with h5py.File(filename, "w") as out:
+    out = Result()
 
-        # --- Header ---
-        out.attrs["patchID"] = patchID
-        out.attrs["reference_coordinates"] = ref
-        out.attrs["bandlist"] = bands
-        out.attrs["shapenames"] = shapenames
+    # --- Header ---
+    out.patchID = patchID
+    out.reference_coordinates = ref
+    out.bandlist = bands
+    out.shapenames = shapenames
 
-        # --- region, active, fixed ---
-        for k, v in region.__dict__.items():
-            out.attrs[k] = v
-        out.create_dataset("active", data=np.array(active))
-        if fixed is not None:
-            out.create_dataset("fixed", data=np.array(fixed))
+    # --- region, active, fixed ---
+    for k, v in region.__dict__.items():
+        setattr(out, k, v)
+    out.active = np.array(active)
+    if fixed is not None:
+        out.fixed = np.array(fixed)
 
-        # --- chain and covariance ---
-        out.create_dataset("chain", chain)
-        if start is not None:
-            out.create_dataset("start", data=np.array(start))
-        if step is not None:
-            out.create_dataset("cov", data=np.array(step._cov))
-        # keep chain as a structured array?
-        # all infor is saved to make it
-        #chaincat = make_chaincat(chain, bands, active, ref,
-        #                         shapes=shapenames)
+    # --- chain and covariance ---
+    out.ncall = model.ncall
+    out.chain = np.array(chain)
+    if start is not None:
+        out.starting_position = np.array(start)
+    if step is not None:
+        out.cov = np.array(step._cov.copy())
+    # keep chain as a structured array?
+    # all infor is saved to make it
+    #chaincat = make_chaincat(chain, bands, active, ref,
+    #                         shapes=shapenames)
 
-        # --- priors ---
-        out.create_dataset("upper_bound", data=np.array(model.upper))
-        out.create_dataset("lower_bound", data=np.array(model.lower))
+    # --- priors ---
+    if model.transform is not None:
+        out.upper_bound = np.array(model.transform.upper.copy())
+        out.lower_bound = np.array(model.transform.lower.copy())
 
-        # --- last position ---
-        # FIXME: do this another way
-        qlast = chain[-1, :]
-        scene.set_all_source_params(qlast)
-        patch.unzerocoords(scene)
-        for i, source in enumerate(scene.sources):
-            source.id = active[i]["source_index"]
-        qcat = scene.to_catalog(extra_cols=["source_index"])
-        qcat["source_index"][:] = active["source_index"]
+    # --- last position ---
+    # FIXME: do this another way
+    qlast = chain[-1, :]
+    scene.set_all_source_params(qlast)
+    patch.unzerocoords(scene)
+    for i, source in enumerate(scene.sources):
+        source.id = active[i]["source_index"]
+    qcat = scene.to_catalog(extra_cols=["source_index"])
+    qcat["source_index"][:] = active["source_index"]
+    out.final = qcat
 
-    return qcat, mass_matrix
+    return out, qlast, mass_matrix
 
 
 def sourcecat_dtype(source_type=np.float64, bands=[]):
