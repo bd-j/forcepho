@@ -24,14 +24,13 @@ class Result(object):
     """
 
     def __init__(self, **kwargs):
-        self.offsets = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def dump_to_h5(self, filename):
         import h5py
         with h5py.File(filename, "w") as out:
-            for name, value in vars(self):
+            for name, value in vars(self).items():
                 if type(value) == np.ndarray:
                     out.create_dataset(name, data=value)
                 else:
@@ -65,7 +64,7 @@ def priors(scene, stamps, npix=2.0):
     return scales, lower, upper
 
 
-def run_lmc(model, q, n_draws, warmup=[10], z_cov=None):
+def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     """Use the littlemcmc barebones NUTS algorithm to sample from the
     posterior.
 
@@ -111,6 +110,7 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None):
 
     # --- Burn-in windows with step tuning ---
     trace = None
+    t = time.time()
     for n_iterations in warmup:
         potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
         step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
@@ -119,7 +119,7 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None):
                                    model_ndim=n_dim, start=start, step=step,
                                    draws=2, tune=n_iterations,
                                    discard_tuned_samples=False,
-                                   progressbar=False)
+                                   progressbar=progressbar)
         start = trace[:, -1]
 
     # --- production run ---
@@ -130,21 +130,30 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None):
                               model_ndim=n_dim, start=start, step=step,
                               draws=n_draws, tune=2,
                               discard_tuned_samples=True,
-                              progressbar=True,)
+                              progressbar=progressbar,)
+    tsample = time.time() - t
 
     if model.transform is not None:
         chain = model.transform.transform(trace.T)
     else:
         chain = trace.T
 
-    return chain, step, stats
+    result = Result()
+    result.ndim = len(q)
+    result.starting_position = q.copy()
+    result.chain = chain
+    result.ncall = model.ncall
+    result.wall_time = tsample
+
+    return result, step, stats
 
 
-def get_pot(init_cov=None, n_dim=0, trace=None):
+def get_pot(init_cov=None, n_dim=0, trace=None, regular_variance=1e-3):
     """Generate a full potential (i.e. a mass matrix) either using a supplied
     covariance matrix, a trace of samples, or the identity
     """
     from littlemcmc import QuadPotentialFull
+    from scipy.linalg import cholesky
 
     if trace is None and init_cov is None:
         cov = np.eye(n_dim)
@@ -153,6 +162,15 @@ def get_pot(init_cov=None, n_dim=0, trace=None):
         # TODO: Add regularization?
     else:
         cov = np.array(init_cov)
+
+    ntimes = 0
+    while ntimes < 5:
+        try:
+            _ = cholesky(cov, lower=True)
+            break
+        except(np.linalg.LinAlgError):
+            cov[np.diag_indices_from(cov)] += regular_variance
+            ntimes += 1
 
     potential = QuadPotentialFull(cov)
     return potential
@@ -166,8 +184,14 @@ def run_opt(model, q, jac=True, **extras):
             'disp':True, 'iprint': 1, 'maxcor': 20}
     callback = None
 
+    if model.transform is not None:
+        start = model.transform.inverse_transform(q)
+    else:
+        start = q.copy()
+
+
     t0 = time.time()
-    scires = minimize(model.nll, q.copy(), jac=jac,  method='BFGS',
+    scires = minimize(model.nll, start.copy(), jac=jac,  method='BFGS',
                       options=opts, bounds=None, callback=callback)
     tsample = time.time() - t0
 
@@ -175,6 +199,9 @@ def run_opt(model, q, jac=True, **extras):
     result.ndim = len(q)
     result.starting_position = q.copy()
     result.chain = np.atleast_2d(scires.x)
+    if model.transform is not None:
+        result.chain = model.transform.transform(result.chain)
+
     result.lnp = -0.5 * scires.fun
     result.wall_time = tsample
 
@@ -219,7 +246,7 @@ def run_pymc3(model, q, lower=-np.inf, upper=np.inf,
 
 
 def run_dynesty(model, q, lower=0, upper=1.0, nlive=50):
-    """Run a dynesty fit of the scene to plans
+    """Run a dynesty fit of the model
     """
     import dynesty
 
@@ -330,3 +357,51 @@ def run_hemcee(model, q, scales=1.0, nwarm=2000, niter=1000):
 
     return result
 
+
+if __name__ == "__main__":
+
+    from scipy.stats import norm
+    from forcepho.model import BoundedTransform, CPUPosterior
+    import matplotlib.pyplot as pl
+    pl.ion()
+
+    # --- dimension and bounds ---
+    ndim = 30
+    a = 1.5
+    epsilon = 1e-2
+
+    # --- Build the model ---
+    def lnlike_gauss(theta, **extras):
+        lnp = -0.5 * np.dot(theta, theta)
+        lnp_grad = -theta
+        return lnp, lnp_grad
+
+
+    if a is not None:
+        lower = np.zeros(ndim) - a
+        upper = np.zeros(ndim) + a
+        transform = BoundedTransform(lower, upper)
+    else:
+        transform = None
+        upper = np.inf
+        lower = -np.inf
+    model = CPUPosterior(lnlike=lnlike_gauss, transform=transform)
+    q = np.clip(np.random.normal(0, 1, size=(ndim,)), lower + epsilon, upper - epsilon)
+
+    # --- Run the sampler ---
+    chain, step, stats = run_lmc(model, q, n_draws=1000, HASGPU=False,
+                                 warmup=[256, 512, 1024, 1024, 1024, 2048])
+
+
+    if a is not None:
+        from scipy.special import erf
+        A = erf(a / np.sqrt(2))
+    else:
+        A = 1
+
+    fig, ax = pl.subplots()
+    hh = [ax.hist(chain[:, i], histtype="step", bins=np.linspace(-4, 4, 100), alpha=0.5, density=True)
+          for i in range(ndim)]
+    xx = np.linspace(-10, 10, 1000)
+    ax.plot(xx, norm.pdf(xx) / A)
+    pl.show()

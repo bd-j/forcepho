@@ -226,8 +226,8 @@ class SuperScene:
         """
         # Find where the sources are that are being checked in
         try:
-            active_inds = active["source_index"]
-            fixed_inds = fixed["source_index"]
+            active_inds = active["source_index"].astype(int)
+            fixed_inds = fixed["source_index"].astype(int)
         except(KeyError):
             raise
 
@@ -586,7 +586,7 @@ if __name__ == "__main__":
 
             # send to parent, free GPU memory
             # TODO: isend?
-            comm.ssend(payload, parent, status.tag)  
+            comm.ssend(payload, parent, status.tag)
             #patcher.free()
 
             msg = "Child {} sent {} for patch {}"

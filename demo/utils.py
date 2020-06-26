@@ -26,6 +26,22 @@ class Logger:
         return log
 
 
+def make_statscat(stats, dtypes):
+    cols = list(stats[0].keys())
+    # Reshape `stats` to a dictionary with keys = string of sampling stat name,
+    # values = np.array with shape [num_chains, num_samples, num_variables]
+    stats = {
+        name: np.array(
+            [
+                [np.atleast_1d(iter_stats[name]) for iter_stats in chain_stats]
+                for (_, chain_stats) in results
+            ]
+        ).astype(dtype)
+        for (name, dtype) in step.stats_dtypes[0].items()
+    }
+
+
+
 def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     # --- Get sizes of things ----
     n_iter, n_param = chain.shape
@@ -39,7 +55,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     # --- generate dtype ---
     colnames = bands + shapes
     cols = [("source_index", np.int32)] + [(c, np.float64, (n_iter,))
-                                         for c in colnames + aper_bands]
+                                           for c in colnames]
     dtype = np.dtype(cols)
 
     # --- make and fill catalog
@@ -56,17 +72,17 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     return cat
 
 
-def make_result(region, active, fixed, model, chain,
-                patchID=None, step=None, stats=None, start=None):
+def make_result(result, region, active, fixed, model,
+                patchID=None, step=None, stats=None):
 
     patch = model.proposer.patch
     scene = model.scene
-    bands = np.array(patch.bandlist, dtype="U")  # Bands actually present in patch
-    shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="U")
+    bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
+    shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="S")
     ref = np.array(patch.patch_reference_coordinates)
     mass_matrix = None
 
-    out = Result()
+    out = result
 
     # --- Header ---
     out.patchID = patchID
@@ -82,15 +98,11 @@ def make_result(region, active, fixed, model, chain,
         out.fixed = np.array(fixed)
 
     # --- chain and covariance ---
-    out.ncall = model.ncall
-    out.chain = np.array(chain)
-    if start is not None:
-        out.starting_position = np.array(start)
     if step is not None:
-        out.cov = np.array(step._cov.copy())
+        out.cov = np.array(step.potential._cov.copy())
     # keep chain as a structured array?
     # all infor is saved to make it
-    #chaincat = make_chaincat(chain, bands, active, ref,
+    #chaincat = make_chaincat(out.chain, bands, active, ref,
     #                         shapes=shapenames)
 
     # --- priors ---
@@ -100,7 +112,7 @@ def make_result(region, active, fixed, model, chain,
 
     # --- last position ---
     # FIXME: do this another way
-    qlast = chain[-1, :]
+    qlast = out.chain[-1, :]
     scene.set_all_source_params(qlast)
     patch.unzerocoords(scene)
     for i, source in enumerate(scene.sources):
@@ -109,7 +121,7 @@ def make_result(region, active, fixed, model, chain,
     qcat["source_index"][:] = active["source_index"]
     out.final = qcat
 
-    return out, qlast, mass_matrix
+    return out, qcat, mass_matrix
 
 
 def sourcecat_dtype(source_type=np.float64, bands=[]):

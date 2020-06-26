@@ -385,6 +385,8 @@ class CPUPosterior(Posterior):
         self._lnprior_grad = lpr_grad
 
         self._lnp = ll + lpr + self._lndetjac
+        # TODO: In the general case this should be a dot product of the
+        # gradient vector with a Jacobian matrix, but for now the jacobian is diagonal so this works
         self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
         self._q = q
         self._z = z

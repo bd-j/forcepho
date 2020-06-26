@@ -12,7 +12,7 @@ config = Namespace()
 # -----------
 # --- Overall ----
 config.logging = True
-basedir = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/jades_force/validation/")
+basedir = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/phodemo/")
 basedir = "."
 
 # -----------------------
@@ -50,7 +50,7 @@ config.patch_maxradius = 8
 # -----------------------
 # --- HMC parameters ---
 config.sampling_draws = 128
-config.warmup = [32, 64, 128, 256, 512]
+config.warmup = [256, 256]
 
 # ------------------------
 # --- PSF information ----
