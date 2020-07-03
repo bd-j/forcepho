@@ -26,20 +26,13 @@ class Logger:
         return log
 
 
-def make_statscat(stats, dtypes):
-    cols = list(stats[0].keys())
-    # Reshape `stats` to a dictionary with keys = string of sampling stat name,
-    # values = np.array with shape [num_chains, num_samples, num_variables]
-    stats = {
-        name: np.array(
-            [
-                [np.atleast_1d(iter_stats[name]) for iter_stats in chain_stats]
-                for (_, chain_stats) in results
-            ]
-        ).astype(dtype)
-        for (name, dtype) in step.stats_dtypes[0].items()
-    }
-
+def make_statscat(stats, step):
+    # Reshape `stats` to an array
+    dtype = np.dtype(list(step.stats_dtypes[0].items()))
+    stats_arr = np.zeros(len(stats), dtype=dtype)
+    for c in stats_arr.dtype.names:
+        stats_arr[c][:] = np.array([s[c] for s in stats])
+    return stats_arr
 
 
 def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
@@ -100,8 +93,9 @@ def make_result(result, region, active, fixed, model,
     # --- chain and covariance ---
     if step is not None:
         out.cov = np.array(step.potential._cov.copy())
-    # keep chain as a structured array?
-    # all infor is saved to make it
+        if stats is not None:
+            out.stats = make_statscat(stats, step)
+    # keep chain as a structured array? all info is saved to make it later
     #chaincat = make_chaincat(out.chain, bands, active, ref,
     #                         shapes=shapenames)
 

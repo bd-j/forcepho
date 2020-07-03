@@ -77,6 +77,9 @@ class SuperScene:
         return self
 
     def __exit__(self, type, value, traceback):
+        self.writeout()
+
+    def writeout(self):
         fits.writeto(self.statefilename, self.sourcecat, overwrite=True)
 
     @property

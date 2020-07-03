@@ -33,6 +33,7 @@ config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
 config.metastorefile = "{}/meta_{}.h5".format(sd, sn)
 config.psfstorefile = "{}/psf_{}.h5".format(sd, sn)
 
+config.scene_catalog = os.path.join(basedir, "output", "test_scene.fits")
 
 # ------------------------
 # --- Data Types/Sizes ---
