@@ -1,7 +1,7 @@
 # Setup
 ```bash
 srun --pty -p gpu_test -t 0-01:00 --mem 1000 --gres=gpu:1 /bin/bash
-srun --pty -p gpu -t 0-06:00 --mem 1000 --gres=gpu:1 /bin/bash
+srun --pty -p gpu -t 0-04:00 --mem 1000 --gres=gpu:1 /bin/bash
 
 module purge
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01

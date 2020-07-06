@@ -34,9 +34,9 @@ def prepare(patcher, active=None, fixed=None):
 
     # --- Build the things
     patcher.pack_meta(cat)
+    patcher.return_residual = True
     gpu_patch = patcher.send_to_gpu()
     proposer = Proposer(patcher)
-    proposer.patch.return_residual = True
 
     # --- Get parameter vector and proposal
     q = patcher.scene.get_all_source_params().copy()

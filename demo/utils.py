@@ -92,7 +92,10 @@ def make_result(result, region, active, fixed, model,
 
     # --- chain and covariance ---
     if step is not None:
-        out.cov = np.array(step.potential._cov.copy())
+        try:
+            out.cov = np.array(step.potential._cov.copy())
+        except(AttributeError):
+            out.cov = np.diag(step.potential._var.copy())
         if stats is not None:
             out.stats = make_statscat(stats, step)
     # keep chain as a structured array? all info is saved to make it later
