@@ -117,6 +117,9 @@ class SuperScene:
         self.dec0 = sourcecat["dec"][:].copy()
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
 
+        self.sourcelog = {}
+        self.patchlog = []
+
     def sky_to_scene(self, ra, dec):
         """Generate scene coordinates, which are anglular offsets (lat, lon)
         from the median ra, dec in units of arcsec.
@@ -220,7 +223,8 @@ class SuperScene:
 
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
-    def checkin_region(self, active, fixed, niter, mass_matrix=None):
+    def checkin_region(self, active, fixed, niter, mass_matrix=None, patchID=None,
+                       flush=False):
         """Check-in a set of active source parameters, and also fixed sources.
         The parameters of the active sources are updated in the master catalog,
         they are marked as inactive, and along with the provided fixed sources
@@ -247,7 +251,18 @@ class SuperScene:
 
         self.n_active -= len(active_inds)
         self.n_fixed -= len(fixed_inds)
+
         # log which patch and which child ran for each source?
+        if patchID is not None:
+            for k in active_inds:
+                if k in self.sourcelog:
+                    self.sourcelog[k].extend(patchID)
+                else:
+                    self.sourcelog[k] = [patchID]
+            self.patchlog.extend(patchID)
+
+        if flush:
+            self.writeout()
 
     def reset(self):
         """Reset active, valid, and n_iter values.

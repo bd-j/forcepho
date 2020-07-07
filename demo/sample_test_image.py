@@ -132,7 +132,7 @@ if __name__ == "__main__":
         logger.info("Checked out scene with {} active sources".format(len(active)))
 
         # --- Build patch and fit ---
-        patchID += 1
+        patchID = int(active["source_index"][0])
         patcher.build_patch(region, None, allbands=bands)
         proposer, q = prepare(patcher, active=active, fixed=fixed)
         logger.info("Prepared Patch {:04.0f}".format(patchID))
@@ -158,4 +158,4 @@ if __name__ == "__main__":
         logger.info("Writing to {}".format(outfile))
         out.dump_to_h5(outfile)
 
-        #sceneDB.undone = False
+    sceneDB.writeout()

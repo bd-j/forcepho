@@ -454,7 +454,7 @@ class JadesPatch(Patch):
             The new reference coordinates, all source positions are offsets
             from this.  This should be subtracted from crval coordinates.
         """
-        if not sky_zero:
+        if sky_zero is None:
             zra = np.median([s.ra for s in scene.sources])
             zdec = np.median([s.dec for s in scene.sources])
             sky_zero = np.array([zra, zdec])

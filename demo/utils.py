@@ -64,6 +64,35 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
 
     return cat
 
+def make_boundscat(lower, upper, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
+    # --- Get sizes of things ----
+    n_param = len(lower)
+    n_band = len(bands)
+
+    n_param_per_source = n_band + 6
+    assert (np.mod(n_param, n_param_per_source) == 0)
+    n_source = int(n_param / n_param_per_source)
+    assert (n_source == len(active))
+
+    # --- generate dtype ---
+    colnames = bands + shapes
+    cols = [("source_index", np.int32)] + [(c, np.float64, (2,))
+                                           for c in colnames]
+    dtype = np.dtype(cols)
+
+    # --- make and fill catalog
+    cat = np.zeros(n_source, dtype=dtype)
+    cat["source_index"][:] = active["source_index"]
+    for s in range(n_source):
+        for j, col in enumerate(colnames):
+            cat[s][col][0] = lower[s * n_param_per_source + j]
+            cat[s][col][1] = upper[s * n_param_per_source + j]
+
+    # rectify parameters
+    cat["ra"] += ref[0]
+    cat["dec"] += ref[1]
+    return cat
+
 
 def make_result(result, region, active, fixed, model,
                 patchID=None, step=None, stats=None):
