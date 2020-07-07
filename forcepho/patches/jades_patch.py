@@ -472,8 +472,8 @@ class JadesPatch(Patch):
     def unzerocoords(self, scene):
         zero = self.patch_reference_coordinates
         for source in scene.sources:
-            source.ra -= zero[0]
-            source.dec -= zero[1]
+            source.ra += zero[0]
+            source.dec += zero[1]
         #self.patch_reference_coordinates = np.array([0, 0])
         return scene
 

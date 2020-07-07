@@ -256,10 +256,10 @@ class SuperScene:
         if patchID is not None:
             for k in active_inds:
                 if k in self.sourcelog:
-                    self.sourcelog[k].extend(patchID)
+                    self.sourcelog[k].append(patchID)
                 else:
                     self.sourcelog[k] = [patchID]
-            self.patchlog.extend(patchID)
+            self.patchlog.append(patchID)
 
         if flush:
             self.writeout()
