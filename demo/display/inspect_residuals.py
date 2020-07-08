@@ -20,13 +20,19 @@ def legend(row):
     return s
 
 
-def show_one(row, residual, ax=None, n_pix_per_gal=24, fontsize=8, **imshow_kwargs):
+def show_one(row, truth, model, axes=None, n_pix_per_gal=24, fontsize=8,
+             **imshow_kwargs):
     d = np.array([-1, 1])
 
     xs, xf = (row["x"] + d*n_pix_per_gal).astype(int)
     ys, yf = (row["y"] + d*n_pix_per_gal).astype(int)
-    im = residual[ys:yf, xs:xf]
-    cm = ax.imshow(im, origin="lower", **imshow_kwargs)
+    t = truth[ys:yf, xs:xf]
+    m = model[ys:yf, xs:xf]
+    r = t - m
+
+    # --- show the image ---
+    ax = axes[0]
+    cm = ax.imshow(r, origin="lower", **imshow_kwargs)
 
     ax.text(0.05, 0.95, legend(row), transform=ax.transAxes,
             verticalalignment="top", fontsize=fontsize)
@@ -35,6 +41,17 @@ def show_one(row, residual, ax=None, n_pix_per_gal=24, fontsize=8, **imshow_kwar
     ax.text(0.6, 0.95, s, transform=ax.transAxes, verticalalignment="top",
             fontsize=fontsize)
 
+    # --- show slices through the center ---
+    if len(axes) > 1:
+        ax = axes[1]
+        ax.plot(t[n_pix_per_gal, :], label="GalSim")
+        ax.plot(m[n_pix_per_gal, :], label="fpho")
+        ax.legend()
+        ax = axes[2]
+        ax.plot(t[:, n_pix_per_gal], label="GalSim")
+        ax.plot(m[:, n_pix_per_gal], label="fpho")
+        ax.legend()
+
     return ax, cm
 
 
@@ -42,11 +59,11 @@ if __name__ == "__main__":
 
     pl.ion()
 
-    cat = fits.getdata("data/galsim_galaxy_grid_cat.fits")
-    truth = fits.getdata("data/galsim_galaxy_grid_truth.fits")
-    noisy = fits.getdata("data/galsim_galaxy_grid_noisy.fits")
-    model = fits.getdata("output/galsim_galaxy_grid_force.fits")
-    unc = fits.getheader("data/galsim_galaxy_grid_noisy.fits")["NOISE"]
+    cat = fits.getdata("../data/galsim_galaxy_grid_cat.fits")
+    truth = fits.getdata("../data/galsim_galaxy_grid_truth.fits")
+    noisy = fits.getdata("../data/galsim_galaxy_grid_noisy.fits")
+    model = fits.getdata("../output/galsim_galaxy_grid_force.fits")
+    unc = fits.getheader("../data/galsim_galaxy_grid_noisy.fits")["NOISE"]
     chi = (noisy - model) / unc
 
     ns = np.unique(cat["sersic"])
@@ -70,7 +87,7 @@ if __name__ == "__main__":
         sel = (cat["snr"] > 31) & (cat["sersic"] == n)
         for i, row in enumerate(cat[sel]):
             ax = axes[i, j]
-            ax, cm = show_one(row, residual, ax=ax, vmin=-5, vmax=5)
+            ax, cm = show_one(row, residual, axes=[ax], vmin=-5, vmax=5)
             #ax, cm = show_one(row, truth, ax=ax, vmin=0, vmax=50)
 
     cax = fig.add_subplot(gsc[0, 0])
