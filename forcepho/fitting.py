@@ -85,6 +85,11 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     z_cov : optional, ndarray of shape (ndim, ndim)
         The mass matrix, in the unconstrained parameter space `z`
 
+    adapt_one : bool, optional (default, False)
+        If true, use a diagonol potential (mass_matrix) that adapts at every
+        iteration for the first warmup round. Otherwise the covariance matrix
+        will have off diagonal elements and only adapt between warmup rounds.
+
     Returns
     -------
     chain : ndarray of shape (n_draws, n_dim)
@@ -111,24 +116,34 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     # --- Burn-in windows with step tuning ---
     trace = None
     t = time.time()
-    for n_iterations in warmup:
-        potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
-        step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
-                    model_ndim=n_dim, potential=potential)
-        trace, tstats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
-                                   model_ndim=n_dim, start=start, step=step,
-                                   draws=2, tune=n_iterations,
-                                   discard_tuned_samples=False,
-                                   progressbar=progressbar)
-        start = trace[:, -1]
+    #for iiter, n_iterations in enumerate(warmup):
+    #    if (iiter == 0) & adapt_one:
+    #        adapt = True
+    #    else:
+    #        adapt = False
+    #    potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
+    #    step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
+    #                model_ndim=n_dim, potential=potential)
+    #    trace, tstats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
+    #                               model_ndim=n_dim, start=start, step=step,
+    #                               draws=2, tune=n_iterations,
+    #                               discard_tuned_samples=False,
+    #                               progressbar=progressbar)
+    #    start = trace[:, -1]
+    #    if adapt:
+    #        # Use tuned covariance matrix
+    #        z_cov = np.diag(step.potential._var)
+    #    else:
+    #        # estimate from samples
+    #        z_cov = None
 
     # --- production run ---
-    potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
+    potential = get_pot(n_dim, init_mean=start, init_cov=z_cov, trace=trace, adapt=True)
     step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
                 model_ndim=n_dim, potential=potential)
     trace, stats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
                               model_ndim=n_dim, start=start, step=step,
-                              draws=n_draws, tune=2,
+                              draws=n_draws, tune=warmup[0],
                               discard_tuned_samples=True,
                               progressbar=progressbar,)
     tsample = time.time() - t
@@ -148,21 +163,32 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     return result, step, stats
 
 
-def get_pot(init_cov=None, n_dim=0, trace=None, regular_variance=1e-3):
+def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
+            regular_variance=1e-3, adapt=False):
     """Generate a full potential (i.e. a mass matrix) either using a supplied
-    covariance matrix, a trace of samples, or the identity
+    covariance matrix, a trace of samples, or the identity.
+
+    Returns
+    -------
+    potential : littlemcmc.quadpotential.QuadPotential instance.
+        If `tune` this is an instance of QuadPotentialDiagAdapt with zero mean.
+        Otherwise, an instance of QuadPotentialFull, i.e. a static 2-d mass-matrix.
     """
-    from littlemcmc import QuadPotentialFull
+    from littlemcmc import QuadPotentialFull, QuadPotentialFullAdapt, QuadPotentialDiagAdapt
     from scipy.linalg import cholesky
 
-    if trace is None and init_cov is None:
-        cov = np.eye(n_dim)
-    elif trace is not None:
-        cov = np.cov(trace, rowvar=False)
-        # TODO: Add regularization?
-    else:
+    if init_cov is not None:
+        # use_supplied values
         cov = np.array(init_cov)
+    elif (trace is None) and (init_cov is None):
+        # Default no information
+        cov = np.eye(n_dim)
+    elif (trace is not None) and (init_cov is None):
+        # Estimate from trace
+        cov = np.cov(trace, rowvar=True)
+        init_mean = np.mean(trace, axis=-1)
 
+    print("get_pot: covariance shape={}".format(cov.shape))
     ntimes = 0
     while ntimes < 5:
         try:
@@ -170,10 +196,17 @@ def get_pot(init_cov=None, n_dim=0, trace=None, regular_variance=1e-3):
             break
         except(np.linalg.LinAlgError):
             cov[np.diag_indices_from(cov)] += regular_variance
+            print(ntimes)
             ntimes += 1
 
-    potential = QuadPotentialFull(cov)
+    if adapt:
+        init_diag = np.diag(cov)
+        potential = QuadPotentialDiagAdapt(n_dim, init_mean, init_diag, 10)
+        #potential = QuadPotentialFullAdapt(n_dim, init_mean, init_cov, 10)
+    else:
+        potential = QuadPotentialFull(cov)
     return potential
+
 
 
 def run_opt(model, q, jac=True, **extras):

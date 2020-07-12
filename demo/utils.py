@@ -4,6 +4,7 @@
 import numpy as np
 import time
 from astropy.io import fits
+import h5py
 
 from forcepho.sources import Galaxy
 from forcepho.fitting import Result
@@ -24,6 +25,19 @@ class Logger:
     def serialize(self):
         log = "\n".join([c[0] for c in self.comments])
         return log
+
+
+def get_results(fn):
+    with h5py.File(fn, "r") as res:
+        chain = res["chain"][:]
+        #bands = res["bandlist"][:].astype("U").tolist()
+        bands = ["Fclear"]
+        ref = res["reference_coordinates"][:]
+        active = res["active"][:]
+        stats = res["stats"][:]
+
+    cat = make_chaincat(chain, bands, active, ref)
+    return cat, active, stats
 
 
 def make_statscat(stats, step):
@@ -63,6 +77,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     cat["dec"] += ref[1]
 
     return cat
+
 
 def make_boundscat(lower, upper, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     # --- Get sizes of things ----

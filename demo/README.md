@@ -20,21 +20,29 @@ cd ${MYSCRATCH}/phodemo
 Test against a simple image created from `galsim`
 
 ```sh
-# Make a test image (and catalog) using galsim
-mkdir data
+# Make test images (and catalog) using galsim
+mkdir ./data
 python make_test_image.py
 # preprocess to create data stores in the format expected by forcepho
-mkdir stores
+mkdir ./stores
 python preprocess_test.py
 # Now generate the model image and save it
-mkdir output
+mkdir ./output
 python model_test_image.py
-# sample the output
-python sample_test_image.py
 ```
 
-Then, generate images of the residuals for the S/N=100 objects
+Then, to generate images of the residuals for the S/N=100 objects
 ```
 cd display
 python inspect_residuals.py
+```
+
+Now sample the posterior and regenerate the image from the best fits for each object
+
+```sh
+# fit to the galsim noisy image
+mkdir output/run1
+python sample_test_image.py --patch_dir=./output/run1
+# reconstruct from the posteriors
+python reconstruct_test_image.py --patch_dir=./output/run1 --output_dir=./output
 ```

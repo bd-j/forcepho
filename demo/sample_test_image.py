@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, argparse
+import os, sys, argparse, time
 import numpy as np
 
 from forcepho.dispatcher import SuperScene
@@ -10,7 +10,7 @@ from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 
 from forcepho.model import GPUPosterior, BoundedTransform
-from forcepho.fitting import run_lmc, Result
+from forcepho.fitting import Result, run_lmc
 
 from utils import Logger, rectify_catalog, make_result
 from config_test import config
@@ -98,6 +98,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--logging", action="store_true")
+    parser.add_argument("--patch_dir", type=str, default="../output/")
     args = parser.parse_args()
 
     if args.logging:
@@ -124,7 +125,6 @@ if __name__ == "__main__":
     logger.info("Made SceneDB")
 
     # --- Sample the patches ---
-    patchID = 0
     while sceneDB.undone:
         region, active, fixed = sceneDB.checkout_region()
         if active is None:
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         logger.info("Checking region back in")
         sceneDB.checkin_region(final, fixed, config.sampling_draws, mass_matrix=mass_matrix)
 
-        outfile = "output/patch{:04.0f}_results.h5".format(patchID)
+        outfile = os.path.join(args.patch_dir, "patch{:04.0f}_results.h5".format(patchID))
         logger.info("Writing to {}".format(outfile))
         out.dump_to_h5(outfile)
 
