@@ -82,7 +82,8 @@ if __name__ == "__main__":
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
                          pixelstore=config.pixelstorefile,
-                         splinedata=config.splinedatafile)
+                         splinedata=config.splinedatafile,
+                         return_residual=True)
 
     iexp = 0
 

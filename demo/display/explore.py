@@ -6,6 +6,7 @@ import glob, sys, os
 import numpy as np
 import matplotlib.pyplot as pl
 
+from scipy.stats.distributions import norm
 from astropy.io import fits
 import h5py
 from utils import make_chaincat
@@ -68,6 +69,8 @@ if __name__ == "__main__":
 
     fig, ax = pl.subplots()
     ax.hist(delta / unc, bins=20, density=True, alpha=0.5, label=col)
+    kk = np.linspace(-5, 5, 100)
+    ax.plot(kk, norm.pdf(kk))
     tag = r"$\sigma(\Delta_{{{c}}}/\sigma_{{{c}}})={s:4.2f}$"
     ax.text(0.1, 0.9, tag.format(c=col, s=np.std(delta / unc)),
             transform=ax.transAxes)

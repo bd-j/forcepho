@@ -116,26 +116,7 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     # --- Burn-in windows with step tuning ---
     trace = None
     t = time.time()
-    #for iiter, n_iterations in enumerate(warmup):
-    #    if (iiter == 0) & adapt_one:
-    #        adapt = True
-    #    else:
-    #        adapt = False
-    #    potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
-    #    step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
-    #                model_ndim=n_dim, potential=potential)
-    #    trace, tstats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
-    #                               model_ndim=n_dim, start=start, step=step,
-    #                               draws=2, tune=n_iterations,
-    #                               discard_tuned_samples=False,
-    #                               progressbar=progressbar)
-    #    start = trace[:, -1]
-    #    if adapt:
-    #        # Use tuned covariance matrix
-    #        z_cov = np.diag(step.potential._var)
-    #    else:
-    #        # estimate from samples
-    #        z_cov = None
+    #z_cov, trace = warmup_rounds(warmup, model)
 
     # --- production run ---
     potential = get_pot(n_dim, init_mean=start, init_cov=z_cov, trace=trace, adapt=True)
@@ -163,8 +144,33 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     return result, step, stats
 
 
+def warmup_rounds(warmup, model):
+    # for iiter, n_iterations in enumerate(warmup):
+    #    if (iiter == 0) & adapt_one:
+    #        adapt = True
+    #    else:
+    #        adapt = False
+    #    potential = get_pot(init_cov=z_cov, n_dim=n_dim, trace=trace)
+    #    step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
+    #                model_ndim=n_dim, potential=potential)
+    #    trace, tstats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
+    #                               model_ndim=n_dim, start=start, step=step,
+    #                               draws=2, tune=n_iterations,
+    #                               discard_tuned_samples=False,
+    #                               progressbar=progressbar)
+    #    start = trace[:, -1]
+    #    if adapt:
+    #        # Use tuned covariance matrix
+    #        z_cov = np.diag(step.potential._var)
+    #    else:
+    #        # estimate from samples
+    #        z_cov = None
+
+    raise(NotImplementedError)
+
+
 def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
-            regular_variance=1e-3, adapt=False):
+            regular_variance=1e-3, adapt=True, full=False):
     """Generate a full potential (i.e. a mass matrix) either using a supplied
     covariance matrix, a trace of samples, or the identity.
 
@@ -199,12 +205,13 @@ def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
             print(ntimes)
             ntimes += 1
 
-    if adapt:
-        init_diag = np.diag(cov)
-        potential = QuadPotentialDiagAdapt(n_dim, init_mean, init_diag, 10)
-        #potential = QuadPotentialFullAdapt(n_dim, init_mean, init_cov, 10)
+    if full:
+        init_mass = cov
+        potential = QuadPotentialFullAdapt(n_dim, init_mean, init_mass, 10)
     else:
-        potential = QuadPotentialFull(cov)
+        init_mass = np.diag(cov)
+        potential = QuadPotentialDiagAdapt(n_dim, init_mean, init_mass, 10)
+
     return potential
 
 

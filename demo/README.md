@@ -46,3 +46,11 @@ python sample_test_image.py --patch_dir=./output/run1
 # reconstruct from the posteriors
 python reconstruct_test_image.py --patch_dir=./output/run1 --output_dir=./output
 ```
+
+# Features
+
+It would be nice to show
+
+ 1. The covariances between adjacent sources as a function of distance/rhalf
+ 2. The difference in posteriors between fitting multiple (different resolution) bands separately and simultaneously.
+ 3. Biases due to color gradients.

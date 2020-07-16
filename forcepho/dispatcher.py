@@ -111,12 +111,12 @@ class SuperScene:
         self.sourcecat = sourcecat
         self.n_sources = len(self.sourcecat)
         self.cat_dtype = self.sourcecat.dtype
-
-        # Store the initial coordinates, which are used to set positional priors
-        self.ra0 = sourcecat["ra"][:].copy()
-        self.dec0 = sourcecat["dec"][:].copy()
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
 
+        # save the original catalog
+        self.original = sourcecat.copy()
+
+        # Logs
         self.sourcelog = {}
         self.patchlog = []
 
