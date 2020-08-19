@@ -79,34 +79,14 @@ def rectify_catalog(sourcecatfile, rhrange=(0.051, 0.29), qrange=(0.2, 0.99),
     return sourcecat, bands, header
 
 
-def extract_block_diag(a, n, k=0):
-    a = np.asarray(a)
-    if a.ndim != 2:
-        raise ValueError("Only 2-D arrays handled")
-    if not (n > 0):
-        raise ValueError("Must have n >= 0")
-
-    if k > 0:
-        a = a[:,n*k:]
-    else:
-        a = a[-n*k:]
-
-    n_blocks = min(a.shape[0]//n, a.shape[1]//n)
-
-    new_shape = (n_blocks, n, n)
-    new_strides = (n*a.strides[0] + n*a.strides[1],
-                   a.strides[0], a.strides[1])
-
-    return np.lib.stride_tricks.as_strided(a, new_shape, new_strides)
-
-
 def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
                 n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
                 sqrtq_range=(0.3, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
                 rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
     """Make a catalog of upper and lower bounds for the parameters of each
     source. This catalog is a structured array with fields for each of the
-    source parameters, each containing a 2-element array of the form (lower, upper).  Each row is a different source
+    source parameters, each containing a 2-element array of the form (lower,
+    upper).  Each row is a different source
 
     Parameters
     ----------
@@ -186,6 +166,33 @@ def bounds_vectors(bounds_cat, filternames, shapes=Galaxy.SHAPE_COLS,
     return np.array(lower), np.array(upper)
 
 
+def init_covar(n_param, n_source):
+    """Make a bunch of identity matrices
+    """
+    return np.reshape(np.tile(np.eye(n_param).flatten(), n_source), (n_source, n_param, n_param))
+
+
+def extract_block_diag(a, n, k=0):
+    a = np.asarray(a)
+    if a.ndim != 2:
+        raise ValueError("Only 2-D arrays handled")
+    if not (n > 0):
+        raise ValueError("Must have n >= 0")
+
+    if k > 0:
+        a = a[:,n*k:]
+    else:
+        a = a[-n*k:]
+
+    n_blocks = min(a.shape[0]//n, a.shape[1]//n)
+
+    new_shape = (n_blocks, n, n)
+    new_strides = (n*a.strides[0] + n*a.strides[1],
+                   a.strides[0], a.strides[1])
+
+    return np.lib.stride_tricks.as_strided(a, new_shape, new_strides)
+
+
 def make_result(result, region, active, fixed, model,
                 bounds=None, patchID=None, step=None, stats=None):
 
@@ -219,6 +226,8 @@ def make_result(result, region, active, fixed, model,
             out.cov = np.diag(step.potential._var.copy())
         if stats is not None:
             out.stats = make_statscat(stats, step)
+
+        #covs = extract_block_diag(out.cov)
     # keep chain as a structured array? all info is saved to make it later
     #chaincat = make_chaincat(out.chain, bands, active, ref,
     #                         shapes=shapenames)

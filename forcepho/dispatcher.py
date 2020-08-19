@@ -43,7 +43,10 @@ class SuperScene:
     A region can be checked out.  The default is to randomly choose a single
     valid source from the catalog and find all sources within some radius of
     that seed source.  The weighting logic for the seeds can be adjusted by
-    over-writing the `seed_weight()` method
+    over-writing the `seed_weight()` method.
+
+    Sources in regions that are checked out have their sources unavailable for further
+    checkouts, until they are checked back in, with new parameters
     """
 
     def __init__(self, statefile="superscene.fits",                 # disk locations

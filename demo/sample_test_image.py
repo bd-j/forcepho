@@ -13,7 +13,7 @@ from forcepho.model import GPUPosterior, BoundedTransform
 from forcepho.fitting import Result, run_lmc
 
 from utils import Logger, rectify_catalog, make_result
-from utils import make_bounds, bounds_vectors
+from utils import make_bounds, bounds_vectors, init_covar
 from config_test import config
 
 try:
@@ -98,6 +98,7 @@ if __name__ == "__main__":
                          maxradius=config.patch_maxradius,
                          target_niter=config.sampling_draws)
     sceneDB.bounds_catalog = make_bounds(sceneDB.sourcecat, bands)
+    sceneDB.covariance_matrices = init_covar(len(sceneDB.parameter_columns), sceneDB.n_sources)
     logger.info("Made SceneDB")
 
     # --- Sample the patches ---
@@ -105,6 +106,7 @@ if __name__ == "__main__":
         # --- checkout a scene ---
         region, active, fixed = sceneDB.checkout_region()
         bounds = sceneDB.bounds_catalog[active["source_index"]]
+        covs = sceneDB.covariance_matrices[active["source_index"]]
         if active is None:
             continue
         logger.info("Checked out scene with {} active sources".format(len(active)))
@@ -121,7 +123,9 @@ if __name__ == "__main__":
         model = make_model(proposer, lower, upper)
         logger.info("Model made, sampling with {} warmup and {} draws")
         out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
-                                    warmup=config.warmup, progressbar=True)
+                                   full=config.full_cov,  adapt=True,
+                                   warmup=config.warmup,
+                                   progressbar=True)
 
         # --- Deal with results ---
         logger.info("Sampling complete, preparing output.")

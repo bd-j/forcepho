@@ -64,7 +64,8 @@ def priors(scene, stamps, npix=2.0):
     return scales, lower, upper
 
 
-def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
+def run_lmc(model, q, n_draws, adapt=False, full=False, warmup=[10],
+            trace=None, z_cov=None, progressbar=False):
     """Use the littlemcmc barebones NUTS algorithm to sample from the
     posterior.
 
@@ -85,7 +86,10 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     z_cov : optional, ndarray of shape (ndim, ndim)
         The mass matrix, in the unconstrained parameter space `z`
 
-    adapt_one : bool, optional (default, False)
+    full : bool, optional (default, False)
+        Whether to use the full covariance matrix instead of the diagonal.
+
+    adapt : bool, optional (default, False)
         If true, use a diagonol potential (mass_matrix) that adapts at every
         iteration for the first warmup round. Otherwise the covariance matrix
         will have off diagonal elements and only adapt between warmup rounds.
@@ -114,12 +118,12 @@ def run_lmc(model, q, n_draws, warmup=[10], z_cov=None, progressbar=False):
     n_dim = len(start)
 
     # --- Burn-in windows with step tuning ---
-    trace = None
     t = time.time()
     #z_cov, trace = warmup_rounds(warmup, model)
 
     # --- production run ---
-    potential = get_pot(n_dim, init_mean=start, init_cov=z_cov, trace=trace, adapt=True)
+    potential = get_pot(n_dim, adapt=adapt, full=full,
+                        init_mean=start, init_cov=z_cov, trace=trace)
     step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
                 model_ndim=n_dim, potential=potential)
     trace, stats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
