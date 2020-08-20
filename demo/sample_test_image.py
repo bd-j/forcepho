@@ -83,7 +83,7 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
-    # --- Wire the data ---
+    # --- Wire the data --- (child)
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
                          pixelstore=config.pixelstorefile,
@@ -91,48 +91,49 @@ if __name__ == "__main__":
                          return_residual=True)
     logger.info("Data loaded, HASGPU={}".format(HASGPU))
 
-    # --- Get the patch dispatcher ---
+    # --- Get the patch dispatcher ---  (parent)
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
     sceneDB = SuperScene(sourcecat=cat, bands=bands,
                          maxactive_per_patch=config.maxactive_per_patch,
                          maxradius=config.patch_maxradius,
-                         target_niter=config.sampling_draws)
-    sceneDB.bounds_catalog = make_bounds(sceneDB.sourcecat, bands)
-    sceneDB.covariance_matrices = init_covar(len(sceneDB.parameter_columns), sceneDB.n_sources)
+                         target_niter=config.sampling_draws,
+                         bounds_kwargs={})
+    #sceneDB.bounds_catalog = make_bounds(sceneDB.sourcecat, bands)
+    #sceneDB.covariance_matrices = init_covar(len(sceneDB.parameter_columns), sceneDB.n_sources)
     logger.info("Made SceneDB")
 
     # --- Sample the patches ---
     while sceneDB.undone:
-        # --- checkout a scene ---
+        # --- checkout a scene --- (parent)
         region, active, fixed = sceneDB.checkout_region()
-        bounds = sceneDB.bounds_catalog[active["source_index"]]
-        covs = sceneDB.covariance_matrices[active["source_index"]]
         if active is None:
             continue
         logger.info("Checked out scene with {} active sources".format(len(active)))
 
-        # --- Build patch ---
+        # --- Build patch --- (child)
         patchID = int(active["source_index"][0])
         patcher.build_patch(region, None, allbands=bands)
         proposer, q = prepare(patcher, active=active, fixed=fixed)
         logger.info("Prepared Patch {:04.0f}".format(patchID))
 
-        # --- Get bounds and sample ---
-        lower, upper = bounds_vectors(bounds, patcher.bandlist,
-                                      reference_coordinates=patcher.patch_reference_coordinates)
+        # --- Get bounds, covariances, and sample --- (child)
+        weight = max(10, active["n_iter"].min())
+        bounds = sceneDB.bounds_catalog[active["source_index"]]
+        lower, upper, cov = sceneDB.bounds_and_covs(active["source_index"],
+                                                    bands=patcher.bandlist,
+                                                    ref=patcher.patch_reference_coordinates)
         model = make_model(proposer, lower, upper)
         logger.info("Model made, sampling with {} warmup and {} draws")
         out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
-                                   full=config.full_cov,  adapt=True,
-                                   warmup=config.warmup,
-                                   progressbar=True)
+                                   full=config.full_cov, z_cov=cov, adapt=True,
+                                   weight=weight, warmup=config.warmup, progressbar=True)
 
-        # --- Deal with results ---
+        # --- Deal with results --- (child/parent)
         logger.info("Sampling complete, preparing output.")
-        out, final, mass_matrix = make_result(out, region, active, fixed, model, bounds=bounds,
-                                              step=step, stats=stats, patchID=patchID)
+        out, final, covs = make_result(out, region, active, fixed, model, bounds=bounds,
+                                       step=step, stats=stats, patchID=patchID)
         logger.info("Checking region back in")
-        sceneDB.checkin_region(final, fixed, config.sampling_draws, mass_matrix=mass_matrix)
+        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs)
 
         outfile = os.path.join(args.patch_dir, "patch{:04.0f}_results.h5".format(patchID))
         logger.info("Writing to {}".format(outfile))

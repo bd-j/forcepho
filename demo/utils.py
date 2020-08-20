@@ -11,7 +11,7 @@ from forcepho.fitting import Result
 
 __all__ = ["Logger",
            "rectify_catalog",
-           "make_bounds", "bounds_vectors",
+           "extract_block_diag",
            "make_result", "get_results",
            "make_statscat", "make_chaincat"]
 
@@ -79,113 +79,32 @@ def rectify_catalog(sourcecatfile, rhrange=(0.051, 0.29), qrange=(0.2, 0.99),
     return sourcecat, bands, header
 
 
-def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
-                n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
-                sqrtq_range=(0.3, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
-                rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
-    """Make a catalog of upper and lower bounds for the parameters of each
-    source. This catalog is a structured array with fields for each of the
-    source parameters, each containing a 2-element array of the form (lower,
-    upper).  Each row is a different source
+def extract_block_diag(a, n, k=0):
+    """Extract block diagonal elements from an array
 
     Parameters
     ----------
-    active : structured ndarray of shape (n_source,)
-        The source catalog, with appropriate column names
+    a : ndarray, of shape (N, N)
+        The input array
 
-    filternames : list of strings
-        The names of the columns corresponding to the flux parameters
+    n : int
+        The size of each block
 
-    shapenames: list of strings (optional)
-        The names of the columns corresponding to positional and shape parameters
-
-    n_sig_flux : float (optional)
-        The number of flux sigmas to set for the prior width
-
-    dra : ndarray of shape (n_source,) or (1,) (optional)
-        The delta in RA degrees to use for the prior width
-
-    ddec : ndarray of shape (n_source,) or (1,) (optional)
-        The delta in Dec degrees to use for the prior width
-
-    n_pix : float (optional)
-        The number of pixels to use for a prior width in RA and Dec
-
-    pixscale : float, (optional)
-        The size of each pixel, in arcsec
+    Returns
+    -------
+    b : narray of shape (N//n, n, n)
     """
-
-    pm1 = np.array([-1., 1.])
-
-    if dra is None:
-        dra = n_pix * pixscale / 3600. / np.cos(np.deg2rad(active["ra"]))
-    if ddec is None:
-        ddec = np.array([n_pix * pixscale / 3600.])
-
-    # Make empty bounds catalog
-    colnames = filternames + shapenames
-    cols = [("source_index", np.int32)] + [(c, np.float64, (2,))
-                                           for c in colnames]
-    dtype = np.dtype(cols)
-    bcat = np.zeros(len(active), dtype=dtype)
-
-    # Fill the easy ones
-    bcat["q"] =  sqrtq_range
-    bcat["pa"] = pa_range
-    bcat["sersic"] = sersic_range
-    bcat["rhalf"] = rhalf_range
-
-    # Fill the ra
-    bcat["ra"] = active["ra"][:, None] + pm1[None, :] * dra[:, None]
-    bcat["dec"] = active["dec"][:, None] + pm1[None, :] * ddec[:, None]
-
-    # fill the fluxes
-    for b in filternames:
-        try:
-            sigma_flux = active["{}_unc".format(b)]
-        except(ValueError):
-            sigma_flux = np.sqrt(np.abs(active[b]))
-        bcat[b] = active[b][:, None] + pm1[None, :] * n_sig_flux * sigma_flux[:, None]
-
-    return bcat
-
-
-def bounds_vectors(bounds_cat, filternames, shapes=Galaxy.SHAPE_COLS,
-                   reference_coordinates=[0., 0.]):
-    """Convert a structured array of bounds to simple 1d vectors of lower and
-    upper bounds for all sources.
-    """
-    lower, upper = [], []
-    bcat = bounds_cat.copy()
-    bcat["ra"] -= reference_coordinates[0]
-    bcat["dec"] -= reference_coordinates[1]
-    for row in bcat:
-        lower.extend([row[b][0] for b in filternames] + [row[c][0] for c in shapes])
-        upper.extend([row[b][1] for b in filternames] + [row[c][1] for c in shapes])
-
-    return np.array(lower), np.array(upper)
-
-
-def init_covar(n_param, n_source):
-    """Make a bunch of identity matrices
-    """
-    return np.reshape(np.tile(np.eye(n_param).flatten(), n_source), (n_source, n_param, n_param))
-
-
-def extract_block_diag(a, n, k=0):
     a = np.asarray(a)
     if a.ndim != 2:
         raise ValueError("Only 2-D arrays handled")
     if not (n > 0):
         raise ValueError("Must have n >= 0")
-
     if k > 0:
         a = a[:,n*k:]
     else:
         a = a[-n*k:]
 
     n_blocks = min(a.shape[0]//n, a.shape[1]//n)
-
     new_shape = (n_blocks, n, n)
     new_strides = (n*a.strides[0] + n*a.strides[1],
                    a.strides[0], a.strides[1])
@@ -195,13 +114,61 @@ def extract_block_diag(a, n, k=0):
 
 def make_result(result, region, active, fixed, model,
                 bounds=None, patchID=None, step=None, stats=None):
+    """
+    Parameters
+    ----------
+    result : a fitting.Result() object
+        A namespace that contains fitting results
+
+    region : a region.Region object
+        The region defining the patch; its parameters will be added to the
+        result.
+
+    active : structured ndarray
+        The active sources and their starting parameters.
+
+    fixed : structured ndarray
+        The fixed sources and their parameters.
+
+    model : a model.PosteriorModel object
+        Must contain `proposer.patch` and `scene` attributes
+
+    bounds : optional
+        If given, a structured ndarrray of lower and upper bounds for
+        each parameter of each source.
+
+    patchID : optional, int
+        An integer giving the unique patch ID.
+
+    step : optional
+        If supplied, a littlemcmc NUTS step obect.  this contains the covariance matrix
+
+    stats : optional
+        If supplied, a littlemcmc stats object.
+
+    Returns
+    -------
+
+    result : result container
+        A simple namespace with numerous attributes added
+
+    qcat : structured ndarray
+        A structured array of the parameter values in the last sample of the chain.
+
+    block_covs : ndarray of shape (N_source, N_param, N_param)
+        The covariance matrices for the sampling potential, extracted as block
+        diagonal elements of the full N_source * N_param square covariance
+        array.  Not that it is in the units of the transformed, unconstrained
+        sampling parameters.  If the prior bounds change, the covariance matrix
+        is no longer valid (or must be retransformed) 
+    """
 
     patch = model.proposer.patch
     scene = model.scene
     bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
     shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="S")
     ref = np.array(patch.patch_reference_coordinates)
-    mass_matrix = None
+    block_covs = None
 
     out = result
 
@@ -219,6 +186,9 @@ def make_result(result, region, active, fixed, model,
         out.fixed = np.array(fixed)
 
     # --- chain and covariance ---
+    # keep chain as a structured array? all info is saved to make it later
+    #chaincat = make_chaincat(out.chain, bands, active, ref,
+    #                         shapes=shapenames)
     if step is not None:
         try:
             out.cov = np.array(step.potential._cov.copy())
@@ -227,17 +197,16 @@ def make_result(result, region, active, fixed, model,
         if stats is not None:
             out.stats = make_statscat(stats, step)
 
-        #covs = extract_block_diag(out.cov)
-    # keep chain as a structured array? all info is saved to make it later
-    #chaincat = make_chaincat(out.chain, bands, active, ref,
-    #                         shapes=shapenames)
+        n_param = len(bands + shapenames)
+        block_covs = extract_block_diag(out.cov, n_param)
 
     # --- priors ---
     if bounds is not None:
         out.bounds = bounds
 
-    # --- last position ---
-    # FIXME: do this another way
+    # --- last position as structured array ---
+    # FIXME: do this another way; maybe take a dtype from the superscene
+    # or use make_chaincat
     qlast = out.chain[-1, :]
     scene.set_all_source_params(qlast)
     patch.unzerocoords(scene)
@@ -247,7 +216,7 @@ def make_result(result, region, active, fixed, model,
     qcat["source_index"][:] = active["source_index"]
     out.final = qcat
 
-    return out, qcat, mass_matrix
+    return out, qcat, block_covs
 
 
 def get_results(fn):
@@ -277,7 +246,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     n_iter, n_param = chain.shape
     n_band = len(bands)
 
-    n_param_per_source = n_band + 6
+    n_param_per_source = n_band + len(shapes)
     assert (np.mod(n_param, n_param_per_source) == 0)
     n_source = int(n_param / n_param_per_source)
     assert (n_source == len(active))
@@ -300,4 +269,3 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     cat["dec"] += ref[1]
 
     return cat
-

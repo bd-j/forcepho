@@ -64,8 +64,8 @@ def priors(scene, stamps, npix=2.0):
     return scales, lower, upper
 
 
-def run_lmc(model, q, n_draws, adapt=False, full=False, warmup=[10],
-            trace=None, z_cov=None, progressbar=False):
+def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
+            warmup=[10], trace=None, z_cov=None, progressbar=False):
     """Use the littlemcmc barebones NUTS algorithm to sample from the
     posterior.
 
@@ -122,7 +122,7 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, warmup=[10],
     #z_cov, trace = warmup_rounds(warmup, model)
 
     # --- production run ---
-    potential = get_pot(n_dim, adapt=adapt, full=full,
+    potential = get_pot(n_dim, adapt=adapt, full=full, weight=weight,
                         init_mean=start, init_cov=z_cov, trace=trace)
     step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
                 model_ndim=n_dim, potential=potential)
@@ -174,7 +174,7 @@ def warmup_rounds(warmup, model):
 
 
 def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
-            regular_variance=1e-3, adapt=True, full=False):
+            regular_variance=1e-3, adapt=True, full=False, weight=10):
     """Generate a full potential (i.e. a mass matrix) either using a supplied
     covariance matrix, a trace of samples, or the identity.
 
@@ -211,10 +211,10 @@ def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
 
     if full:
         init_mass = cov
-        potential = QuadPotentialFullAdapt(n_dim, init_mean, init_mass, 10)
+        potential = QuadPotentialFullAdapt(n_dim, init_mean, init_mass, weight)
     else:
         init_mass = np.diag(cov)
-        potential = QuadPotentialDiagAdapt(n_dim, init_mean, init_mass, 10)
+        potential = QuadPotentialDiagAdapt(n_dim, init_mean, init_mass, weight)
 
     return potential
 
