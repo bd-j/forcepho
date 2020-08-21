@@ -104,6 +104,8 @@ class SuperScene:
         return self.bands + self.shape_cols
 
     def ingest(self, sourcecat, **bounds_kwargs):
+        """Set the catalog, make bounds array, and initialize covariance matricices
+        """
         self.set_catalog(sourcecat)
         self.bounds_catalog = make_bounds(self.sourcecat, self.bands,
                                           shapenames=self.shape_cols,
@@ -132,6 +134,8 @@ class SuperScene:
         self.n_sources = len(self.sourcecat)
         self.cat_dtype = self.sourcecat.dtype
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
+        self.sourcecat["is_valid"][:] = True
+        self.sourcecat["is_active"][:] = False
 
         # save the original catalog
         self.original = sourcecat.copy()
@@ -282,7 +286,7 @@ class SuperScene:
 
         # log which patch and which child ran for each source?
         if patchID is not None:
-            pid = int(patchID)  # JSON wants regular ints
+            pid = str(patchID)  # JSON wants regular ints or str
             for k in active_inds:
                 sid = int(k)
                 if sid in self.sourcelog:
@@ -314,6 +318,7 @@ class SuperScene:
         self.sourcecat["is_valid"][:] = True
         self.sourcecat["is_active"][:] = False
         self.sourcecat["n_iter"][:] = 0
+        self.sourcecat["n_patch"][:] = 0
 
     def get_circular_scene(self, center):
         """

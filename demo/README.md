@@ -42,7 +42,7 @@ Now sample the posterior and regenerate the image from the best fits for each ob
 ```sh
 # fit to the galsim noisy image
 mkdir output/run1
-python sample_test_image.py --patch_dir=./output/run1
+python sample_test_image.py --patch_dir=./output/run1 --logging
 # reconstruct from the posteriors
 python reconstruct_test_image.py --patch_dir=./output/run1 --output_dir=./output
 ```

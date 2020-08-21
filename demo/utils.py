@@ -137,7 +137,7 @@ def make_result(result, region, active, fixed, model,
         If given, a structured ndarrray of lower and upper bounds for
         each parameter of each source.
 
-    patchID : optional, int
+    patchID : optional
         An integer giving the unique patch ID.
 
     step : optional
@@ -160,7 +160,7 @@ def make_result(result, region, active, fixed, model,
         diagonal elements of the full N_source * N_param square covariance
         array.  Not that it is in the units of the transformed, unconstrained
         sampling parameters.  If the prior bounds change, the covariance matrix
-        is no longer valid (or must be retransformed) 
+        is no longer valid (or must be retransformed)
     """
 
     patch = model.proposer.patch
@@ -197,7 +197,7 @@ def make_result(result, region, active, fixed, model,
         if stats is not None:
             out.stats = make_statscat(stats, step)
 
-        n_param = len(bands + shapenames)
+        n_param = len(bands) + len(shapenames)
         block_covs = extract_block_diag(out.cov, n_param)
 
     # --- priors ---
@@ -215,6 +215,15 @@ def make_result(result, region, active, fixed, model,
     qcat = scene.to_catalog(extra_cols=["source_index"])
     qcat["source_index"][:] = active["source_index"]
     out.final = qcat
+
+    # qcat = active.copy()
+    # for f in chaincat.dtype.names:
+    #     if f in qcat.dtype.names:
+    #         try:
+    #             qcat[f][:] = chaincat[f][:, -1]
+    #         except(IndexError):
+    #             qcat[f][:] = chaincat[f][:]
+
 
     return out, qcat, block_covs
 

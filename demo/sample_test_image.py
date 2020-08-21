@@ -3,6 +3,8 @@
 
 import os, sys, argparse, time
 import numpy as np
+from astropy.io import fits
+# import h5py
 
 from forcepho.dispatcher import SuperScene
 from forcepho.sources import Galaxy
@@ -13,7 +15,6 @@ from forcepho.model import GPUPosterior, BoundedTransform
 from forcepho.fitting import Result, run_lmc
 
 from utils import Logger, rectify_catalog, make_result
-from utils import make_bounds, bounds_vectors, init_covar
 from config_test import config
 
 try:
@@ -97,10 +98,12 @@ if __name__ == "__main__":
                          maxactive_per_patch=config.maxactive_per_patch,
                          maxradius=config.patch_maxradius,
                          target_niter=config.sampling_draws,
+                         statefile=os.path.join(args.patch_dir, "superscene.fits"),
                          bounds_kwargs={})
     #sceneDB.bounds_catalog = make_bounds(sceneDB.sourcecat, bands)
     #sceneDB.covariance_matrices = init_covar(len(sceneDB.parameter_columns), sceneDB.n_sources)
     logger.info("Made SceneDB")
+    error = None
 
     # --- Sample the patches ---
     while sceneDB.undone:
@@ -108,13 +111,13 @@ if __name__ == "__main__":
         region, active, fixed = sceneDB.checkout_region()
         if active is None:
             continue
+        patchID = "{:04.0f}".format(active["source_index"][0])
         logger.info("Checked out scene with {} active sources".format(len(active)))
 
         # --- Build patch --- (child)
-        patchID = int(active["source_index"][0])
         patcher.build_patch(region, None, allbands=bands)
         proposer, q = prepare(patcher, active=active, fixed=fixed)
-        logger.info("Prepared Patch {:04.0f}".format(patchID))
+        logger.info("Prepared Patch {}".format(patchID))
 
         # --- Get bounds, covariances, and sample --- (child)
         weight = max(10, active["n_iter"].min())
@@ -123,20 +126,35 @@ if __name__ == "__main__":
                                                     bands=patcher.bandlist,
                                                     ref=patcher.patch_reference_coordinates)
         model = make_model(proposer, lower, upper)
-        logger.info("Model made, sampling with {} warmup and {} draws")
-        out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
-                                   full=config.full_cov, z_cov=cov, adapt=True,
-                                   weight=weight, warmup=config.warmup, progressbar=True)
+        logger.info("Model made, sampling with covariance weight={}".format(weight))
+        try:
+            out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
+                                       full=config.full_cov, z_cov=cov, adapt=True,
+                                       weight=weight, warmup=config.warmup, progressbar=True)
+        except(ValueError) as e:
+            print("error with patchID = {}".format(patchID))
+            print(active)
+            print("starting position = {}".format(q))
+            print("below lower = {}".format((q > lower).sum()))
+            print("above upper = {}".format((q < upper).sum()))
+            print("-------\n")
+            fits.writeto("emergency_dump_active{}.fits".format(patchID), active, overwrite=True)
+
+            error = e
+            break
 
         # --- Deal with results --- (child/parent)
         logger.info("Sampling complete, preparing output.")
         out, final, covs = make_result(out, region, active, fixed, model, bounds=bounds,
                                        step=step, stats=stats, patchID=patchID)
         logger.info("Checking region back in")
-        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs)
+        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, patchID=patchID)
 
-        outfile = os.path.join(args.patch_dir, "patch{:04.0f}_results.h5".format(patchID))
+        outfile = os.path.join(args.patch_dir, "patch{}_results.h5".format(patchID))
         logger.info("Writing to {}".format(outfile))
         out.dump_to_h5(outfile)
 
     sceneDB.writeout()
+
+    if error is not None:
+        raise(error)

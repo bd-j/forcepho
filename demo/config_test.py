@@ -51,7 +51,7 @@ config.patch_maxradius = 8
 # -----------------------
 # --- HMC parameters ---
 config.sampling_draws = 256
-config.warmup = [256, 256]
+config.warmup = [512, 256]
 config.full_cov = True
 
 # ------------------------
