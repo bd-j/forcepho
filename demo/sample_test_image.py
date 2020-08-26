@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""sample_test_image.py - Fit a scene to a test image, using littlemcmc
+"""
+
 import os, sys, argparse, time
 import numpy as np
 from astropy.io import fits

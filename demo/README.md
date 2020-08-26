@@ -20,7 +20,7 @@ cd ${MYSCRATCH}/phodemo
 Test against a simple image created from `galsim`
 
 ```sh
-# Make test images (and catalog) using galsim
+# Make test images (and catalog) using GalSim
 mkdir ./data
 python make_test_image.py
 # preprocess to create data stores in the format expected by forcepho
@@ -45,6 +45,9 @@ mkdir output/run1
 python sample_test_image.py --patch_dir=./output/run1 --logging
 # reconstruct from the posteriors
 python reconstruct_test_image.py --patch_dir=./output/run1 --output_dir=./output
+# Compare recovered parameters (here flux) to input
+cd display
+python explore.py --patch_dir=../output/run1 --colname=Fclear
 ```
 
 # Features
@@ -53,4 +56,4 @@ It would be nice to show
 
  1. The covariances between adjacent sources as a function of distance/rhalf
  2. The difference in posteriors between fitting multiple (different resolution) bands separately and simultaneously.
- 3. Biases due to color gradients.
+ 3. Biases due to color gradients, or unmodeled substructure.

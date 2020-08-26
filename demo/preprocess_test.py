@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""preprocess_test.py - Make the required pixel, metadata, and PSF stores.
+"""
+
 import os, glob, sys
 import time
 

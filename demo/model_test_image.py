@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""model_test_image.py - generate image with forcepho for a particular input scene
+"""
+
 import sys, os
 import numpy as np
 

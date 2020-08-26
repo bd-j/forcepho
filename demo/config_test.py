@@ -12,7 +12,6 @@ config = Namespace()
 # -----------
 # --- Overall ----
 config.logging = True
-basedir = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/phodemo/")
 basedir = "."
 
 # -----------------------
@@ -57,6 +56,5 @@ config.full_cov = True
 # ------------------------
 # --- PSF information ----
 # Used for building PSF store
-config.mixture_directory = "/Users/bjohnson/Projects/jades_force/data/psf/mixtures"
 config.psf_fwhm = [2.0]  # single gaussian with FWHM = 2 pixels
 config.psf_amp = [1.0]

@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""reconstruct_test_image.py - Generate an image with forcepho using a set of
+chains from different patches to define the scene.
+"""
+
 from argparse import ArgumentParser
 import sys, os, glob
 import numpy as np
