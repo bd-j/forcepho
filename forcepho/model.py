@@ -151,7 +151,7 @@ class Posterior:
         if self.transform is not None:
             self._jacobian = self.transform.jacobian(z)
             self._lndetjac = self.transform.lndetjac(z)
-            self._lndetjac_grad = self.Transform.lndetjac_grad(z)
+            self._lndetjac_grad = self.transform.lndetjac_grad(z)
             return self.transform.transform(z)
         else:
             self._jacobian = 1.
@@ -231,6 +231,7 @@ class GPUPosterior(Posterior):
         # --- initialize some things ---
         self.ncall = 0
         self._z = -99
+        self._q = -99
         self.mhalf = np.array(-0.5, dtype=np.float64)
 
         # --- logging/debugging ---
@@ -340,16 +341,24 @@ class GPUPosterior(Posterior):
 class CPUPosterior(Posterior):
 
     def __init__(self, scene=None, plans=[], stamps=[], lnlike=lnlike_multi,
-                 lnlike_kwargs={"source_meta": True}):
+                 lnlike_kwargs={"source_meta": True}, lnprior=None, transform=None):
+
+        # --- Assign ingredients ---
+        self.scene = scene
+        self.transform = transform
         self.lnlike = lnlike
         self.lnlike_kwargs = lnlike_kwargs
         if len(plans) == 0:
             self.plans = [WorkPlan(stamp) for stamp in stamps]
         else:
             self.plans = plans
-        self.scene = scene
+        if lnprior is not None:
+            self.lnprior = lnprior
+
+        # --- initialize some things ---
         self.ncall = 0
         self._z = -99
+        self._q = -99
 
     def evaluate(self, z):
         """Evaluate and chache the ln-probability for the given parameter
@@ -357,16 +366,29 @@ class CPUPosterior(Posterior):
 
         Parameters
         ----------
-        z : ndarray of shape (ndim,)
-            The sampling parameters which have a prior distribution attached.
+        z : ndarray of shape (self.ndim,)
+            The untransformed (sampling) parameters which have a prior
+            distribution attached.
 
+        Theta are the transformed forcepho native parameters.  In the default
+        case these are these are the same as thetaprime, i.e. the
+        transformation is the identity.
         """
-        Theta = z
-        ll, ll_grad = self.lnlike(Theta, scene=self.scene, plans=self.plans,
-                                  **self.lnlike_kwargs)
+        q = self.make_transform(z)
+        ll, ll_grad = self.lnlike(q, scene=self.scene, plans=self.plans)
+        lpr, lpr_grad = self.lnprior(q)
+
         self.ncall += 1
-        self._lnp = ll
-        self._lnp_grad = ll_grad
+        self._lnlike = ll
+        self._lnlike_grad = ll_grad
+        self._lnprior = lpr
+        self._lnprior_grad = lpr_grad
+
+        self._lnp = ll + lpr + self._lndetjac
+        # TODO: In the general case this should be a dot product of the
+        # gradient vector with a Jacobian matrix, but for now the jacobian is diagonal so this works
+        self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
+        self._q = q
         self._z = z
 
     def residuals(self, Theta=None):
@@ -381,65 +403,6 @@ class CPUPosterior(Posterior):
 
 class ConstrainedTransformedPosterior(CPUPosterior):
 
-    def __init__(self, scene=None, plans=[], stamps=[], lnlike=lnlike_multi,
-                 lnprior=None, transform=None, upper=np.inf, lower=-np.inf,
-                 verbose=False):
-        self.scene = scene
-        if len(plans) == 0:
-            self.plans = [WorkPlan(stamp) for stamp in stamps]
-        else:
-            self.plans = plans
-        self.lnlike = lnlike
-        if lnprior is not None:
-            self.lnprior = lnprior
-        self.T = transform
-        self.ncall = 0
-        self._theta = -99
-        self._z = -99
-        self.lower = lower
-        self.upper = upper
-
-    def evaluate(self, z):
-        """
-        Parameters
-        ----------
-        z : ndarray of shape (self.ndim,)
-            The untransformed (sampling) parameters which have a prior
-            distribution attached.
-
-        Theta are the transformed forcepho native parameters.  In the default
-        case these are these are the same as thetaprime, i.e. the
-        transformation is the identity.
-        """
-        Theta = self.transform(z)
-        ll, ll_grad = self.lnlike(Theta, scene=self.scene, plans=self.plans)
-        lpr, lpr_grad = self.lnprior(Theta)
-
-        self.ncall += 1
-        self._lnlike = ll
-        self._lnlike_grad = ll_grad
-        self._lnprior = lpr
-        self._lnprior_grad = lpr_grad
-
-        self._lnp = ll + lpr + self._lndetjac
-        self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
-        self._theta = Theta
-        self._z = z
-
-    def lnprior(self, Theta):
-        return 0.0, 0.0
-
-    def transform(self, z):
-        if self.T is not None:
-            self._jacobian = self.T.jacobian(z)
-            self._lndetjac = self.T.lndetjac(z)
-            self._lndetjac_grad = self.T.lndetjac_grad(z)
-            return self.T.transform(z)
-        else:
-            self._jacobian = 1.
-            self._lndetjac = 0
-            self._lndetjac_grad = 0
-            return np.array(z)
 
     def check_constrained(self, theta):
         """Method that checks parameter values against constraints.  If they
@@ -459,16 +422,19 @@ class ConstrainedTransformedPosterior(CPUPosterior):
 
         flag : A flag for if the values are still out of bounds.
         """
+        upper = np.zeros_like(theta) + self.upper
+        lower = np.zeros_like(theta) + self.lower
+
         # initially no flips
         sign = np.ones_like(theta)
         # pretend we started out-of-bounds to force at least one check
         oob = True
         while oob:
-            above = theta > self.upper
-            theta[above] = 2 * self.upper[above] - theta[above]
+            above = theta > upper
+            theta[above] = 2 * upper[above] - theta[above]
             sign[above] *= -1
-            below = theta < self.lower
-            theta[below] = 2 * self.lower[below] - theta[below]
+            below = theta < lower
+            theta[below] = 2 * lower[below] - theta[below]
             sign[below] *= -1
             oob = np.any(below | above)
         return theta, sign, oob

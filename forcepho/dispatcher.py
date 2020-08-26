@@ -16,12 +16,15 @@ except(ImportError):
     MPI = Namespace()
     MPI.ANY_TAG = 1
 
+import json
 from scipy.spatial import cKDTree
+from scipy.linalg import block_diag
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 from .region import CircularRegion
+from .sources import Galaxy
 
 
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
@@ -42,19 +45,23 @@ class SuperScene:
     A region can be checked out.  The default is to randomly choose a single
     valid source from the catalog and find all sources within some radius of
     that seed source.  The weighting logic for the seeds can be adjusted by
-    over-writing the `seed_weight()` method
+    over-writing the `seed_weight()` method.
+
+    Sources in regions that are checked out have their sources unavailable for further
+    checkouts, until they are checked back in, with new parameters
     """
 
     def __init__(self, statefile="superscene.fits",                 # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
                  maxactive_per_patch=20, nscale=3,                  # patch boundaries
                  boundary_radius=8., maxradius=5., minradius=1,     # patch boundaries
-                 sourcecat=None, bands=None):
+                 sourcecat=None, bands=None, bounds_kwargs={}):
 
         self.statefilename = statefile
-        if (sourcecat is not None):
-            self.set_catalog(sourcecat)
         self.bands = bands
+        self.shape_cols = Galaxy.SHAPE_COLS
+        if (sourcecat is not None):
+            self.ingest(sourcecat, **bounds_kwargs)
 
         self.n_active = 0
         self.n_fixed = 0
@@ -75,7 +82,13 @@ class SuperScene:
         return self
 
     def __exit__(self, type, value, traceback):
+        self.writeout()
+
+    def writeout(self):
         fits.writeto(self.statefilename, self.sourcecat, overwrite=True)
+        with open(self.statefilename.replace(".fits", "_log.json"), "w") as fobj:
+            logs = dict(sourcelog=self.sourcelog, patchlog=self.patchlog)
+            json.dump(logs, fobj)
 
     @property
     def sparse(self):
@@ -85,6 +98,24 @@ class SuperScene:
     @property
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
+
+    @property
+    def parameter_columns(self):
+        return self.bands + self.shape_cols
+
+    def ingest(self, sourcecat, **bounds_kwargs):
+        """Set the catalog, make bounds array, and initialize covariance matricices
+        """
+        self.set_catalog(sourcecat)
+        self.bounds_catalog = make_bounds(self.sourcecat, self.bands,
+                                          shapenames=self.shape_cols,
+                                          **bounds_kwargs)
+        n_param = len(self.parameter_columns)
+        self.covariance_matrices =  np.reshape(np.tile(np.eye(n_param).flatten(), self.n_sources),
+                                                (self.n_sources, n_param, n_param))
+        # Logs
+        self.sourcelog = {}
+        self.patchlog = []
 
     def set_catalog(self, sourcecat):
         """Set the sourcecat attribute to the given catalog, doing some checks
@@ -102,11 +133,12 @@ class SuperScene:
         self.sourcecat = sourcecat
         self.n_sources = len(self.sourcecat)
         self.cat_dtype = self.sourcecat.dtype
-
-        # Store the initial coordinates, which are used to set positional priors
-        self.ra0 = sourcecat["ra"][:].copy()
-        self.dec0 = sourcecat["dec"][:].copy()
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
+        self.sourcecat["is_valid"][:] = True
+        self.sourcecat["is_active"][:] = False
+
+        # save the original catalog
+        self.original = sourcecat.copy()
 
     def sky_to_scene(self, ra, dec):
         """Generate scene coordinates, which are anglular offsets (lat, lon)
@@ -193,6 +225,10 @@ class SuperScene:
         active : structured ndarray
             Copies of the rows of the `sourcecat` attribute corresponding to the
             active sources in the region
+
+        fixed : structured ndarray
+            Copies of the rows of the `sourcecat` attribute corresponding to the
+            fixed sources in the region
         """
         # Draw a patch center, convert to scene coordinates
         # (arcsec from scene center), and get active and fixed sources
@@ -211,7 +247,8 @@ class SuperScene:
 
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
-    def checkin_region(self, active, fixed, niter, mass_matrix=None):
+    def checkin_region(self, active, fixed, niter, block_covs=None,
+                       patchID=None, flush=False):
         """Check-in a set of active source parameters, and also fixed sources.
         The parameters of the active sources are updated in the master catalog,
         they are marked as inactive, and along with the provided fixed sources
@@ -220,8 +257,8 @@ class SuperScene:
         """
         # Find where the sources are that are being checked in
         try:
-            active_inds = active["source_index"]
-            fixed_inds = fixed["source_index"]
+            active_inds = active["source_index"].astype(int)
+            fixed_inds = fixed["source_index"].astype(int)
         except(KeyError):
             raise
 
@@ -238,7 +275,50 @@ class SuperScene:
 
         self.n_active -= len(active_inds)
         self.n_fixed -= len(fixed_inds)
+
+        # update mass matrix
+        if block_covs is not None:
+            # FIXME: this should account for missing bands in the mass matrices
+            try:
+                self.covariance_matrices[active_inds] = block_covs
+            except(ValueError, AttributeError):
+                print("could not update mass matrix")
+
         # log which patch and which child ran for each source?
+        if patchID is not None:
+            pid = str(patchID)  # JSON wants regular ints or str
+            for k in active_inds:
+                sid = int(k)
+                if sid in self.sourcelog:
+                    self.sourcelog[sid].append(pid)
+                else:
+                    self.sourcelog[sid] = [pid]
+            self.patchlog.append(pid)
+
+        if flush:
+            self.writeout()
+
+    def bounds_and_covs(self, sourceIDs, bands=[], ref=[0., 0.]):
+        bounds = self.bounds_catalog[sourceIDs]
+        lower, upper = bounds_vectors(bounds, bands, shapes=self.shape_cols,
+                                      reference_coordinates=ref)
+
+        if hasattr(self, "covariance_matrices"):
+            covs = self.covariance_matrices[sourceIDs]
+            # FIXME: deal with missing bands
+            cov = block_diag(*covs)
+        else:
+            cov = None
+
+        return lower, upper, cov
+
+    def reset(self):
+        """Reset active, valid, and n_iter values.
+        """
+        self.sourcecat["is_valid"][:] = True
+        self.sourcecat["is_active"][:] = False
+        self.sourcecat["n_iter"][:] = 0
+        self.sourcecat["n_patch"][:] = 0
 
     def get_circular_scene(self, center):
         """
@@ -370,6 +450,93 @@ class SuperScene:
         # add fixed boundary objects; these will be all objects
         # within some tolerance (d / size) of every active source
         raise NotImplementedError
+
+
+def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
+                n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
+                sqrtq_range=(0.3, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
+                rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
+    """Make a catalog of upper and lower bounds for the parameters of each
+    source. This catalog is a structured array with fields for each of the
+    source parameters, each containing a 2-element array of the form (lower,
+    upper).  Each row is a different source
+
+    Parameters
+    ----------
+    active : structured ndarray of shape (n_source,)
+        The source catalog, with appropriate column names
+
+    filternames : list of strings
+        The names of the columns corresponding to the flux parameters
+
+    shapenames: list of strings (optional)
+        The names of the columns corresponding to positional and shape parameters
+
+    n_sig_flux : float (optional)
+        The number of flux sigmas to set for the prior width
+
+    dra : ndarray of shape (n_source,) or (1,) (optional)
+        The delta in RA degrees to use for the prior width
+
+    ddec : ndarray of shape (n_source,) or (1,) (optional)
+        The delta in Dec degrees to use for the prior width
+
+    n_pix : float (optional)
+        The number of pixels to use for a prior width in RA and Dec
+
+    pixscale : float, (optional)
+        The size of each pixel, in arcsec
+    """
+
+    pm1 = np.array([-1., 1.])
+
+    if dra is None:
+        dra = n_pix * pixscale / 3600. / np.cos(np.deg2rad(active["ra"]))
+    if ddec is None:
+        ddec = np.array([n_pix * pixscale / 3600.])
+
+    # Make empty bounds catalog
+    colnames = filternames + shapenames
+    cols = [("source_index", np.int32)] + [(c, np.float64, (2,))
+                                           for c in colnames]
+    dtype = np.dtype(cols)
+    bcat = np.zeros(len(active), dtype=dtype)
+
+    # Fill the easy ones
+    bcat["q"] =  sqrtq_range
+    bcat["pa"] = pa_range
+    bcat["sersic"] = sersic_range
+    bcat["rhalf"] = rhalf_range
+
+    # Fill the ra
+    bcat["ra"] = active["ra"][:, None] + pm1[None, :] * dra[:, None]
+    bcat["dec"] = active["dec"][:, None] + pm1[None, :] * ddec[:, None]
+
+    # fill the fluxes
+    for b in filternames:
+        try:
+            sigma_flux = active["{}_unc".format(b)]
+        except(ValueError):
+            sigma_flux = np.sqrt(np.abs(active[b]))
+        bcat[b] = active[b][:, None] + pm1[None, :] * n_sig_flux * sigma_flux[:, None]
+
+    return bcat
+
+
+def bounds_vectors(bounds_cat, filternames, shapes=Galaxy.SHAPE_COLS,
+                   reference_coordinates=[0., 0.]):
+    """Convert a structured array of bounds to simple 1d vectors of lower and
+    upper bounds for all sources.
+    """
+    lower, upper = [], []
+    bcat = bounds_cat.copy()
+    bcat["ra"] -= reference_coordinates[0]
+    bcat["dec"] -= reference_coordinates[1]
+    for row in bcat:
+        lower.extend([row[b][0] for b in filternames] + [row[c][0] for c in shapes])
+        upper.extend([row[b][1] for b in filternames] + [row[c][1] for c in shapes])
+
+    return np.array(lower), np.array(upper)
 
 
 class MPIQueue:
@@ -573,7 +740,7 @@ if __name__ == "__main__":
 
             # send to parent, free GPU memory
             # TODO: isend?
-            comm.ssend(payload, parent, status.tag)  
+            comm.ssend(payload, parent, status.tag)
             #patcher.free()
 
             msg = "Child {} sent {} for patch {}"

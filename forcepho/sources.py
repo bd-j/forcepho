@@ -21,6 +21,8 @@ __all__ = ["Scene", "Source",
            "SimpleGalaxy", "Galaxy",
            "ConformalShearGalaxy"]
 
+# TODO: Consider dropping optional filtername from all set_params and get_params methods.
+# Also, use the Source get and set methods instead of subclasses, and replace npos, nshape with just nshape
 
 class Scene(object):
     """The Scene holds the sources and provides the mapping between a giant 1-d
@@ -206,7 +208,7 @@ class Source(object):
 
     # --- Parameters ---
     ID_COL = ["id"]
-    SHAPE_COLS = ["ra", "dec", "q", "pa"]
+    SHAPE_COLS = ["ra", "dec", "q", "pa", "rhalf", "sersic"]
     FLUX_COL = ["flux"]
     npos, nshape = 2, 2
     flux = 0.     # flux.  This will get rewritten on instantiation to have
@@ -216,7 +218,7 @@ class Source(object):
     q = 1.        # sqrt of the axis ratio, i.e.  (b/a)^0.5
     pa = 0.       # postion angle (N of E)
     sersic = 0.   # sersic index
-    rhalf = 0.       # half light radius
+    rhalf = 0.    # half light radius
 
     def __init__(self, filters=['band'], radii=None):
         """
@@ -276,8 +278,48 @@ class Source(object):
         names = ["{}_{}".format(n, self.id) for n in names]
         return names
 
-    def get_param_vector(self):
-        raise(NotImplementedError)
+    def set_params(self, parvector, filtername=None):
+        """Set the relevant parameter attributes from a sequence of parameters.
+
+        Parameters
+        ----------
+        parvector : Sequence of length `nband+nshape` or `1+nshape`
+            The source parameter values that are to be set.
+
+        filtername : string or None (optional, default: None)
+            If supplied, the given vector is assumed to be of length `1 +
+            self.nshape` where the first element is the source flux through the
+            filter given by `filtername`.  If `None` then the vector is assumed
+            to be of length `self.nband + self.nshape`, where the first `nband`
+            elements correspond to the fluxes.
+        """
+        if filtername is not None:
+            nflux = 1
+            flux_inds = self.filter_index(filtername)
+        else:
+            nflux = self.nband
+            flux_inds = slice(None)
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(parvector) == nflux + len(self.SHAPE_COLS), msg
+
+        self.flux[flux_inds] = parvector[:nflux]
+        for i, a in enumerate(self.SHAPE_COLS):
+            setattr(self, a, parvector[nflux + i])
+
+    def get_param_vector(self, filtername=None):
+        """Get the relevant source parameters as a simple 1-D ndarray.
+
+        Returns
+        -------
+        parvector : ndarray of shape (self.nband + self.nshape)
+            The source parameters as a simple vector
+        """
+        if filtername:
+            flux = [self.flux[self.filter_index(filtername)]]
+        else:
+            flux = self.flux
+        params = np.concatenate([flux, [getattr(self, a) for a in self.SHAPE_COLS]])
+        return params
 
     def filter_index(self, filtername):
         """Returns the index of the element of the `flux` array that
@@ -636,6 +678,7 @@ class Galaxy(Source):
             to be of length `self.nband + 6`, where the first `nband`
             elements correspond to the fluxes.
         """
+        # FIXME: use a parameter name list and setattr here
         if filtername is not None:
             nflux = 1
             flux_inds = self.filter_index(filtername)
@@ -660,6 +703,7 @@ class Galaxy(Source):
             flux = [self.flux[self.filter_index(filtername)]]
         else:
             flux = self.flux
+        # FIXME: use a parameter name list and getattr here
         params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
         if self.nshape > 2:
             params = np.concatenate([params, [self.sersic, self.rhalf]])
