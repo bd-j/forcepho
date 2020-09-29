@@ -3,3 +3,4 @@ pycuda
 pymc3
 dynesty
 matplotlib
+littlemcmc

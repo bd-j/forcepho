@@ -54,6 +54,6 @@ python explore.py --patch_dir=../output/run1 --colname=Fclear
 
 It would be nice to show
 
- 1. The covariances between adjacent sources as a function of distance/rhalf
- 2. The difference in posteriors between fitting multiple (different resolution) bands separately and simultaneously.
+ 1. The covariances between adjacent sources as a function of the ratio distance/rhalf
+ 2. The difference in posteriors between fitting multiple (different resolution) bands separately versus simultaneously.
  3. Biases due to color gradients, or unmodeled substructure.

@@ -340,6 +340,7 @@ class SuperScene:
             (i.e. sources that have some overlap with the radius but are not active)
         """
         # pull all sources within boundary radius
+        # Note this uses original positions
         kinds = self.kdt.query_ball_point(center, self.boundary_radius)
         kinds = np.array(kinds)
         #candidates = self.sourcecat[kinds]
@@ -350,6 +351,7 @@ class SuperScene:
             return None, None, None
 
         # sort sources by distance from center in scale-lengths
+        # Note this uses original coordinates, but updated half-lengths
         rhalf = self.sourcecat[kinds]["rhalf"]
         d = self.scene_coordinates[kinds] - center
         distance = np.hypot(*d.T)
