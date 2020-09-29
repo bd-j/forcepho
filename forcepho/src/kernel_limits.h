@@ -1,15 +1,15 @@
-// This file contains numerical limits that we have to hardwire to 
+// This file contains numerical limits that we have to hardwire to
 // ease fixed-sized allocations on the GPU
 
 // The maximum number of bands we're allowed to use
-#define MAXBANDS 30     
+#define MAXBANDS 30
 
 // The maximum number of active sources that the GPU can use
-#define MAXSOURCES 30   
+#define MAXSOURCES 30
 
 // The number of on-sky parameters per band that yield derivatives
 #define NPARAMS 7
-// NOTE: Changing this *also* requires changing the structure of 
+// NOTE: Changing this *also* requires changing the structure of
 // the ImageGaussian class and the computation of the derivatives.
 
 // The maximum square distance in a Gaussian evaluation before we no-op.
@@ -28,7 +28,7 @@
 
 // Shared memory in each GPU block is limited to 48 KB, which is 12K floats.
 // We have a handful (~9) of single variables, and then the big items are:
-// The accumulators are NUMACCUMS*(NPARAMS*MAXSOURCES+1) shared floats 
+// The accumulators are NUMACCUMS*(NPARAMS*MAXSOURCES+1) shared floats
 // The ImageGaussians are n_psf_per_source*n_sources*21 shared floats,
 // so this is bounded by n_psf_per_source*MAXSOURCES*21.
 

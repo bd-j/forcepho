@@ -8,7 +8,7 @@
 #define CUDA_CALLABLE_MEMBER __host__ __device__
 #else
 #define CUDA_CALLABLE_MEMBER
-#endif 
+#endif
 
 #include "kernel_limits.h"
 
