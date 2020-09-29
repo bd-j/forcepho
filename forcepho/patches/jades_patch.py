@@ -198,7 +198,7 @@ class JadesPatch(Patch):
                 self.CW[j, i] = CW_mat
                 # source specific:
                 self.crval[j, i] = ssky - self.patch_reference_coordinates
-                self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
+                self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], self.wcs_origin)
 
     def _pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
         """A nominal flux calibrartion has been applied to all images,

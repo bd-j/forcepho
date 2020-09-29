@@ -262,7 +262,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
     // We're going to store some values common to the exposure in shared memory
     __shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss;
-    __shared__ float G //, crpix[2], crval[2];
+    __shared__ float G; //, crpix[2], crval[2];
 
     // Load the shared values
     if ( threadIdx.x == 0 ){
@@ -310,8 +310,8 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         // Source dependent coordinate reference values
         float crpix[2], crval[2];
         int cr_start = 2 * (patch->n_sources * exposure + g);
-        crpix = patch->crpix+cr_start;
-        crval = patch->crval+cr_start;
+        crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
+        crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
 
         float smean[2];
         smean[0] = galaxy->ra  - crval[0];
