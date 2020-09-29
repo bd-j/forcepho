@@ -220,17 +220,17 @@ class StaticPatch(Patch):
         # Each source need different astrometry for each exposure
         self.D = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
-        self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
-        self.crval = np.empty((self.n_exp, 2), dtype=dtype)
+        self.crpix = np.empty((self.n_exp, self.n_sources, 2), dtype=dtype)
+        self.crval = np.empty((self.n_exp, self.n_sources, 2), dtype=dtype)
         self.G = np.empty((self.n_exp), dtype=dtype)
 
         # The ordering of the astrometric information in the sources is
         # guaranteed to be in the same order as our exposures
 
         for i in range(self.n_exp):
-            # these values are per-exposure
-            self.crpix[i] = sources[0].stamp_crpixs[i]
-            self.crval[i] = sources[0].stamp_crvals[i]
+            # we give the same value to every source in the exp (no distortions)
+            self.crpix[i, :, :] = sources[0].stamp_crpixs[i]
+            self.crval[i, :, :] = sources[0].stamp_crvals[i]
             self.G[i] = sources[0].stamp_zps[i]
 
             for s, source in enumerate(sources):
@@ -322,15 +322,15 @@ def patch_to_stamps(patch):
         stamp.ierr = splits[3][e]
 
         # Add metadata from first source
-        stamp.crpix = patch.crpix[e]
-        stamp.crpix = patch.crval[e]
+        stamp.crpix = patch.crpix[e, 0]
+        stamp.crpix = patch.crval[e, 0]
 
     scene = patch.scene
     for s, source in enumerate(scene.sources):
         source.stamp_scales = patch.D[:, s, :, :]
         source.stamp_cds = patch.CW[:, s, :, :]  # dpix/dra, dpix/ddec
-        source.stamp_crpixs = patch.crpix[:]
-        source.stamp_crvals = patch.crval[:]
+        source.stamp_crpixs = patch.crpix[:, 0, :]
+        source.stamp_crvals = patch.crval[:, 0, :]
         source.stamp_zps = patch.G[:]
 
         # need to do something about PSFs and about Band ids

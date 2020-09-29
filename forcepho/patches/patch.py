@@ -128,8 +128,8 @@ class Patch:
 
         - self.D             [NEXP, NSOURCE, 2, 2]
         - self.CW            [NEXP, NSOURCE, 2, 2]
-        - self.crpix         [NEXP, 2]
-        - self.crval         [NEXP, 2]
+        - self.crpix         [NEXP, NSOURCE, 2]
+        - self.crval         [NEXP, NSOURCE, 2]
         - self.G             [NEXP]
 
         - self.n_psf_per_source  [NBAND]  number of PSFGaussians per source in each band
@@ -166,9 +166,8 @@ class Patch:
         # Each source need different astrometry for each exposure
         self.D = np.empty((n_exp, self.n_sources, 2, 2), dtype=self.meta_dtype)
         self.CW = np.empty((n_exp, self.n_sources, 2, 2), dtype=self.meta_dtype)
-        # TODO this should also be (Nexp, N_sources, 2)
-        self.crpix = np.empty((n_exp, 2), dtype=self.meta_dtype)
-        self.crval = np.empty((n_exp, 2), dtype=self.meta_dtype)
+        self.crpix = np.empty((n_exp, self.n_sources, 2), dtype=self.meta_dtype)
+        self.crval = np.empty((n_exp, self.n_sources, 2), dtype=self.meta_dtype)
         self.G = np.empty((n_exp), dtype=self.meta_dtype)
 
         # --- PSF data ---

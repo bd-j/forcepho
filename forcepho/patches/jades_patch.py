@@ -178,8 +178,8 @@ class JadesPatch(Patch):
 
         self.D = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
-        self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
-        self.crval = np.empty((self.n_exp, 2), dtype=dtype)
+        self.crpix = np.empty((self.n_exp, self.n_sources, 2), dtype=dtype)
+        self.crval = np.empty((self.n_exp, self.n_sources, 2), dtype=dtype)
         # FIXME: this is a little hacky;
         # what if zerocoords hasn't been called after the scene changed?
         ra0, dec0 = self.patch_reference_coordinates
@@ -189,16 +189,16 @@ class JadesPatch(Patch):
             # near the center of a patch
             # TODO: Source specific crpix, crval pairs?
             # Using ref coords of patch for crval and zero-indexed crpix
-            self.crval[j] = np.zeros(2, dtype=self.meta_dtype)
-            self.crpix[j] = wcs.all_world2pix(ra0, dec0, 0)
+            #self.crval[j] = np.zeros(2, dtype=self.meta_dtype)
+            #self.crpix[j] = wcs.all_world2pix(ra0, dec0, 0)
             for i, s in enumerate(scene.sources):
                 ssky = np.array([s.ra + ra0, s.dec + dec0])
                 CW_mat, D_mat = scale_at_sky(ssky, wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
                 # source specific:
-                #self.crval[j, i] = ssky - self.patch_reference_coordinates
-                #self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
+                self.crval[j, i] = ssky - self.patch_reference_coordinates
+                self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
 
     def _pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
         """A nominal flux calibrartion has been applied to all images,

@@ -262,7 +262,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
 
     // We're going to store some values common to the exposure in shared memory
     __shared__ int band, psfgauss_start, n_psf_per_source, n_gal_gauss;
-    __shared__ float G, crpix[2], crval[2];
+    __shared__ float G //, crpix[2], crval[2];
 
     // Load the shared values
     if ( threadIdx.x == 0 ){
@@ -270,8 +270,8 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         psfgauss_start = patch->psfgauss_start[exposure];
         G = patch->G[exposure];
 
-        crpix[0] = patch->crpix[2*exposure]; crpix[1] = patch->crpix[2*exposure + 1];
-        crval[0] = patch->crval[2*exposure]; crval[1] = patch->crval[2*exposure + 1];
+        //crpix[0] = patch->crpix[2*exposure]; crpix[1] = patch->crpix[2*exposure + 1];
+        //crval[0] = patch->crval[2*exposure]; crval[1] = patch->crval[2*exposure + 1];
 
         n_psf_per_source = patch->n_psf_per_source[band]; //constant per band.
         n_gal_gauss = patch->n_sources * n_psf_per_source;
@@ -298,7 +298,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         matrix22 D, R, S;
 
         int d_cw_start = 4 * (patch->n_sources * exposure + g);
-        D  = matrix22(patch->D+d_cw_start);
+        D = matrix22(patch->D+d_cw_start);
         R.rot(galaxy->pa);
         S.scale(galaxy->q);
 
@@ -306,6 +306,12 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         matrix22 dS_dq, dR_dpa;
         dS_dq.scale_matrix_deriv(galaxy->q);
         dR_dpa.rotation_matrix_deriv(galaxy->pa);
+
+        // Source dependent coordinate reference values
+        float crpix[2], crval[2];
+        int cr_start = 2 * (patch->n_sources * exposure + g);
+        crpix = patch->crpix+cr_start;
+        crval = patch->crval+cr_start;
 
         float smean[2];
         smean[0] = galaxy->ra  - crval[0];

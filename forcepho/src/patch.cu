@@ -73,8 +73,8 @@ public:
     float *D;       // [expnum][source][2][2]
 
     // The Coordinate Reference Point has a pixel location and a RA/Dec
-    float *crpix;   // [expnum][2] -- Image pixel
-    float *crval;   // [expnum][2] -- RA/Dec
+    float *crpix;   // [expnum][source][2] -- Image pixel
+    float *crval;   // [expnum][source][2] -- RA/Dec
 
     // CW is d(pixel x,y)/d(RA,dec) expanded around CR point
     float *CW;      // [expnum][source][2][2]
