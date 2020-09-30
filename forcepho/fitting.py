@@ -29,6 +29,7 @@ class Result(object):
 
     def dump_to_h5(self, filename):
         import h5py
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with h5py.File(filename, "w") as out:
             for name, value in vars(self).items():
                 if type(value) == np.ndarray:
@@ -65,7 +66,8 @@ def priors(scene, stamps, npix=2.0):
 
 
 def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
-            warmup=[10], trace=None, z_cov=None, progressbar=False):
+            warmup=[10], trace=None, z_cov=None, progressbar=False,
+            random_seed=0xDEADBEEF):
     """Use the littlemcmc barebones NUTS algorithm to sample from the
     posterior.
 
@@ -108,7 +110,7 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
         Statistics for each sample
     """
 
-    from littlemcmc.sampling import _sample_one_chain as sample_one
+    from littlemcmc.sampling import _sample as sample_one
     from littlemcmc import NUTS
 
     if model.transform is not None:
@@ -130,7 +132,8 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
                               model_ndim=n_dim, start=start, step=step,
                               draws=n_draws, tune=warmup[0],
                               discard_tuned_samples=True,
-                              progressbar=progressbar,)
+                              progressbar=progressbar,
+                              chain=0, random_seed=random_seed)
     tsample = time.time() - t
 
     if model.transform is not None:

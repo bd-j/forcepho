@@ -9,6 +9,7 @@ gradient calculation.  numba is used to speed up some of the loops.
 
 import numpy as np
 import numba
+from numba.experimental import jitclass
 
 __all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
@@ -18,7 +19,7 @@ image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'
                                      [numba.float64, ]*6)) + [('derivs', numba.float64[:, :])]
 
 
-@numba.jitclass(image_gaussian_numba_spec)
+@jitclass(image_gaussian_numba_spec)
 class ImageGaussian(object):
     """This is description of one Gaussian, in pixel locations, as well as the
     derivatives of this Gaussian wrt to the Scene model parameters.
