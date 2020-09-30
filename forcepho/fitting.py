@@ -29,6 +29,7 @@ class Result(object):
 
     def dump_to_h5(self, filename):
         import h5py
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with h5py.File(filename, "w") as out:
             for name, value in vars(self).items():
                 if type(value) == np.ndarray:
