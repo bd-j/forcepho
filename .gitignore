@@ -1,0 +1,4 @@
+.ipynb_checkpoints/
+__pycache__/
+slurm-*.out
+/forcepho.egg-info/
