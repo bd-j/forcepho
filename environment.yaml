@@ -1,0 +1,25 @@
+name: fpho
+dependencies:
+  # Infrastructure
+  - ipython
+  # Scientific computing
+  - numpy>=1.14
+  - scipy>=1.1.0
+  - matplotlib
+  - h5py
+  - numba>=0.43.0
+  # Astro
+  - astropy
+  # Inference
+  - dynesty # optional
+  #- pymc3
+  - pip:
+    - littlemcmc=0.2.*
+  # Optional but recommended
+  - pycuda
+  - mpi4py
+
+# --- via setup.py ---
+# forcepho
+
+
