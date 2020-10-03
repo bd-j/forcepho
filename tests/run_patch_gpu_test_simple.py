@@ -2,7 +2,7 @@
 
 '''
 
-A simple test sccript to set up one patch and launch many proposals on it.
+A simple test script to set up one patch and launch many proposals on it.
 
 On Ascent with CUDA MPS, one could run this with 16 processes on 7 cores using 1 GPU with:
 

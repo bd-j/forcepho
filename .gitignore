@@ -2,3 +2,6 @@
 __pycache__/
 slurm-*.out
 /forcepho.egg-info/
+/output/
+/demo/data/
+/demo/stores/

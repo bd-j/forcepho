@@ -17,7 +17,7 @@ from forcepho.patches import JadesPatch
 from forcepho.model import GPUPosterior, BoundedTransform
 from forcepho.fitting import Result, run_lmc
 
-from utils import Logger, rectify_catalog, make_result
+from utils import Logger, rectify_catalog
 from config_test import config
 
 try:
@@ -27,51 +27,6 @@ try:
 except:
     print("NO PYCUDA")
     HASGPU = False
-
-
-def prepare(patcher, active=None, fixed=None):
-    """Prepare the patch for model making
-    """
-    if fixed is not None:
-        cat = fixed
-    else:
-        cat = active
-
-    # --- Build the things
-    patcher.pack_meta(cat)
-    patcher.return_residual = True
-    gpu_patch = patcher.send_to_gpu()
-    proposer = Proposer(patcher)
-
-    # --- Get parameter vector and proposal
-    q = patcher.scene.get_all_source_params().copy()
-
-    # --- subtract fixed sources ---
-    if (fixed is not None):
-        q_fixed = q
-        prop_fixed = patcher.scene.get_proposal()
-        out = proposer.evaluate_proposal(prop_fixed)
-        residual_fixed = out[-1]
-
-        patcher.pack_meta(active)
-        q = patcher.scene.get_all_source_params().copy()
-        patcher.swap_on_gpu()
-
-    proposer.patch.return_residual = False
-
-    return proposer, q
-
-
-def make_model(proposer, lower, upper, **model_kwargs):
-    """Make a model including prior bounds
-    """
-    transform = BoundedTransform(lower, upper)
-    model = GPUPosterior(proposer, proposer.patch.scene,
-                         transform=transform,
-                         **model_kwargs)
-
-    return model
-
 
 if __name__ == "__main__":
 
@@ -119,7 +74,7 @@ if __name__ == "__main__":
 
         # --- Build patch --- (child)
         patcher.build_patch(region, None, allbands=bands)
-        proposer, q = prepare(patcher, active=active, fixed=fixed)
+        proposer, q = patcher.prepare(active=active, fixed=fixed)
         logger.info("Prepared Patch {}".format(patchID))
 
         # --- Get bounds, covariances, and sample --- (child)
@@ -148,7 +103,7 @@ if __name__ == "__main__":
 
         # --- Deal with results --- (child/parent)
         logger.info("Sampling complete, preparing output.")
-        out, final, covs = make_result(out, region, active, fixed, model, bounds=bounds,
+        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                                        step=step, stats=stats, patchID=patchID)
         logger.info("Checking region back in")
         sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, patchID=patchID)
