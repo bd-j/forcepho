@@ -9,15 +9,15 @@ import numpy as np
 from astropy.io import fits
 # import h5py
 
-from forcepho.dispatcher import SuperScene
+from forcepho.dispatcher import SuperScene, make_model
 from forcepho.sources import Galaxy
 from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 
 from forcepho.model import GPUPosterior, BoundedTransform
 from forcepho.fitting import Result, run_lmc
+from forcepho.utils import Logger, rectify_catalog
 
-from utils import Logger, rectify_catalog
 from config_test import config
 
 try:
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                                        step=step, stats=stats, patchID=patchID)
         logger.info("Checking region back in")
-        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, patchID=patchID)
+        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, taskID=patchID)
 
         outfile = os.path.join(args.patch_dir, "patch{}_results.h5".format(patchID))
         logger.info("Writing to {}".format(outfile))

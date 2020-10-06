@@ -11,7 +11,7 @@ from forcepho.sources import Galaxy
 __all__ = ["Logger",
            "rectify_catalog",
            "extract_block_diag",
-           "make_result", "get_results",
+           "get_results",
            "make_statscat", "make_chaincat"]
 
 
@@ -111,6 +111,15 @@ def extract_block_diag(a, n, k=0):
     return np.lib.stride_tricks.as_strided(a, new_shape, new_strides)
 
 
+def make_statscat(stats, step):
+    # Reshape `stats` to an array
+    dtype = np.dtype(list(step.stats_dtypes[0].items()))
+    stats_arr = np.zeros(len(stats), dtype=dtype)
+    for c in stats_arr.dtype.names:
+        stats_arr[c][:] = np.array([s[c] for s in stats])
+    return stats_arr
+
+
 def get_results(fn):
     with h5py.File(fn, "r") as res:
         chain = res["chain"][:]
@@ -122,15 +131,6 @@ def get_results(fn):
 
     cat = make_chaincat(chain, bands, active, ref)
     return cat, active, stats
-
-
-def make_statscat(stats, step):
-    # Reshape `stats` to an array
-    dtype = np.dtype(list(step.stats_dtypes[0].items()))
-    stats_arr = np.zeros(len(stats), dtype=dtype)
-    for c in stats_arr.dtype.names:
-        stats_arr[c][:] = np.array([s[c] for s in stats])
-    return stats_arr
 
 
 def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):

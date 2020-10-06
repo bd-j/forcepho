@@ -26,6 +26,7 @@ from .region import CircularRegion
 from .sources import Galaxy
 from .fitting import run_lmc
 from .model import GPUPosterior, BoundedTransform
+from .utils import rectify_catalog
 
 
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
@@ -695,7 +696,6 @@ def do_parent(comm):
     os.chdir('../demo')
     import sys
     sys.path.insert(0,'.')
-    from utils import rectify_catalog
     from config_test import config
 
     # --- Get the patch dispatcher ---  (parent)
@@ -798,7 +798,6 @@ def do_child(comm):
     os.chdir('../demo')
     import sys
     sys.path.insert(0,'.')
-    from utils import rectify_catalog
     from config_test import config
     from .patches import JadesPatch
     ##########################
@@ -824,7 +823,7 @@ def do_child(comm):
         
         taskid = status.tag
 
-        logger.info(f"Child {rank} received {region.ra} with tag {taskid}")
+        logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
 
         # pretend we did something
         #result = dummy_work(region, active, fixed, mm)

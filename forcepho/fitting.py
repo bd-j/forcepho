@@ -13,6 +13,7 @@ import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
 from .model import ConstrainedTransformedPosterior as Posterior
+from .utils import make_statscat, extract_block_diag
 
 
 __all__ = ["Result", "run_lmc", "run_opt",

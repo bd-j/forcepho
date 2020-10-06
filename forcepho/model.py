@@ -168,7 +168,7 @@ class Posterior:
         return -self._lnp, -self._lnp_grad
 
     def lnprob_and_grad(self, z):
-        """Some samplers want a single functio to return lnp, dlnp.
+        """Some samplers want a single function to return lnp, dlnp.
         This is that.
         """
         if np.any(z != self._z):
