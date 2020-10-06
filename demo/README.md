@@ -15,6 +15,15 @@ source activate jadespho
 cd ${MYSCRATCH}/phodemo
 ```
 
+on lux
+```sh
+srun --x11 -N 1 --partition=comp-astro --account=comp-astro --pty bash -I
+module load cuda10.1 python/3.6.7 hdf5
+module load numpy scipy h5py
+module load numba pycuda
+module load astropy fastprogress littlemcmc
+```
+
 # Correctness
 
 Test against a simple image created from `galsim`
