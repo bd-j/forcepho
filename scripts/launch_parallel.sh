@@ -6,7 +6,7 @@
 # An enhancement would be to use manual host specification to
 # launch the server on a client node.
 
-time="0:10"
+time="10:00"
 gpus_per_node=2
 resources="-N1 -n2 --cpus-per-task=3 --mem-per-cpu=3G -m cyclic --gres=gpu:${gpus_per_node} -p gpu"
 script="./client_shim.sh"

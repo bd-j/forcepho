@@ -9,9 +9,8 @@ import numpy as np
 from astropy.io import fits
 # import h5py
 
-from forcepho.dispatcher import SuperScene, make_model
+from forcepho.dispatcher import SuperScene
 from forcepho.sources import Galaxy
-from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 
 from forcepho.model import GPUPosterior, BoundedTransform
@@ -74,16 +73,18 @@ if __name__ == "__main__":
 
         # --- Build patch --- (child)
         patcher.build_patch(region, None, allbands=bands)
-        proposer, q = patcher.prepare(active=active, fixed=fixed)
-        logger.info("Prepared Patch {}".format(patchID))
+        
+        bounds, cov = sceneDB.bounds_and_covs(active["source_index"],
+                                                    bands=patcher.bandlist,
+                                                    ref=patcher.patch_reference_coordinates)
+        
+        model, q = patcher.prepare(active=active, fixed=fixed,
+                                   bounds_kwargs=dict(bounds_cat=bounds,filternames=bands,shapes=sceneDB.shape_cols))
 
         # --- Get bounds, covariances, and sample --- (child)
         weight = max(10, active["n_iter"].min())
         bounds = sceneDB.bounds_catalog[active["source_index"]]
-        lower, upper, cov = sceneDB.bounds_and_covs(active["source_index"],
-                                                    bands=patcher.bandlist,
-                                                    ref=patcher.patch_reference_coordinates)
-        model = make_model(proposer, lower, upper)
+        
         logger.info("Model made, sampling with covariance weight={}".format(weight))
         try:
             out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
@@ -93,8 +94,6 @@ if __name__ == "__main__":
             print("error with patchID = {}".format(patchID))
             print(active)
             print("starting position = {}".format(q))
-            print("below lower = {}".format((q > lower).sum()))
-            print("above upper = {}".format((q < upper).sum()))
             print("-------\n")
             fits.writeto("emergency_dump_active{}.fits".format(patchID), active, overwrite=True)
 

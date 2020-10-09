@@ -11,6 +11,8 @@ import numpy as np
 
 from .. import source_dir
 from ..proposal import Proposer
+from ..model import GPUPosterior
+from ..dispatcher import bounds_vectors
 
 try:
     import pycuda
@@ -275,9 +277,14 @@ class Patch:
 
         return self.gpu_patch
     
-    def prepare(self, active=None, fixed=None):
+    def prepare(self, active=None, fixed=None, bounds_kwargs=None, model_kwargs=None):
         """Prepare the patch for model making
         """
+        if model_kwargs is None:
+            model_kwargs = {}
+        if bounds_kwargs is None:
+            bounds_kwargs = {}
+            
         if fixed is not None:
             cat = fixed
         else:
@@ -304,8 +311,12 @@ class Patch:
             self.swap_on_gpu()
 
         proposer.patch.return_residual = False
+        
+        lower, upper = bounds_vectors(**bounds_kwargs, reference_coordinates=self.patch_reference_coordinates)
+        
+        model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
 
-        return proposer, q
+        return model, q
 
     def free(self):
         # Release ALL the device-side arrays

@@ -253,15 +253,13 @@ class SuperScene:
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
     def checkin_region(self, active, fixed, niter, block_covs=None,
-                       taskID=None, flush=False, mass_matrix=None):
+                       taskID=None, flush=False):
         """Check-in a set of active source parameters, and also fixed sources.
         The parameters of the active sources are updated in the master catalog,
         they are marked as inactive, and along with the provided fixed sources
         are marked as valid.  The counts of active and fixed sources are updated.
         The number of patches and iterations for each active source is updated.
         """
-        
-        # TODO: mass matrix
         
         # Find where the sources are that are being checked in
         try:
@@ -308,8 +306,6 @@ class SuperScene:
 
     def bounds_and_covs(self, sourceIDs, bands=[], ref=[0., 0.]):
         bounds = self.bounds_catalog[sourceIDs]
-        lower, upper = bounds_vectors(bounds, bands, shapes=self.shape_cols,
-                                      reference_coordinates=ref)
 
         if hasattr(self, "covariance_matrices"):
             covs = self.covariance_matrices[sourceIDs]
@@ -318,7 +314,7 @@ class SuperScene:
         else:
             cov = None
 
-        return lower, upper, cov
+        return bounds, cov
 
     def reset(self):
         """Reset active, valid, and n_iter values.
@@ -549,17 +545,6 @@ def bounds_vectors(bounds_cat, filternames, shapes=Galaxy.SHAPE_COLS,
     return np.array(lower), np.array(upper)
 
 
-def make_model(proposer, lower, upper, **model_kwargs):
-    """Make a model including prior bounds
-    """
-    transform = BoundedTransform(lower, upper)
-    model = GPUPosterior(proposer, proposer.patch.scene,
-                         transform=transform,
-                         **model_kwargs)
-
-    return model
-
-
 class MPIQueue:
     """Simple implementation of an MPI queue.  Work can be submitted to the queue
     as long as there is at least one idle child.  Supplies an interface to collect
@@ -742,12 +727,12 @@ def do_parent(comm):
                 taskid += 1
                 
                 bounds = sceneDB.bounds_catalog[active["source_index"]]
-                lower, upper, cov = sceneDB.bounds_and_covs(active["source_index"],
-                                                    bands=bands,  # TODO: can we do this without patcher.bandlist?
-                                                    ref=np.zeros(2))  # TODO: can we do this without patcher.patch_reference_coordinates?
+                bounds, cov = sceneDB.bounds_and_covs(active["source_index"],
+                                                      bands=bands)  # TODO: this used to be `patcher.bandlist`, is it okay to use `bands` here?
         
                 chore = {'region':region, 'active':active, 'fixed':fixed, 'mass':mass,
-                         'boumds':bounds, 'lower':lower, 'upper':upper, 'cov':cov, 'bands':bands,
+                         'bounds':bounds, 'cov':cov, 'bands':bands,
+                         'shape_cols':sceneDB.shape_cols,
                          # For now, the child reads no config, and the parent passes everything
                          'lmc_config':dict(n_draws=config.sampling_draws, full=config.full_cov, warmup=config.warmup)}
                 patchcat[taskid] = {"ra": region.ra,
@@ -767,12 +752,13 @@ def do_parent(comm):
                 sceneDB.checkin_region(result['final'], result['out'].fixed,
                                        len(result['out'].chain),  # ?
                                        block_covs=result['covs'],
-                                       patchID=None,  # ?
-                                       mass_matrix=None)
+                                       patchID=None, # ?
+                                      )
 
         # Receive any stragglers
         results = queue.collect(blocking='all')
         logger.info(f'Collected {len(results)} straggler result(s)')
+        # TODO: finalize the checkin args, then update this
         #for result in results:
         #    sceneDB.checkin_region(result.active, result.fixed,
         #                           result.niter, mass_matrix=None)
@@ -816,8 +802,8 @@ def do_child(comm):
         # To be explicit, let's unpack all the task variables here
         region= task['region']
         active, fixed, mm = task['active'], task['fixed'], task['mass']
-        lower, upper, cov = task['lower'], task['upper'], task['cov']
-        bands = task['bands']
+        bounds, cov = task['bounds'], task['cov']
+        bands, shape_cols = task['bands'], task['shape_cols']
         lmc_config = task['lmc_config']
         del task
         
@@ -836,15 +822,14 @@ def do_child(comm):
                          return_residual=True)
         
         patcher.build_patch(region, None, allbands=bands)
-        proposer, q = patcher.prepare(active=active, fixed=fixed)
+        model, q = patcher.prepare(active=active, fixed=fixed,
+                                   bounds_kwargs=dict(bounds_cat=bounds,filternames=bands,shapes=shape_cols))
         logger.info("Prepared patch")
 
         # --- Get bounds, covariances, and sample --- (child)
         weight = max(10, active["n_iter"].min())
         
-        model = make_model(proposer, lower, upper)
         logger.info(f"Model made, sampling with covariance weight={weight}")
-        #print(vars(model))
         out, step, stats = run_lmc(model, q.copy(), **lmc_config,
                                        z_cov=cov, adapt=True,
                                        weight=weight, progressbar=True)
@@ -853,7 +838,7 @@ def do_child(comm):
         logger.info("Sampling complete, preparing output.")
         # TODO: is there any reason we should do this on the parent instead?
         final, covs = out.fill(region, active, fixed, model, bounds=bounds,
-                                       step=step, stats=stats, patchID=patchID)
+                                       step=step, stats=stats, patchID=taskid)
         payload = dict(out=out, final=final, covs=covs)
 
         # blocking send to parent, free GPU memory
