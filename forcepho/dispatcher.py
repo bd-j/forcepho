@@ -640,7 +640,8 @@ class MPIQueue:
         logger.info(f'Sending task {tag} to child {child}')
         self.comm.send(task, dest=child, tag=tag)
         # Queue up the eventual receive of the result
-        rreq = self.comm.irecv(source=child, tag=tag)
+        irecv_bufsize = int(10e6)  # TODO: have to specify a max recv size. Better way to do this? The Jades demo payload is 50 KB.
+        rreq = self.comm.irecv(irecv_bufsize, source=child, tag=tag)
         self.irecv_handles += [rreq]
         return child
 
@@ -752,7 +753,7 @@ def do_parent(comm):
                 sceneDB.checkin_region(result['final'], result['out'].fixed,
                                        len(result['out'].chain),  # ?
                                        block_covs=result['covs'],
-                                       patchID=None, # ?
+                                       taskID=None, # ?
                                       )
 
         # Receive any stragglers
