@@ -64,8 +64,9 @@ class Posterior:
         if (np.any(kwargs.get('lower')) and np.any(kwargs.get('upper'))) == bool(kwargs.get('transform')):
             raise ValueError('Must specify either "transform" or ("lower","upper")')
         
-        if kwargs.get('transform'):
-            self.transform = kwargs.pop('transform')
+        transform = kwargs.pop('transform',None)
+        if transform is not None:
+            self.transform = transform
         else:
             self.transform = BoundedTransform(kwargs.pop('lower'), kwargs.pop('upper'))
             
