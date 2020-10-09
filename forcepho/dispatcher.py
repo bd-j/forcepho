@@ -573,8 +573,8 @@ class MPIQueue:
     def __init__(self, comm, n_children):
 
         self.comm = comm
-        # this is just a list of child numbers
         self.irecv_handles = []
+        self.busy = []
         self.idle = list(range(1,n_children + 1))
         self.n_children = n_children
         self.parent = 0
@@ -611,7 +611,10 @@ class MPIQueue:
             indices, results = MPI.Request.testsome(self.irecv_handles, statuses)
             
         for i in sorted(indices, reverse=True):
-            self.idle += [statuses[i].source]
+            # TODO: this happens at Flatiron sometimes. Bad MPI? Bad mpi4py? mpi4py bug? Problem with irecv allocation? Incomplete communication? The results look sane though...
+            if statuses[i].source == -1:
+                logger.warning(f'Got source rank -1 on irecv from rank {self.busy[i]}!  Why??')
+            self.idle += [self.busy.pop(i)]
             del self.irecv_handles[i]
             
         logger.info(f'Collected {len(results)} result(s) from child(ren) {self.idle[len(self.idle)-len(results):]}')
@@ -638,11 +641,14 @@ class MPIQueue:
         # We'll use a blocking send for this, since the child ought to be listening, as good children do.
         # And then we don't have to worry about the lifetime of the task or isend handle.
         logger.info(f'Sending task {tag} to child {child}')
+        if child in self.busy:
+            raise ValueError(f'About to send task to child {child} that is already busy!')
         self.comm.send(task, dest=child, tag=tag)
         # Queue up the eventual receive of the result
         irecv_bufsize = int(10e6)  # TODO: have to specify a max recv size. Better way to do this? The Jades demo payload is 50 KB.
         rreq = self.comm.irecv(irecv_bufsize, source=child, tag=tag)
         self.irecv_handles += [rreq]
+        self.busy += [child]
         return child
 
     def closeout(self):
