@@ -17,7 +17,7 @@ try:
     theano.gof.compilelock.set_lock_status(False)
     import theano.tensor as tt
     Op = tt.Op
-except(ImportError):
+except ImportError:
     Op = object
     from argparse import Namespace
     tt = Namespace(fscalar=np.float32, fvector=np.ndarray,
@@ -27,7 +27,7 @@ except(ImportError):
 try:
     import pycuda
     import pycuda.autoinit
-except(ImportError):
+except ImportError:
     pass
 
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
@@ -40,13 +40,39 @@ __all__ = ["Posterior", "GPUPosterior", "CPUPosterior",
 
 
 class Posterior:
-    """Abstract class for models.  Includes the basic caching mechanism for
+    """Base class for models.  Includes the basic caching mechanism for
     probabilities and gradients, as well as a numerical check on the gradients.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        '''
+        Initializes fields that are common to all subclasses.
+        
+        Parameters
+        ----------
+        transform: Transform, optional
+            The transform to use. Must specify this, or `lower` and `upper`.
+        lower: array-like, optional
+            Lower bounds for a BoundedTransform. `upper` must also be specified
+            if given. Mutually exclusive with `transform`.
+        upper: array-like, optional
+            Upper bounds for a BoundedTransform. `lower` must also be specified
+            if given. Mutually exclusive with `transform`.
+        '''
         self.ncall = 0
-        raise(NotImplementedError)
+        
+        if (np.any(kwargs.get('lower')) and np.any(kwargs.get('upper'))) == bool(kwargs.get('transform')):
+            raise ValueError('Must specify either "transform" or ("lower","upper")')
+        
+        transform = kwargs.pop('transform',None)
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = BoundedTransform(kwargs.pop('lower'), kwargs.pop('upper'))
+            
+        if kwargs:
+            raise ValueError(f'Passed argument(s) {list(kwargs.keys())} to Posterior that were not understood')
+            
 
     def evaluate(self, z):
         """Method to actually evaluate ln-probability and its gradient, at the
@@ -168,7 +194,7 @@ class Posterior:
         return -self._lnp, -self._lnp_grad
 
     def lnprob_and_grad(self, z):
-        """Some samplers want a single functio to return lnp, dlnp.
+        """Some samplers want a single function to return lnp, dlnp.
         This is that.
         """
         if np.any(z != self._z):
@@ -219,12 +245,15 @@ class GPUPosterior(Posterior):
     and its gradients.
     """
 
-    def __init__(self, proposer, scene, lnprior=None, transform=None,
-                 name="", print_interval=1000, verbose=False, debug=False, logging=False):
+    def __init__(self, proposer, scene=None, lnprior=None, transform=None,
+                 name="", print_interval=1000, verbose=False, debug=False,
+                 logging=False, **kwargs):
+        
+        super().__init__(transform=transform, **kwargs)
+        
         # --- Assign ingredients ---
         self.proposer = proposer
-        self.scene = scene
-        self.transform = transform
+        self.scene = scene if scene else proposer.patch.scene
         if lnprior is not None:
             self.lnprior = lnprior
 

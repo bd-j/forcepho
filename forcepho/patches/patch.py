@@ -10,11 +10,14 @@ in patch.cu.
 import numpy as np
 
 from .. import source_dir
+from ..proposal import Proposer
+from ..model import GPUPosterior
+from ..dispatcher import bounds_vectors
 
 try:
     import pycuda
     import pycuda.driver as cuda
-except(ImportError):
+except ImportError:
     pass
 
 __all__ = ["Patch"]
@@ -273,6 +276,47 @@ class Patch:
         self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
+    
+    def prepare(self, active=None, fixed=None, bounds_kwargs=None, model_kwargs=None):
+        """Prepare the patch for model making
+        """
+        if model_kwargs is None:
+            model_kwargs = {}
+        if bounds_kwargs is None:
+            bounds_kwargs = {}
+            
+        if fixed is not None:
+            cat = fixed
+        else:
+            cat = active
+
+        # --- Build the things
+        self.pack_meta(cat)
+        self.return_residual = True
+        gpu_patch = self.send_to_gpu()
+        proposer = Proposer(self)
+
+        # --- Get parameter vector and proposal
+        q = self.scene.get_all_source_params().copy()
+
+        # --- subtract fixed sources ---
+        if fixed is not None:
+            q_fixed = q
+            prop_fixed = self.scene.get_proposal()
+            out = proposer.evaluate_proposal(prop_fixed)
+            residual_fixed = out[-1]
+
+            self.pack_meta(active)
+            q = self.scene.get_all_source_params().copy()
+            self.swap_on_gpu()
+
+        proposer.patch.return_residual = False
+        
+        lower, upper = bounds_vectors(**bounds_kwargs, reference_coordinates=self.patch_reference_coordinates)
+        
+        model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
+
+        return model, q
 
     def free(self):
         # Release ALL the device-side arrays

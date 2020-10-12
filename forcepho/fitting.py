@@ -13,6 +13,7 @@ import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
 from .model import ConstrainedTransformedPosterior as Posterior
+from .utils import make_statscat, extract_block_diag
 
 
 __all__ = ["Result", "run_lmc", "run_opt",
@@ -26,7 +27,116 @@ class Result(object):
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
+            
+    def fill(self, region, active, fixed, model,
+                bounds=None, patchID=None, step=None, stats=None):
+        """
+        Parameters
+        ----------
+        region : a region.Region object
+            The region defining the patch; its parameters will be added to the
+            result.
 
+        active : structured ndarray
+            The active sources and their starting parameters.
+
+        fixed : structured ndarray
+            The fixed sources and their parameters.
+
+        model : a model.PosteriorModel object
+            Must contain `proposer.patch` and `scene` attributes
+
+        bounds : optional
+            If given, a structured ndarrray of lower and upper bounds for
+            each parameter of each source.
+
+        patchID : optional
+            An integer giving the unique patch ID.
+
+        step : optional
+            If supplied, a littlemcmc NUTS step obect.  this contains the covariance matrix
+
+        stats : optional
+            If supplied, a littlemcmc stats object.
+
+        Returns
+        -------
+        qcat : structured ndarray
+            A structured array of the parameter values in the last sample of the chain.
+
+        block_covs : ndarray of shape (N_source, N_param, N_param)
+            The covariance matrices for the sampling potential, extracted as block
+            diagonal elements of the full N_source * N_param square covariance
+            array.  Note that it is in the units of the transformed, unconstrained
+            sampling parameters.  If the prior bounds change, the covariance matrix
+            is no longer valid (or must be retransformed)
+        """
+
+        patch = model.proposer.patch
+        scene = model.scene
+        bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
+        shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="S")
+        ref = np.array(patch.patch_reference_coordinates)
+        block_covs = None
+
+        out = self
+
+        # --- Header ---
+        out.patchID = patchID
+        out.reference_coordinates = ref
+        out.bandlist = bands
+        out.shapenames = shapenames
+
+        # --- region, active, fixed ---
+        for k, v in region.__dict__.items():
+            setattr(out, k, v)
+        out.active = np.array(active)
+        if fixed is not None:
+            out.fixed = np.array(fixed)
+
+        # --- chain and covariance ---
+        # keep chain as a structured array? all info is saved to make it later
+        #chaincat = make_chaincat(out.chain, bands, active, ref,
+        #                         shapes=shapenames)
+        if step is not None:
+            try:
+                out.cov = np.array(step.potential._cov.copy())
+            except(AttributeError):
+                out.cov = np.diag(step.potential._var.copy())
+            if stats is not None:
+                out.stats = make_statscat(stats, step)
+
+            n_param = len(bands) + len(shapenames)
+            block_covs = extract_block_diag(out.cov, n_param)
+
+        # --- priors ---
+        if bounds is not None:
+            out.bounds = bounds
+
+        # --- last position as structured array ---
+        # FIXME: do this another way; maybe take a dtype from the superscene
+        # or use make_chaincat
+        qlast = out.chain[-1, :]
+        scene.set_all_source_params(qlast)
+        patch.unzerocoords(scene)
+        for i, source in enumerate(scene.sources):
+            source.id = active[i]["source_index"]
+        qcat = scene.to_catalog(extra_cols=["source_index"])
+        qcat["source_index"][:] = active["source_index"]
+        out.final = qcat
+
+        # qcat = active.copy()
+        # for f in chaincat.dtype.names:
+        #     if f in qcat.dtype.names:
+        #         try:
+        #             qcat[f][:] = chaincat[f][:, -1]
+        #         except(IndexError):
+        #             qcat[f][:] = chaincat[f][:]
+
+
+        return qcat, block_covs
+
+    
     def dump_to_h5(self, filename):
         import h5py
         os.makedirs(os.path.dirname(filename), exist_ok=True)
