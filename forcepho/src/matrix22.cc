@@ -1,6 +1,6 @@
 /* matrix22.cc
 This creates a simple class for 2x2 real-valued matrices.
-Convention: 
+Convention:
     v11 v12
     v21 v22
 
@@ -26,7 +26,7 @@ CUDA_CALLABLE_MEMBER inline matrix22 operator * (const matrix22& A, const matrix
 */
 
 
-	
+
 
 
 class matrix22 {
@@ -49,7 +49,7 @@ class matrix22 {
     CUDA_CALLABLE_MEMBER matrix22(const float d[]) {
         v11 = d[0]; v12 = d[1]; v21 = d[2]; v22 = d[3];
     }
-	
+
 	CUDA_CALLABLE_MEMBER inline void debug_print(){
 		printf(" %f %f\n", v11, v12);
 		printf(" %f %f\n\n", v21, v22);
@@ -71,17 +71,17 @@ class matrix22 {
         float c = cos(theta); float s = sin(theta);
         v11 = v22 = c;  v12 = -s; v21 = s;
     }
-    
+
     CUDA_CALLABLE_MEMBER inline void rotation_matrix_deriv(float theta){
         float c = cos(theta); float s = sin(theta);
-        v11 = v22 = -s; v12 = -c; v21 = c; 
+        v11 = v22 = -s; v12 = -c; v21 = c;
         // return matrix22( -s, -c, c, -s);
     }
-    
+
     CUDA_CALLABLE_MEMBER inline void scale(float q) {
         v11 = 1.0f/q; v22 = q; v12 = v21 = 0.0;
     }
-    
+
     CUDA_CALLABLE_MEMBER inline void scale_matrix_deriv(float q){
         v11 = -1.0f/(q*q); v22 = 1.0; v12 = v21 = 0.0;
         // return matrix22(-1.0/(q*q), 1.0);
@@ -90,7 +90,7 @@ class matrix22 {
     // --------------------------------------------------
     // The following operations return a new output matrix
     // The input instance is not altered
-    
+
     /// The transpose
     CUDA_CALLABLE_MEMBER inline matrix22 T() { return matrix22(v11, v21, v12, v22); }
 
@@ -106,7 +106,7 @@ class matrix22 {
         return matrix22(v22*idet, -v12*idet, -v21*idet, v11*idet);
     }
 
-    // matrix *= scalar 
+    // matrix *= scalar
     CUDA_CALLABLE_MEMBER inline matrix22& operator *= ( const float s) {
         v11*=s; v12*=s; v21*=s; v22*=s; return *this;
     }
@@ -126,10 +126,10 @@ CUDA_CALLABLE_MEMBER inline matrix22 operator * (const float s, const matrix22& 
 
 /// matrix + matrix, matrix - matrix
 CUDA_CALLABLE_MEMBER inline matrix22 operator + (const matrix22& A, const matrix22& B) {
-    return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22); 
+    return matrix22( A.v11+B.v11, A.v12+B.v12, A.v21+B.v21, A.v22+B.v22);
 }
 CUDA_CALLABLE_MEMBER inline matrix22 operator - (const matrix22& A, const matrix22& B) {
-    return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22); 
+    return matrix22( A.v11-B.v11, A.v12-B.v12, A.v21-B.v21, A.v22-B.v22);
 }
 
 /// matrix * matrix product
@@ -141,12 +141,12 @@ CUDA_CALLABLE_MEMBER inline matrix22 operator * (const matrix22& A, const matrix
 // ========== And here are functions that work on matrices ===========
 
 ///Compute A B A, return matrix
-CUDA_CALLABLE_MEMBER inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia! 
-	float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22; 	
-    float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v12 * A.v12 * B.v21 + A.v12 * A.v22 * B.v22; 	
-    float v21 = A.v11 * A.v21 * B.v11 + A.v21 * A.v21 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22; 	
-    float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v22 * A.v22 * B.v22; 
-    return matrix22(v11, v12, v21, v22); 
+CUDA_CALLABLE_MEMBER inline matrix22 ABA(const matrix22& A, matrix22& B){ //mamma mia!
+	float v11 = A.v11 * A.v11 * B.v11 + A.v11 * A.v21 * B.v12 + A.v11 * A.v12 * B.v21 + A.v12 * A.v21 * B.v22;
+    float v12 = A.v11 * A.v12 * B.v11 + A.v11 * A.v22 * B.v12 + A.v12 * A.v12 * B.v21 + A.v12 * A.v22 * B.v22;
+    float v21 = A.v11 * A.v21 * B.v11 + A.v21 * A.v21 * B.v12 + A.v11 * A.v22 * B.v21 + A.v21 * A.v22 * B.v22;
+    float v22 = A.v12 * A.v21 * B.v11 + A.v21 * A.v22 * B.v12 + A.v12 * A.v22 * B.v21 + A.v22 * A.v22 * B.v22;
+    return matrix22(v11, v12, v21, v22);
 }
 
 /// Compute A A^T, return the symmetrix matrix
@@ -188,13 +188,13 @@ CUDA_CALLABLE_MEMBER inline float vtAv(matrix22& A, float v1, float v2) {
 /// A matrix * vector product, returning in place
 CUDA_CALLABLE_MEMBER inline void Av(matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
-    v[0] = A.v11 * v1 + A.v12 * v2; 
-    v[1] = A.v21 * v1 + A.v22 * v2; 
+    v[0] = A.v11 * v1 + A.v12 * v2;
+    v[1] = A.v21 * v1 + A.v22 * v2;
 }
 
 /// A matrix * vector product, returning out of place
 CUDA_CALLABLE_MEMBER inline void Av(float *w, matrix22& A, float *v) {
     float v1 = v[0]; float v2 = v[1];
-    w[0] = A.v11 * v1 + A.v12 * v2; 
-    w[1] = A.v21 * v1 + A.v22 * v2; 
+    w[0] = A.v11 * v1 + A.v12 * v2;
+    w[1] = A.v21 * v1 + A.v22 * v2;
 }

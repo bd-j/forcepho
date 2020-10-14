@@ -1,6 +1,6 @@
 /* proposal.cu
 
-This is the data model for the Source class on the GPU.  
+This is the data model for the Source class on the GPU.
 A proposal consists of a list of Sources.
 Similarly, the response for the likelihood derivatives is a Band-length
 vector of Response's.
@@ -27,14 +27,14 @@ class Source {
 };
 
 
-/// The response from the GPU likelihood call kernel for for a single band for a single proposal.  A full response will consist of a list of NBANDS of these responses.  
-/// There can be many empty elements of this if MAXSOURCE > NSOURCE 
+/// The response from the GPU likelihood call kernel for for a single band for a single proposal.  A full response will consist of a list of NBANDS of these responses.
+/// There can be many empty elements of this if MAXSOURCE > NSOURCE
 /// For HMC, need to pull out every NPARAMth element for the fluxes and then coadd the remaining shape gradients across bands
 class Response {
   public:
     // This is the gradients for all sources in a patch in a band
     // It is ordered d/dflux, d/dra, d/dec, d/dq, d/dpa, d/dsersic, d/drh
-    // and then repeats for each source. 
+    // and then repeats for each source.
     float dchi2_dparam[MAXSOURCES * NPARAMS];
 };
 

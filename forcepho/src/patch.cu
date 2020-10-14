@@ -24,7 +24,7 @@ class Patch {
 public:
 
     /* Image info */
-    
+
     // Pixel data -- all exposures, all bands
     // Note that the pixels are organized into warp-sized compact superpixels
     // and exposures are padded to blockDim.x.
@@ -40,13 +40,13 @@ public:
 
     // These index the pixel arrays
     int *exposure_start;    // [expnum]. This exposure's pixels start at exposure_start[exposure]
-    int *exposure_N;        // [expnum]. This exposure has exposure_N[exposure] pixels. 
+    int *exposure_N;        // [expnum]. This exposure has exposure_N[exposure] pixels.
 
     // These index the exposure_start and exposure_N arrays
     // bands are indexed sequentially, not by any band ID
     // These are the expnum used elsewhere
     int16_t *band_start;    // [band]. This band's exposures start at band_start[band].
-    int16_t *band_N;        // [band]. This band has band_N[band] exposures. 
+    int16_t *band_N;        // [band]. This band has band_N[band] exposures.
 
     // ------------------ Source data --------------------
     // Number of active sources
@@ -57,7 +57,7 @@ public:
     int n_radii;
 
     // The square radii of the Sersic mixtures (in arcsec^2)
-    float *rad2;   //[n_radii] 
+    float *rad2;   //[n_radii]
 
     // ----------------------- Astrometry --------------------
     // Astrometry: scale, rotation matrices (and derivatives)
@@ -66,21 +66,21 @@ public:
     //      D[4*nsource*exposure + 4*source + 2*i + j]
     // (could also be an array of matrix structs if preferred)
     // The exposure indices for a band can be found from band_start and band_N
-    
+
     // D is pixels per arcsec, d(pixel x,y)/d(sky).
     // Here the sky is in arcseconds of displacement, which differs from CW
     // because of a cos(dec)
     float *D;       // [expnum][source][2][2]
 
     // The Coordinate Reference Point has a pixel location and a RA/Dec
-    float *crpix;   // [expnum][2] -- Image pixel
-    float *crval;   // [expnum][2] -- RA/Dec 
+    float *crpix;   // [expnum][source][2] -- Image pixel
+    float *crval;   // [expnum][source][2] -- RA/Dec
 
     // CW is d(pixel x,y)/d(RA,dec) expanded around CR point
     float *CW;      // [expnum][source][2][2]
 
     // G is the conversion from our sky flux scale into exposure counts
-    float *G;       // [expnum]  
+    float *G;       // [expnum]
 
 
     // --------------  PSF Gaussians  ---------------------
@@ -114,8 +114,8 @@ public:
 
     // The index of the sersic radius bin this Gaussian applies to
     int sersic_radius_bin;
-	
-	
+
+
 };
 
 #endif
