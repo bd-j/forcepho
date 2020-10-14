@@ -13,7 +13,6 @@ from forcepho.dispatcher import SuperScene
 from forcepho.sources import Galaxy
 from forcepho.patches import JadesPatch
 
-from forcepho.model import GPUPosterior, BoundedTransform
 from forcepho.fitting import Result, run_lmc
 from forcepho.utils import Logger, rectify_catalog
 
@@ -57,8 +56,6 @@ if __name__ == "__main__":
                          target_niter=config.sampling_draws,
                          statefile=os.path.join(args.patch_dir, "superscene.fits"),
                          bounds_kwargs={})
-    #sceneDB.bounds_catalog = make_bounds(sceneDB.sourcecat, bands)
-    #sceneDB.covariance_matrices = init_covar(len(sceneDB.parameter_columns), sceneDB.n_sources)
     logger.info("Made SceneDB")
     error = None
 
@@ -71,23 +68,18 @@ if __name__ == "__main__":
         patchID = "{:04.0f}".format(active["source_index"][0])
         logger.info("Checked out scene with {} active sources".format(len(active)))
 
-        # --- Build patch --- (child)
+        # --- Build patch & prepare model--- (child)
         patcher.build_patch(region, None, allbands=bands)
-        
-        bounds, cov = sceneDB.bounds_and_covs(active["source_index"],
-                                                    bands=patcher.bandlist,
-                                                    ref=patcher.patch_reference_coordinates)
-        
-        model, q = patcher.prepare(active=active, fixed=fixed,
-                                   bounds_kwargs=dict(bounds_cat=bounds,filternames=bands,shapes=sceneDB.shape_cols))
 
-        # --- Get bounds, covariances, and sample --- (child)
+        bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
+        model, q = patcher.prepare(active=active, fixed=fixed,
+                                   bounds_kwargs=dict(bounds_cat=bounds, filternames=bands, shapes=sceneDB.shape_cols))
+
+        # ---  Sample --- (child)
         weight = max(10, active["n_iter"].min())
-        bounds = sceneDB.bounds_catalog[active["source_index"]]
-        
         logger.info("Model made, sampling with covariance weight={}".format(weight))
         try:
-            out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
+            out, step, stats = run_lmc(model, q.copy(), len(out.chain),
                                        full=config.full_cov, z_cov=cov, adapt=True,
                                        weight=weight, warmup=config.warmup, progressbar=True)
         except(ValueError) as e:

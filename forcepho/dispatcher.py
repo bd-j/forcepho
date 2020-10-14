@@ -260,7 +260,7 @@ class SuperScene:
         are marked as valid.  The counts of active and fixed sources are updated.
         The number of patches and iterations for each active source is updated.
         """
-        
+
         # Find where the sources are that are being checked in
         try:
             active_inds = active["source_index"].astype(int)
@@ -304,12 +304,11 @@ class SuperScene:
         if flush:
             self.writeout()
 
-    def bounds_and_covs(self, sourceIDs, bands=[], ref=[0., 0.]):
+    def bounds_and_covs(self, sourceIDs):
         bounds = self.bounds_catalog[sourceIDs]
 
         if hasattr(self, "covariance_matrices"):
             covs = self.covariance_matrices[sourceIDs]
-            # FIXME: deal with missing bands
             cov = block_diag(*covs)
         else:
             cov = None
@@ -549,7 +548,7 @@ class MPIQueue:
     """Simple implementation of an MPI queue.  Work can be submitted to the queue
     as long as there is at least one idle child.  Supplies an interface to collect
     all returned work units.
-    
+
     Implementation note: if we encapsulate any references to MPI in the function
     bodies, we can avoid a top-level MPI import.
 
@@ -581,7 +580,7 @@ class MPIQueue:
 
     def collect(self, blocking=False):
         """Collect all results that children have finished.
-        
+
         Parameters
         ----------
         blocking: bool or str, optional
@@ -596,10 +595,10 @@ class MPIQueue:
         """
         if blocking == 'all' and not self.irecv_handles:
             return []
-        
+
         if blocking and not self.irecv_handles:
             raise RuntimeError('blocking collect() requested but there are no outstanding tasks')
-        
+
         statuses = [MPI.Status() for _ in range(len(self.irecv_handles))]
         if blocking == 'all':
             results = MPI.Request.waitall(self.irecv_handles, statuses)
@@ -609,18 +608,20 @@ class MPIQueue:
             indices, results = MPI.Request.waitsome(self.irecv_handles, statuses)
         else:
             indices, results = MPI.Request.testsome(self.irecv_handles, statuses)
-            
+
         for i in sorted(indices, reverse=True):
-            # TODO: this happens at Flatiron sometimes. Bad MPI? Bad mpi4py? mpi4py bug? Problem with irecv allocation? Incomplete communication? The results look sane though...
+            # TODO: this happens at Flatiron sometimes. Bad MPI? Bad mpi4py? mpi4py bug?
+            # Problem with irecv allocation? Incomplete communication?
+            # The results look sane though...
             if statuses[i].source == -1:
                 logger.warning(f'Got source rank -1 on irecv from rank {self.busy[i]}!  Why??')
             self.idle += [self.busy.pop(i)]
             del self.irecv_handles[i]
-            
+
         logger.info(f'Collected {len(results)} result(s) from child(ren) {self.idle[len(self.idle)-len(results):]}')
-            
+
         assert len(self.idle) == len(set(self.idle))  # check uniqueness
-            
+
         return results
 
     def submit(self, task, tag='any'):
@@ -630,14 +631,14 @@ class MPIQueue:
         """
         if tag == 'any':
             tag = MPI.ANY_TAG
-            
+
         # Why make this an error rather than queue it up for later?
         # Because we want to generate tasks with the freshest SuperScene info
         try:
             child = self.idle.pop(0)
         except IndexError as e:
             raise RuntimeError('No idle child to submit task to!') from e
-            
+
         # We'll use a blocking send for this, since the child ought to be listening, as good children do.
         # And then we don't have to worry about the lifetime of the task or isend handle.
         logger.info(f'Sending task {tag} to child {child}')
@@ -658,30 +659,30 @@ class MPIQueue:
             raise RuntimeError('Trying to close MPIQueue, but some children are busy!')
         if len(self.irecv_handles) != 0:
             raise RuntimeError(f'Trying to close MPIQueue, but have {len(self.irecv_handles)} outstanding task(s)!')
-            
+
         logger.info(f'Poisoning children')
-            
+
         for child in range(1,self.n_children + 1):
             self.comm.send(None, dest=child, tag=0)
 
-            
+
 def do_parent(comm):
     timer = time.perf_counter
     tstart = timer()
-    
+
     # TODO: not really sure if this is the "right" way to use logging
     # but isn't the point that we don't have to pass around a logger object?
     global logger
     logger = logging.getLogger('dispatcher-parent')
     logger.info(f'Starting parent on {socket.gethostname()}')
-    
+
     rank = comm.Get_rank()
     n_child = comm.Get_size() - 1
     patchcat = {}
 
     # Make Queue
     queue = MPIQueue(comm, n_child)
-    
+
     ###################
     # steal a real patch from the demo
     import os
@@ -689,6 +690,7 @@ def do_parent(comm):
     import sys
     sys.path.insert(0,'.')
     from config_test import config
+    ##########################
 
     # --- Get the patch dispatcher ---  (parent)
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
@@ -699,67 +701,58 @@ def do_parent(comm):
                          statefile="superscene.fits",
                          bounds_kwargs={},
                          maxactive_fraction=0.5)
-    ##########################
-    
-
     checkout_time = 0
-    
-    # Do it in context so failure still writes current superscene
+
+    # Do it in context so failure still writes current superscene.
     with sceneDB:
         logger.debug(f'SuperScene has {sceneDB.n_sources} sources')
-        
-        # TODO: LHG changed this from patchid to taskid, to make it clear it's more of a counter than an index of a patch in the scene
-        # but this could/should be changed back if that's not the right interpretation
+
         taskid = 0
-        
-        # EVENT LOOP
+        # Event Loop
         while sceneDB.undone:
-            # Generate one patch proposal
+            # Generate one patch proposal.
             _tstart = timer()
             ntry = 1000  # how many tries before we decide there are no regions to be checked out?
             for _ in range(ntry):
                 region, active, fixed = sceneDB.checkout_region()
-                mass = None  # TODO: this should be returned by the superscene
                 if active is not None:
                     break
             else:
                 logger.debug(f'Failed to checkout region')
             checkout_time += timer() - _tstart
-            
-            # construct the task
+
+            # Construct the task.
             if active is not None:
                 if not sceneDB.sparse:
                     logger.debug(f'Scene no longer sparse with {queue.n_children - len(queue.idle) + 1} checkout(s)')
-                logger.info(f'Checked out region {len(active)} actives')
+                logger.info(f'Checked out region with {len(active)} actives')
                 taskid += 1
-                
-                bounds = sceneDB.bounds_catalog[active["source_index"]]
-                bounds, cov = sceneDB.bounds_and_covs(active["source_index"],
-                                                      bands=bands)  # TODO: this used to be `patcher.bandlist`, is it okay to use `bands` here?
-        
-                chore = {'region':region, 'active':active, 'fixed':fixed, 'mass':mass,
-                         'bounds':bounds, 'cov':cov, 'bands':bands,
-                         'shape_cols':sceneDB.shape_cols,
+                bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
+
+                chore = {'region':region, 'active':active, 'fixed':fixed,
+                         'bounds':bounds, 'cov':cov,
+                         'bands':bands, 'shape_cols':sceneDB.shape_cols,
                          # For now, the child reads no config, and the parent passes everything
                          'lmc_config':dict(n_draws=config.sampling_draws, full=config.full_cov, warmup=config.warmup)}
                 patchcat[taskid] = {"ra": region.ra,
-                                     "dec": region.dec,
-                                     "radius": region.radius,
-                                     "sources": active["source_index"].tolist()}
+                                    "dec": region.dec,
+                                    "radius": region.radius,
+                                    "sources": active["source_index"].tolist()}
                 # submit the task
                 assigned_to = queue.submit(chore, tag=taskid)
 
-            # collect all results that have been returned
-            # If all workers are busy, or the scene is no longer sparse, or no regions are available for checkout, wait for a result to come back
+            # Collect all results that have been returned.
+            # If all workers are busy, or the scene is no longer sparse, or no regions
+            # are available for checkout, wait for a result to come back
             blocking = not queue.idle or not sceneDB.sparse or active is None
             results = queue.collect(blocking=blocking)
-            
+
             # Check results back in
             for result in results:
                 sceneDB.checkin_region(result['final'], result['out'].fixed,
-                                       len(result['out'].chain),  # ?
+                                       len(result['out'].chain),
                                        block_covs=result['covs'],
-                                       taskID=None, # ?
+                                       taskID=taskid,
                                       )
 
         # Receive any stragglers
@@ -769,7 +762,7 @@ def do_parent(comm):
         #for result in results:
         #    sceneDB.checkin_region(result.active, result.fixed,
         #                           result.niter, mass_matrix=None)
-        
+
         ttotal = timer() - tstart
         logger.info(f"Finished in {ttotal:.1f}s")
         logger.info(f"Spent {checkout_time:.1f}s checking out sources")
@@ -777,14 +770,14 @@ def do_parent(comm):
     with open("patchlog.dat", "w") as f:
         json.dump(patchcat, f)
     queue.closeout()
-    
-    
+
+
 def do_child(comm):
     rank = comm.Get_rank()
     global logger
     logger = logging.getLogger(f'dispatcher-child-{rank}')
     parent = 0
-    
+
     ###################
     # steal a real patch from the demo
     import os
@@ -794,7 +787,7 @@ def do_child(comm):
     from config_test import config
     from .patches import JadesPatch
     ##########################
-    
+
     # Event Loop
     while True:
         status = MPI.Status()
@@ -807,56 +800,55 @@ def do_child(comm):
             break
 
         # To be explicit, let's unpack all the task variables here
-        region= task['region']
-        active, fixed, mm = task['active'], task['fixed'], task['mass']
+        region = task['region']
+        active, fixed = task['active'], task['fixed']
         bounds, cov = task['bounds'], task['cov']
         bands, shape_cols = task['bands'], task['shape_cols']
         lmc_config = task['lmc_config']
         del task
-        
-        taskid = status.tag
 
+        taskid = status.tag
         logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
 
-        # pretend we did something
-        #result = dummy_work(region, active, fixed, mm)
-        
+
         # TODO: can we reuse the patcher object between iterations?
+        # Yes, but the overhead on patcher generation is not huge
         patcher = JadesPatch(metastore=config.metastorefile,
-                         psfstore=config.psfstorefile,
-                         pixelstore=config.pixelstorefile,
-                         splinedata=config.splinedatafile,
-                         return_residual=True)
-        
+                             psfstore=config.psfstorefile,
+                             pixelstore=config.pixelstorefile,
+                             splinedata=config.splinedatafile,
+                             return_residual=True)
+
+        # get pixel data and pixel metadata
         patcher.build_patch(region, None, allbands=bands)
+        #lower, upper = bounds_vectors(**bounds_kwargs, reference_coordinates=self.patch_reference_coordinates)
         model, q = patcher.prepare(active=active, fixed=fixed,
                                    bounds_kwargs=dict(bounds_cat=bounds,filternames=bands,shapes=shape_cols))
         logger.info("Prepared patch")
 
         # --- Get bounds, covariances, and sample --- (child)
         weight = max(10, active["n_iter"].min())
-        
+
         logger.info(f"Model made, sampling with covariance weight={weight}")
         out, step, stats = run_lmc(model, q.copy(), **lmc_config,
-                                       z_cov=cov, adapt=True,
-                                       weight=weight, progressbar=True)
-        
+                                   z_cov=cov, adapt=True,
+                                   weight=weight, progressbar=True)
+
         # develop the payload
         logger.info("Sampling complete, preparing output.")
-        # TODO: is there any reason we should do this on the parent instead?
         final, covs = out.fill(region, active, fixed, model, bounds=bounds,
-                                       step=step, stats=stats, patchID=taskid)
+                               step=step, stats=stats, patchID=taskid)
         payload = dict(out=out, final=final, covs=covs)
 
         # blocking send to parent, free GPU memory
         comm.send(payload, parent, status.tag)
         logger.info(f"Child {rank} sent {region.ra} for patch {taskid}")
-        
+
         patcher.free()
         del patcher
-            
-        
-def dummy_work(region, active, fixed, mm):
+
+
+def dummy_work(region, active, fixed):
     """Pretend to do work, but sleep for 1 second
 
     Returns
@@ -870,8 +862,8 @@ def dummy_work(region, active, fixed, mm):
     result.active = active
     result.fixed = fixed
     return result
-            
-            
+
+
 def main():
     # Demo usage of the queue
 
@@ -880,7 +872,7 @@ def main():
     rank = comm.Get_rank()
 
     n_child = comm.Get_size() - 1
-    
+
     if n_child < 1:
         logger.warning('Need at least one child rank!')
 
@@ -898,11 +890,10 @@ class ArgParseFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentD
 if __name__ == "__main__":
     # Hide this MPI import in __main__ so one can import this module without MPI
     from mpi4py import MPI
-    
+
     parser = argparse.ArgumentParser(description='MPI dispatcher interface', formatter_class=ArgParseFormatter)
     # Any command line arguments can be added here
     args = parser.parse_args()
     args = vars(args)
-    
+
     main(**args)
-    

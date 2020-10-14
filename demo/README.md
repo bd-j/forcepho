@@ -1,4 +1,7 @@
 # Setup
+
+on ody:
+
 ```bash
 srun --pty -p gpu_test -t 0-01:00 --mem 1000 --gres=gpu:1 /bin/bash
 srun --pty -p gpu -t 0-05:00 --mem 1000 --gres=gpu:1 /bin/bash
@@ -15,13 +18,16 @@ source activate jadespho
 cd ${MYSCRATCH}/phodemo
 ```
 
-on lux
+on lux:
+
 ```sh
-srun --x11 -N 1 --partition=comp-astro --account=comp-astro --pty bash -I
+srun -N 1 --partition=comp-astro --account=comp-astro --pty bash -I
 module load cuda10.1 python/3.6.7 hdf5
 module load numpy scipy h5py
 module load numba pycuda
-module load astropy fastprogress littlemcmc
+module load astropy littlemcmc
+
+module load openmpi mpi4py
 ```
 
 # Correctness

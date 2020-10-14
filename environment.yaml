@@ -17,9 +17,7 @@ dependencies:
     - littlemcmc=0.2.*
   # Optional but recommended
   - pycuda
-  - mpi4py
+  - mpi4py>=3.1.0
 
 # --- via setup.py ---
 # forcepho
-
-

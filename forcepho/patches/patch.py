@@ -275,7 +275,7 @@ class Patch:
         self.gpu_patch = cuda.to_device(patch_struct)
 
         return self.gpu_patch
-    
+
     def prepare(self, active=None, fixed=None, bounds_kwargs=None, model_kwargs=None):
         """Prepare the patch for model making
         """
@@ -283,7 +283,7 @@ class Patch:
             model_kwargs = {}
         if bounds_kwargs is None:
             bounds_kwargs = {}
-            
+
         if fixed is not None:
             cat = fixed
         else:
@@ -310,9 +310,9 @@ class Patch:
             self.swap_on_gpu()
 
         proposer.patch.return_residual = False
-        
+
         lower, upper = bounds_vectors(**bounds_kwargs, reference_coordinates=self.patch_reference_coordinates)
-        
+
         model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
 
         return model, q

@@ -27,7 +27,7 @@ class Result(object):
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
-            
+
     def fill(self, region, active, fixed, model,
                 bounds=None, patchID=None, step=None, stats=None):
         """
@@ -136,7 +136,7 @@ class Result(object):
 
         return qcat, block_covs
 
-    
+
     def dump_to_h5(self, filename):
         import h5py
         os.makedirs(os.path.dirname(filename), exist_ok=True)
