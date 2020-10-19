@@ -7,6 +7,10 @@ from astropy.wcs import WCS
 from ..sources import Scene, Galaxy
 from ..stamp import scale_at_sky
 
+from ..proposal import Proposer
+from ..model import GPUPosterior
+from ..dispatcher import bounds_vectors
+
 from .storage import MetaStore, PixelStore, PSFStore
 from .storage import PSF_COLS
 from .patch import Patch
@@ -54,6 +58,47 @@ class JadesPatch(Patch):
 
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
+
+    def prepare_model(self, active=None, fixed=None,
+                      bounds=None, shapes=None, model_kwargs=None):
+        """Prepare the patch for model making
+        """
+        if model_kwargs is None:
+            model_kwargs = {}
+        if shapes is None:
+            shapes = Galaxy.SHAPE_COLS
+
+        if fixed is not None:
+            cat = fixed
+        else:
+            cat = active
+
+        # --- Build the things
+        self.pack_meta(cat)
+        self.return_residual = True
+        gpu_patch = self.send_to_gpu()
+        proposer = Proposer(self)
+
+        # --- Get parameter vector and proposal
+        q = self.scene.get_all_source_params().copy()
+
+        # --- subtract fixed sources ---
+        if fixed is not None:
+            q_fixed = q
+            prop_fixed = self.scene.get_proposal()
+            out = proposer.evaluate_proposal(prop_fixed)
+            residual_fixed = out[-1]
+
+            self.pack_meta(active)
+            q = self.scene.get_all_source_params().copy()
+            self.swap_on_gpu()
+
+        proposer.patch.return_residual = False
+        lower, upper = bounds_vectors(bounds, self.bandlist, shapes=shapes,
+                                      reference_coordinates=self.patch_reference_coordinates)
+        model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
+
+        return model, q
 
     def build_patch(self, region, sourcecat, allbands=JWST_BANDS):
         """Given a ragion and a source catalog, this method finds and packs up

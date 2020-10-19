@@ -821,9 +821,8 @@ def do_child(comm):
 
         # get pixel data and pixel metadata
         patcher.build_patch(region, None, allbands=bands)
-        #lower, upper = bounds_vectors(**bounds_kwargs, reference_coordinates=self.patch_reference_coordinates)
-        model, q = patcher.prepare(active=active, fixed=fixed,
-                                   bounds_kwargs=dict(bounds_cat=bounds,filternames=bands,shapes=shape_cols))
+        model, q = patcher.prepare_model(active=active, fixed=fixed, bounds=bounds,
+                                         shapes=shape_cols)
         logger.info("Prepared patch")
 
         # --- Get bounds, covariances, and sample --- (child)

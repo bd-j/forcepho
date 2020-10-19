@@ -72,8 +72,8 @@ if __name__ == "__main__":
         patcher.build_patch(region, None, allbands=bands)
 
         bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
-        model, q = patcher.prepare(active=active, fixed=fixed,
-                                   bounds_kwargs=dict(bounds_cat=bounds, filternames=bands, shapes=sceneDB.shape_cols))
+        model, q = patcher.prepare_model(active=active, fixed=fixed,
+                                         bounds=bounds, shapes=sceneDB.shape_cols))
 
         # ---  Sample --- (child)
         weight = max(10, active["n_iter"].min())
