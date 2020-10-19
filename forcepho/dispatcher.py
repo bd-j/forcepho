@@ -259,6 +259,29 @@ class SuperScene:
         they are marked as inactive, and along with the provided fixed sources
         are marked as valid.  The counts of active and fixed sources are updated.
         The number of patches and iterations for each active source is updated.
+
+        Parameters
+        ----------
+        active : structured array of shape (n_sources,)
+            The final source parameters as a structured array.  Parameter names
+            are in column names, one row per source.  Must include a
+            "source_index" column.
+
+        fixed : structured array of shape (n_sources,)
+            The fixed sources for this patch.  Used to make them valid again
+
+        niter : int
+            The number of iterations that were run since last checkout.
+
+        block_covs : ndarray of shape(n_sources,n_params, n_params)
+            The covariance matrices for each source.
+
+        taskID : int or string
+            The ID of the task that did the sampling; used for logging purposes
+
+        flush : bool
+            If true, flush the new superscene catalog (the current parameter
+            state) to disk, including patchlog
         """
 
         # Find where the sources are that are being checked in
@@ -578,6 +601,10 @@ class MPIQueue:
         self.n_children = n_children
         self.parent = 0
 
+        # TODO is this the right place for this?
+        self.ntry = 1000
+        self.irecv_bufsize = int(10e6)
+
     def collect(self, blocking=False):
         """Collect all results that children have finished.
 
@@ -639,7 +666,8 @@ class MPIQueue:
         except IndexError as e:
             raise RuntimeError('No idle child to submit task to!') from e
 
-        # We'll use a blocking send for this, since the child ought to be listening, as good children do.
+        # We'll use a blocking send for this, since the child ought to be listening,
+        # as good children do.
         # And then we don't have to worry about the lifetime of the task or isend handle.
         logger.info(f'Sending task {tag} to child {child}')
         if child in self.busy:
