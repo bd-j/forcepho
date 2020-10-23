@@ -135,8 +135,8 @@ class RectangularRegion(Region):
     dec_min : float
         The minimum Declination of the center of the circle.  Degrees
 
-    radius : float
-        The radius of the region, in degrees of arc.
+    dec_max : float
+        The maximum Declination of the center of the circle.  Degrees
     """
     def __init__(self, ra_min, ra_max, dec_min, dec_max):
         self.ra_min = ra_min       # degrees

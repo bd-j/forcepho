@@ -29,7 +29,7 @@ class Result(object):
             setattr(self, k, v)
 
     def fill(self, region, active, fixed, model,
-                bounds=None, patchID=None, step=None, stats=None):
+             bounds=None, patchID=None, step=None, stats=None):
         """
         Parameters
         ----------

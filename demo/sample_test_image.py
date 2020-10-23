@@ -73,13 +73,13 @@ if __name__ == "__main__":
 
         bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
         model, q = patcher.prepare_model(active=active, fixed=fixed,
-                                         bounds=bounds, shapes=sceneDB.shape_cols))
+                                         bounds=bounds, shapes=sceneDB.shape_cols)
 
         # ---  Sample --- (child)
         weight = max(10, active["n_iter"].min())
         logger.info("Model made, sampling with covariance weight={}".format(weight))
         try:
-            out, step, stats = run_lmc(model, q.copy(), len(out.chain),
+            out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
                                        full=config.full_cov, z_cov=cov, adapt=True,
                                        weight=weight, warmup=config.warmup, progressbar=True)
         except(ValueError) as e:

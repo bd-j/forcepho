@@ -12,7 +12,8 @@ import argparse
 from h5py import File
 from astropy.io import fits
 
-from forcepho.patches.storage import ImageNameSet, PixelStore, MetaStore
+from forcepho.patches.storage import ImageNameSet, ImageSet, header_to_id
+from forcepho.patches.storage import PixelStore, MetaStore
 
 
 def find_images(loc=".", pattern="*noisy.fits"):
@@ -25,6 +26,22 @@ def find_images(loc=".", pattern="*noisy.fits"):
                           "")  # bkg
              for f in files]
     return names
+
+
+def nameset_to_imset(nameset):
+    # Read the header and set identifiers
+    hdr = fits.getheader(nameset.im)
+    band, expID = header_to_id(hdr, nameset)
+
+    # Read data and perform basic operations
+    # NOTE: we transpose to get a more familiar order where the x-axis
+    # (NAXIS1) is the first dimension and y is the second dimension.
+    im = np.array(fits.getdata(nameset.im)).T
+    ierr = 1 / np.array(fits.getdata(nameset.err)).T
+    imset = ImageSet(im=im, ierr=ierr, hdr=hdr,
+                     band=band, expID=expID, names=nameset,
+                     mask=None, bkg=None)
+    return imset
 
 
 def make_psf_store(psfstorefile, nradii=9, band="",
@@ -114,8 +131,9 @@ if __name__ == "__main__":
 
     # Fill pixel and metastores
     for n in names:
-        pixelstore.add_exposure(n)
-        metastore.add_exposure(n)
+        ims = nameset_to_imset(n)
+        pixelstore.add_exposure(ims)
+        metastore.add_exposure(ims)
 
     bands = list(pixelstore.data.keys())
 

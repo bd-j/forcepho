@@ -15,7 +15,7 @@ from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
 
-from utils import Logger, rectify_catalog
+from forcepho.utils import Logger, rectify_catalog
 from config_test import config
 
 try:

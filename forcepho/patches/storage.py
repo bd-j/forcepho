@@ -13,7 +13,9 @@ import h5py
 from astropy.io import fits
 from astropy.wcs import WCS
 
-ImageNameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
+ImageNameSet = namedtuple("ImageNames", ["im", "err", "mask", "bkg"])
+ImageSet = namedtuple("Images", ["im", "ierr", "mask", "bkg",
+                                 "hdr", "band", "expID", "names"])
 
 EXP_FMT = "{}/{}"
 
@@ -122,7 +124,7 @@ class PixelStore:
         ypix = packed[:, :, self.super_pixel_size**2:].astype(np.int16)
         return xpix, ypix
 
-    def add_exposure(self, nameset, bitmask=None):
+    def add_exposure(self, imset, bitmask=None):
         """Add an exposure to the pixel data store, including background
         subtraction (if `nameset.bkg`), flux conversion, setting ierr for masked
         pixels to 0, and super-pixel ordering.  This opens the HDF5 files, adds
@@ -136,22 +138,19 @@ class PixelStore:
             subtraction and no masking beyond NaNs and infs
         """
         # Read the header and set identifiers
-        hdr = fits.getheader(nameset.im)
-        band, expID = header_to_id(hdr, nameset)
+        hdr = imset.hdr
+        band, expID = imset.band, imset.expID
 
-        # Read data and perform basic operations
-        # NOTE: we transpose to get a more familiar order where the x-axis
-        # (NAXIS1) is the first dimension and y is the second dimension.
-        im = np.array(fits.getdata(nameset.im)).T
-        ierr = 1 / np.array(fits.getdata(nameset.err)).T
-        if nameset.bkg:
-            bkg = np.array(fits.getdata(nameset.bkg)).T
+        im = imset.im
+        ierr = imset.ierr
+        if imset.bkg is not None:
+            bkg = imset.bkg
             im -= bkg
         else:
             bkg = np.zeros_like(im)
         mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
-        if nameset.mask:
-            pmask = np.array(fits.getdata(nameset.mask)).T
+        if imset.mask is not None:
+            pmask = imset.mask
             if bitmask:
                 # just check that any of the bad bits are set
                 pmask = np.bitwise_and(pmask, bitmask) != 0
@@ -188,9 +187,10 @@ class PixelStore:
             pdat.attrs["flux_units"] = unitname
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
-            for i, f in enumerate(nameset._fields):
-                if type(nameset[i]) is str:
-                    pdat.attrs[f] = nameset[i]
+            if imset.names:
+                for i, f in enumerate(imset.names._fields):
+                    if type(imset.names[i]) is str:
+                        pdat.attrs[f] = imset.names[i]
 
     def superpixelize(self, im, ierr, pix_dtype=None):
         """Take native image data and reshape into super-pixel order.
@@ -274,9 +274,10 @@ class MetaStore:
                     w = w.dropaxis(2)
                 self.wcs[band][expID] = w
 
-    def add_exposure(self, nameset):
-        hdr = fits.getheader(nameset.im)
-        band, expID = header_to_id(hdr, nameset)
+    def add_exposure(self, imset):
+        # Read the header and set identifiers
+        hdr = imset.hdr
+        band, expID = imset.band, imset.expID
         if band not in self.headers:
             self.headers[band] = {}
         self.headers[band][expID] = hdr
@@ -288,7 +289,7 @@ class MetaStore:
         Parameters
         ----------
         filename : str
-            The name of the file fro the metadata.  Will be overwritten if it
+            The name of the file for the metadata.  Will be overwritten if it
             already exists
         """
         import json
