@@ -1,4 +1,4 @@
-# Setup
+## Setup
 
 on ody:
 
@@ -30,42 +30,43 @@ module load astropy littlemcmc
 module load openmpi mpi4py
 ```
 
-# Correctness
+## Correctness
 
-Test against a simple image created from `galsim`
+Test against a simple image created from `galsim`:
 
 ```sh
 # Make test images (and catalog) using GalSim
 mkdir ./data
-python make_test_image.py
+python make_galsim_image.py
 # preprocess to create data stores in the format expected by forcepho
 mkdir ./stores
-python preprocess_test.py
+python preprocess_galsim.py
 # Now generate the model image and save it
 mkdir ./output
-python model_test_image.py
+python model_galsim_image.py
 ```
 
-Then, to generate images of the residuals for the S/N=100 objects
-```
+Then, to generate images of the residuals for the S/N=100 objects:
+
+```sh
 cd display
 python inspect_residuals.py
 ```
 
-Now sample the posterior and regenerate the image from the best fits for each object
+Now sample the posterior and regenerate the image from the best fits for each object:
 
 ```sh
 # fit to the galsim noisy image
 mkdir output/run1
-python sample_test_image.py --patch_dir=./output/run1 --logging
+python sample_galsim_image.py --patch_dir=./output/run1 --logging
 # reconstruct from the posteriors
-python reconstruct_test_image.py --patch_dir=./output/run1 --output_dir=./output
+python reconstruct_galsim_image.py --patch_dir=./output/run1 --output_dir=./output
 # Compare recovered parameters (here flux) to input
 cd display
 python explore.py --patch_dir=../output/run1 --colname=Fclear
 ```
 
-# Features
+## Features
 
 It would be nice to show
 

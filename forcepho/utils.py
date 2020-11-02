@@ -37,7 +37,7 @@ class Logger:
         return log
 
 
-def read_config(config_file):
+def read_config(config_file, args=None):
     """Read a yaml formatted config file.
     """
     import yaml
@@ -50,6 +50,9 @@ def read_config(config_file):
         if "dtype" in k:
             v = np.typeDict[v]
         setattr(config, k, v)
+
+    config = update_config(config, args)
+
     return config
 
 
@@ -57,12 +60,13 @@ def update_config(config, args):
     """Update a configuration namespace with parsed command line arguments.
     Also prepends config.store_directory to *storefile names
     """
-    d = vars(args)
-    for k, v in d.items():
-        try:
-            setattr(config, k, v)
-        except:
-            print("couldd not update {}={}".format(k, v))
+    if args is not None:
+        d = vars(args)
+        for k, v in d.items():
+            try:
+                setattr(config, k, v)
+            except:
+                print("could not update {}={}".format(k, v))
 
     # update the store paths
     for store in ["pixel", "meta", "psf"]:

@@ -17,8 +17,7 @@ from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
 
-from forcepho.utils import Logger, rectify_catalog, get_results
-from config_test import config
+from forcepho.utils import Logger, rectify_catalog, get_results, read_config
 
 try:
     import pycuda
@@ -106,15 +105,19 @@ def get_model_gpu(active, patcher):
 
 if __name__ == "__main__":
 
+    # Configure
     parser = ArgumentParser()
+    parser.add_argument("--config_file", type=str, default="galsim.yml")
     parser.add_argument("--output_dir", type=str, default="./output/")
     parser.add_argument("--patch_dir", type=str, default="./output/run3")
     args = parser.parse_args()
+    config = read_config(args.config_file, args)
+    bands = config.bandlist
 
+    # Find patch results and reconstruct scene
     files = glob.glob(os.path.join(args.patch_dir, "patch????_results.h5"))
     fullcat, inds = reconstruct_scene(files)
     cat = fullcat[inds]
-    bands = config.bandlist
 
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,

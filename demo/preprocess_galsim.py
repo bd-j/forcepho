@@ -12,6 +12,7 @@ import argparse
 from h5py import File
 from astropy.io import fits
 
+from forcepho.utils import read_config
 from forcepho.patches.storage import ImageNameSet, ImageSet, header_to_id
 from forcepho.patches.storage import PixelStore, MetaStore
 
@@ -107,13 +108,13 @@ if __name__ == "__main__":
     # --- Configuration ---
     # ---------------------
 
-    # read config file
-    from config_test import config
-
     # read command lines
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config_file", type=str, default="galsim.yml")
     args = parser.parse_args()
 
+    # read config file
+    config = read_config(args.config_file, args)
 
     # --- Make pix and meta stores ---
     # --------------------------------

@@ -15,8 +15,7 @@ from forcepho.proposal import Proposer
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
 
-from forcepho.utils import Logger, rectify_catalog
-from config_test import config
+from forcepho.utils import Logger, rectify_catalog, read_config
 
 try:
     import pycuda
@@ -81,6 +80,14 @@ def get_model_gpu(active, patcher):
 
 
 if __name__ == "__main__":
+
+    # read command lines
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config_file", type=str, default="galsim.yml")
+    args = parser.parse_args()
+
+    # read config file
+    config = read_config(args.config_file, args)
 
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,

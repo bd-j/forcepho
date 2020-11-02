@@ -14,9 +14,7 @@ from forcepho.sources import Galaxy
 from forcepho.patches import JadesPatch
 
 from forcepho.fitting import Result, run_lmc
-from forcepho.utils import Logger, rectify_catalog
-
-from config_test import config
+from forcepho.utils import Logger, rectify_catalog, read_config
 
 try:
     import pycuda
@@ -26,12 +24,16 @@ except:
     print("NO PYCUDA")
     HASGPU = False
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config_file", type=str, default="./test.yml")
     parser.add_argument("--logging", action="store_true")
-    parser.add_argument("--patch_dir", type=str, default="../output/")
+    parser.add_argument("--patch_dir", type=str, default="./output/")
     args = parser.parse_args()
+    config = read_config(args.config_file, args)
+
 
     if args.logging:
         import logging
