@@ -108,10 +108,11 @@ if __name__ == "__main__":
     # Configure
     parser = ArgumentParser()
     parser.add_argument("--config_file", type=str, default="galsim.yml")
-    parser.add_argument("--output_dir", type=str, default="./output/")
-    parser.add_argument("--patch_dir", type=str, default="./output/run3")
+    parser.add_argument("--run_id", type=str, default="run1")
     args = parser.parse_args()
     config = read_config(args.config_file, args)
+    config.outbase = config.outbase.replace("run1", config.run_id)
+    config.patch_dir = config.patch_dir.replace("run1", config.run_id)
     bands = config.bandlist
 
     # Find patch results and reconstruct scene
@@ -151,6 +152,7 @@ if __name__ == "__main__":
 
     # write out the sum
     outfile = os.path.join(args.output_dir, exp.replace("noisy", "forcebest") + ".fits")
+    os.makedirs(os.path.dirname(outfile), exist_ok=True)
     image = im.sum(axis=-1).T
     with fits.HDUList(fits.PrimaryHDU(image)) as hdul:
         hdul[0].header.update(hdr[6:])

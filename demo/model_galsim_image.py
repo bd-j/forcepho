@@ -84,6 +84,7 @@ if __name__ == "__main__":
     # read command lines
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_file", type=str, default="galsim.yml")
+    parser.add_argument("--outbase", type=str, default="output")
     args = parser.parse_args()
 
     # read config file
@@ -120,7 +121,8 @@ if __name__ == "__main__":
         im[xpix, ypix, i] += model
 
     # write out the sum
-    outfile = os.path.join("output", exp.replace("noisy", "forcemodel") + ".fits")
+    outfile = os.path.join(args.outbase, exp.replace("noisy", "fmodel") + ".fits")
+    os.makedirs(os.path.dirname(outfile), exist_ok=True)
     image = im.sum(axis=-1).T
     with fits.HDUList(fits.PrimaryHDU(image)) as hdul:
         hdul[0].header.update(hdr[6:])

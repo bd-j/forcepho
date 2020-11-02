@@ -30,10 +30,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_file", type=str, default="./test.yml")
     parser.add_argument("--logging", action="store_true")
-    parser.add_argument("--patch_dir", type=str, default="./output/")
+    parser.add_argument("--run_id", type=str, default="run1")
     args = parser.parse_args()
     config = read_config(args.config_file, args)
-
+    config.outbase = config.outbase.replace("run1", config.run_id)
+    config.patch_dir = config.patch_dir.replace("run1", config.run_id)
+    os.makedirs(args.outbase, exist_ok=True)
 
     if args.logging:
         import logging
@@ -56,7 +58,7 @@ if __name__ == "__main__":
                          maxactive_per_patch=config.maxactive_per_patch,
                          maxradius=config.patch_maxradius,
                          target_niter=config.sampling_draws,
-                         statefile=os.path.join(args.patch_dir, "superscene.fits"),
+                         statefile=os.path.join(args.outbase, args.scene_catalog),
                          bounds_kwargs={})
     logger.info("Made SceneDB")
     error = None
@@ -102,6 +104,7 @@ if __name__ == "__main__":
         sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, taskID=patchID)
 
         outfile = os.path.join(args.patch_dir, "patch{}_results.h5".format(patchID))
+        os.makedirs(os.path.dirname(outfile), exist_ok=True)
         logger.info("Writing to {}".format(outfile))
         out.dump_to_h5(outfile)
 

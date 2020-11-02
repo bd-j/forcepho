@@ -21,12 +21,14 @@ raw_catalog: # full path (optional)
 
 splinedatafile:
   ./stores/sersic_mog_model.smooth=0.0150.h5
+store_directory:
+  ./stores/
 pixelstorefile:
-  ./stores/pixels_galsim_galaxy_grid.h5
+  pixels_galsim_galaxy_grid.h5
 psfstorefile:
-  ./stores/psf_galsim_galaxy_grid.h5
+  psf_galsim_galaxy_grid.h5
 metastorefile:
-  ./stores/meta_galsim_galaxy_grid.h5
+  meta_galsim_galaxy_grid.h5
 
 # ------------------------
 # --- Output locations
@@ -35,7 +37,7 @@ outbase:
 scene_catalog:
   test_scene.fits
 patch_dir:
-  patches/
+  ./output/run1/patches/
 
 # ------------------------
 # --- Data Types/Sizes ---
