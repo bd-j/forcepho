@@ -1,7 +1,8 @@
 name: fpho
 dependencies:
   # Infrastructure
-  - ipython
+  - ipython  # optional
+  - pyyaml
   # Scientific computing
   - numpy>=1.14
   - scipy>=1.1.0
@@ -12,7 +13,6 @@ dependencies:
   - astropy
   # Inference
   - dynesty # optional
-  #- pymc3
   - pip:
     - littlemcmc=0.2.*
   # Optional but recommended

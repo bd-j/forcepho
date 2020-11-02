@@ -23,9 +23,9 @@ EXP_FMT = "{}/{}"
 PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 
 
-def header_to_id(hdr, nameset):
+def header_to_id(hdr, name):
     band = hdr["FILTER"]
-    expID = os.path.basename(nameset.im).replace(".fits", "")
+    expID = os.path.basename(name).replace(".fits", "")
     return band, expID
 
 

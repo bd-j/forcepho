@@ -31,7 +31,7 @@ def find_images(loc=".", pattern="*noisy.fits"):
 def nameset_to_imset(nameset):
     # Read the header and set identifiers
     hdr = fits.getheader(nameset.im)
-    band, expID = header_to_id(hdr, nameset)
+    band, expID = header_to_id(hdr, nameset.im)
 
     # Read data and perform basic operations
     # NOTE: we transpose to get a more familiar order where the x-axis
