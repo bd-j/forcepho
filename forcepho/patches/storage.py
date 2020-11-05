@@ -124,7 +124,7 @@ class PixelStore:
         ypix = packed[:, :, self.super_pixel_size**2:].astype(np.int16)
         return xpix, ypix
 
-    def add_exposure(self, imset, bitmask=None):
+    def add_exposure(self, imset, bitmask=None, do_fluxcal=False):
         """Add an exposure to the pixel data store, including background
         subtraction (if `nameset.bkg`), flux conversion, setting ierr for masked
         pixels to 0, and super-pixel ordering.  This opens the HDF5 files, adds
@@ -158,11 +158,14 @@ class PixelStore:
         ierr[mask] = 0
         # masked pixels provide a sampling of the subtracted background
         im[mask] = bkg[mask]
-        # this does nominal flux calibration of the image.
-        # Returns the calibration factor applied
-        fluxconv, unitname = self.flux_calibration(hdr)
-        im *= fluxconv
-        ierr *= 1. / fluxconv
+        if do_fluxcal:
+            # this does nominal flux calibration of the image.
+            # Returns the calibration factor applied
+            fluxconv, unitname = self.flux_calibration(hdr)
+            im *= fluxconv
+            ierr *= 1. / fluxconv
+        else:
+            fluxconv, unitname = 1.0, "image"
 
         # Superpixelize
         imsize = np.array(im.shape)
