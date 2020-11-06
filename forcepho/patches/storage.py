@@ -191,9 +191,14 @@ class PixelStore:
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
             if imset.names:
-                for i, f in enumerate(imset.names._fields):
-                    if type(imset.names[i]) is str:
-                        pdat.attrs[f] = imset.names[i]
+                if type(imset.names) is str:
+                    pdat.attrs["image_name"] = imset.names
+                try:
+                    for i, f in enumerate(imset.names._fields):
+                        if type(imset.names[i]) is str:
+                            pdat.attrs[f] = imset.names[i]
+                except(AttributeError):
+                    pass
 
     def superpixelize(self, im, ierr, pix_dtype=None):
         """Take native image data and reshape into super-pixel order.
