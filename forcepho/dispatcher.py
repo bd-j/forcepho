@@ -26,7 +26,7 @@ from .region import CircularRegion
 from .sources import Galaxy
 from .fitting import run_lmc
 from .model import GPUPosterior, BoundedTransform
-from .utils import rectify_catalog
+from .utils import rectify_catalog, read_config
 
 
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
@@ -694,7 +694,7 @@ class MPIQueue:
             self.comm.send(None, dest=child, tag=0)
 
 
-def do_parent(comm):
+def do_parent(comm, config=None):
     timer = time.perf_counter
     tstart = timer()
 
@@ -711,22 +711,13 @@ def do_parent(comm):
     # Make Queue
     queue = MPIQueue(comm, n_child)
 
-    ###################
-    # steal a real patch from the demo
-    import os
-    os.chdir('../demo')
-    import sys
-    sys.path.insert(0,'.')
-    from config_test import config
-    ##########################
-
     # --- Get the patch dispatcher ---  (parent)
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
     sceneDB = SuperScene(sourcecat=cat, bands=bands,
                          maxactive_per_patch=config.maxactive_per_patch,
                          maxradius=config.patch_maxradius,
-                         target_niter=config.sampling_draws,
-                         statefile="superscene.fits",
+                         target_niter=config.target_draws,
+                         statefile=config.scene_catalog,
                          bounds_kwargs={},
                          maxactive_fraction=0.5)
     checkout_time = 0
@@ -740,7 +731,7 @@ def do_parent(comm):
         while sceneDB.undone:
             # Generate one patch proposal.
             _tstart = timer()
-            ntry = 1000  # how many tries before we decide there are no regions to be checked out?
+            ntry = getattr(config, "ntry_checkout", 1000)  # how many tries before we decide there are no regions to be checked out?
             for _ in range(ntry):
                 region, active, fixed = sceneDB.checkout_region()
                 if active is not None:
@@ -757,14 +748,11 @@ def do_parent(comm):
                 taskid += 1
                 bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
 
-                chore = {'region':region, 'active':active, 'fixed':fixed,
-                         'bounds':bounds, 'cov':cov,
-                         'bands':bands, 'shape_cols':sceneDB.shape_cols,
-                         # For now, the child reads no config, and the parent passes everything
-                         'lmc_config':dict(n_draws=config.sampling_draws, full=config.full_cov, warmup=config.warmup)}
-                patchcat[taskid] = {"ra": region.ra,
-                                    "dec": region.dec,
-                                    "radius": region.radius,
+                chore = {'region': region, 'active': active, 'fixed': fixed,
+                         'bounds': bounds, 'cov': cov,
+                         'bands': bands, 'shape_cols': sceneDB.shape_cols}
+                # log some info for this patch/task
+                patchcat[taskid] = {"ra": region.ra, "dec": region.dec, "radius": region.radius,
                                     "sources": active["source_index"].tolist()}
                 # submit the task
                 assigned_to = queue.submit(chore, tag=taskid)
@@ -780,8 +768,7 @@ def do_parent(comm):
                 sceneDB.checkin_region(result['final'], result['out'].fixed,
                                        len(result['out'].chain),
                                        block_covs=result['covs'],
-                                       taskID=taskid,
-                                      )
+                                       taskID=taskid)
 
         # Receive any stragglers
         results = queue.collect(blocking='all')
@@ -800,23 +787,21 @@ def do_parent(comm):
     queue.closeout()
 
 
-def do_child(comm):
+def do_child(comm, config=None):
     rank = comm.Get_rank()
     global logger
     logger = logging.getLogger(f'dispatcher-child-{rank}')
     parent = 0
 
-    ###################
-    # steal a real patch from the demo
-    import os
-    os.chdir('../demo')
-    import sys
-    sys.path.insert(0,'.')
-    from config_test import config
+    # --- Patch Maker (gets reused between patches) ---
     from .patches import JadesPatch
-    ##########################
+    patcher = JadesPatch(metastore=config.metastorefile,
+                            psfstore=config.psfstorefile,
+                            pixelstore=config.pixelstorefile,
+                            splinedata=config.splinedatafile,
+                            return_residual=True)
 
-    # Event Loop
+    # --- Event Loop ---
     while True:
         status = MPI.Status()
         # do a blocking receive
@@ -828,46 +813,36 @@ def do_child(comm):
             break
 
         # To be explicit, let's unpack all the task variables here
-        region = task['region']
-        active, fixed = task['active'], task['fixed']
+        region, active, fixed = task['region'], task['active'], task['fixed']
         bounds, cov = task['bounds'], task['cov']
         bands, shape_cols = task['bands'], task['shape_cols']
-        lmc_config = task['lmc_config']
         del task
 
         taskid = status.tag
         logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
 
-
-        # TODO: can we reuse the patcher object between iterations?
-        # Yes, but the overhead on patcher generation is not huge
-        patcher = JadesPatch(metastore=config.metastorefile,
-                             psfstore=config.psfstorefile,
-                             pixelstore=config.pixelstorefile,
-                             splinedata=config.splinedatafile,
-                             return_residual=True)
-
-        # get pixel data and pixel metadata
+        # --- get pixel data and metadata, subtract fixed sources, build model ---
         patcher.build_patch(region, None, allbands=bands)
         model, q = patcher.prepare_model(active=active, fixed=fixed, bounds=bounds,
                                          shapes=shape_cols)
-        logger.info("Prepared patch")
+        logger.info("Prepared patch and model")
 
-        # --- Get bounds, covariances, and sample --- (child)
+        # --- Sample using covariances--- (child)
         weight = max(10, active["n_iter"].min())
+        logger.info(f"sampling with covariance weight={weight}")
+        out, step, stats = run_lmc(model, q.copy(), n_draws=config.sampling_draws, warmup=config.warmup,
+                                   z_cov=cov, full=config.full_cov, adapt=True,
+                                   weight=weight, progressbar=getattr(config, "progressbar", False))
 
-        logger.info(f"Model made, sampling with covariance weight={weight}")
-        out, step, stats = run_lmc(model, q.copy(), **lmc_config,
-                                   z_cov=cov, adapt=True,
-                                   weight=weight, progressbar=True)
-
-        # develop the payload
+        # --- develop the payload ---
         logger.info("Sampling complete, preparing output.")
         final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                                step=step, stats=stats, patchID=taskid)
         payload = dict(out=out, final=final, covs=covs)
 
-        # blocking send to parent, free GPU memory
+        # --- write the output for this task ---
+
+        # --- blocking send to parent, free GPU memory ---
         comm.send(payload, parent, status.tag)
         logger.info(f"Child {rank} sent {region.ra} for patch {taskid}")
 
@@ -891,7 +866,7 @@ def dummy_work(region, active, fixed):
     return result
 
 
-def main():
+def main(config=None):
     # Demo usage of the queue
 
     # MPI communicator
@@ -905,10 +880,10 @@ def main():
 
     if rank == 0:
         # Do parental things
-        do_parent(comm)
+        do_parent(comm, config=config)
     else:
         # Do childish things
-        do_child(comm)
+        do_child(comm, config=config)
 
 
 class ArgParseFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
@@ -920,7 +895,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='MPI dispatcher interface', formatter_class=ArgParseFormatter)
     # Any command line arguments can be added here
-    args = parser.parse_args()
-    args = vars(args)
+    parser.add_argument("--config_file", type=str, default="galsim.yml")
 
-    main(**args)
+    args = parser.parse_args()
+    config = read_config(args.config_file, args)
+
+    main(config)

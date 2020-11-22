@@ -273,6 +273,16 @@ class Patch:
 
         return self.gpu_patch
 
+    @property
+    def size(self):
+        s = 0
+        for arrname in self.patch_struct_dtype.names:
+            try:
+                s += getattr(self, arrname).nbytes
+            except(AttributeError):
+                pass
+        return s
+
     def free(self):
         # Release ALL the device-side arrays
         try:

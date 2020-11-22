@@ -59,11 +59,15 @@ maxactive_per_patch:
   15
 patch_maxradius:  # in arcsec
   8
-ntry_patch:
+ntry_checkout:
   1000
+buffer_size:
+  5e7
 
 # -----------------------
 # --- HMC parameters ---
+target_draws:
+  512
 sampling_draws:
   256
 warmup:

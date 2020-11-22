@@ -9,6 +9,9 @@ for a given patch or area of the sky defined in celestial coordinates.
 
 import numpy as np
 
+__all__ = ["Region", "CircularRegion", "RectangularRegion",
+           "polygons_intersect"]
+
 
 class Region:
 
@@ -41,6 +44,23 @@ class Region:
         """A bounding box for the region, in celestial coordinates.
         """
         return None
+
+    def overlaps(self, hdr):
+        """Check for overlap of the bounding box with a rectangular image based
+        on the WCS in its header.
+        """
+        from astropy.wcs import WCS
+        wcs = WCS(hdr)
+        imsize = hdr["NAXIS1"], hdr["NAXIS2"]
+
+        # Compute image bounding box, and check if bounding boxes overlap
+        pcorners = np.array([[0, imsize[0], imsize[0], 0],
+                            [0, 0, imsize[1], imsize[1]]])
+        ira, idec = wcs.all_pix2world(pcorners[0], pcorners[1], 1)
+        im_bb = RectangularRegion(ira.min(), ira.max(), idec.min(), idec.max())
+        overlap = polygons_overlap(self, im_bb)
+
+        return overlap
 
 
 class CircularRegion(Region):
@@ -99,8 +119,9 @@ class CircularRegion(Region):
 
     @property
     def bounding_box(self):
-        """Return a square bounding-box in celestial coordinates.
-        The box is aligned with the celestial coordinate system.
+        """Return a square bounding-box in celestial coordinates that
+        circumscribes the circular region. The box is aligned with the celestial
+        coordinate system.
 
         Returns
         -------
@@ -188,3 +209,56 @@ class RectangularRegion(Region):
                    (self.ra_max, self.dec_max),
                    (self.ra_min, self.dec_max)]
         return np.array(corners).T
+
+
+def polygons_overlap(a, b):
+    """Determine whether the bounding boxes of two regions intersect, including
+    whether one is fully contained within the other.  Regions must have their
+    bounding polygons be convex and in consistent order (CCW *or* CW for both)
+
+    Parameters
+    ----------
+    a: Region() instance
+        A region with `bounding_box()` method defined.
+
+    b : Region() instance
+        A second region with `bounding_box()` method defined.
+
+    Returns
+    -------
+    overlap : bool
+        Whether there is any overlap.
+
+    >>> a = RectangularRegion(58, 59, 26, 27)
+    >>> b = RectangularRegion(57, 60, 25, 28)
+    >>> polygons_overlap(a, b)
+    True
+
+    >>> b = RectangularRegion(60, 62, 25, 28)
+    >>> polygons_overlap(a, b)
+    False
+
+    >>> b = RectangularRegion(58.5, 62, 25, 28)
+    >>> polygons_overlap(a, b)
+    True
+    """
+    for region in a, b:
+        Xs, Ys = region.bounding_box
+        N = len(Xs)
+        inds = np.arange(N)
+        normX, normY = Ys[(inds + 1) % N] - Ys[inds], Xs[inds] - Xs[(inds + 1) % N]
+
+        ax, ay = a.bounding_box
+        proj = normX[:, None] * ax[None, :] + normY[:, None] * ay[None, :]
+        minA = proj.min(axis=-1)
+        maxA = proj.max(axis=-1)
+
+        bx, by = b.bounding_box
+        proj = normX[:, None] * bx[None, :] + normY[:, None] * by[None, :]
+        minB = proj.min(axis=-1)
+        maxB = proj.max(axis=-1)
+
+        if (np.any((maxA < minB) | (maxB < minA))):
+            return False
+
+    return True

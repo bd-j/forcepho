@@ -10,8 +10,8 @@ import h5py
 from forcepho.sources import Galaxy
 #from forcepho.fitting import Result  # indirect pycuda import
 
-__all__ = ["Logger", "configure",
-           "rectify_catalog",
+__all__ = ["Logger", "read_config", "update_config",
+           "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
            "get_results",
            "make_statscat", "make_chaincat"]
