@@ -7,6 +7,7 @@ Parent side classes for MPI queues and handling a master source catalog,
 where sources/patches are checked out and checked back in
 """
 
+import os
 import json
 import logging
 import argparse
@@ -810,6 +811,7 @@ def do_child(comm, config=None):
         logger.info(f'Received task id {status.tag}')
         # if shutdown break and quit
         if task is None:
+            logger.info(f"Child {rank} shutting down.")
             break
 
         # To be explicit, let's unpack all the task variables here
@@ -841,13 +843,20 @@ def do_child(comm, config=None):
         payload = dict(out=out, final=final, covs=covs)
 
         # --- write the output for this task ---
+        if config.patch_dir:
+            outfile = os.path.join(config.patch_dir, "task{}_results.h5".format(taskid))
+            os.makedirs(os.path.dirname(outfile), exist_ok=True)
+            logger.info("Writing to {}".format(outfile))
+            out.dump_to_h5(outfile)
+
 
         # --- blocking send to parent, free GPU memory ---
         comm.send(payload, parent, status.tag)
         logger.info(f"Child {rank} sent {region.ra} for patch {taskid}")
 
         patcher.free()
-        del patcher
+
+    del patcher
 
 
 def dummy_work(region, active, fixed):
