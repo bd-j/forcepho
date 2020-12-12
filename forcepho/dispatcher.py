@@ -373,7 +373,6 @@ class SuperScene:
         # Note this uses original positions
         kinds = self.kdt.query_ball_point(center, self.boundary_radius)
         kinds = np.array(kinds)
-        #candidates = self.sourcecat[kinds]
 
         # check for active sources; if any exist, return None
         # really should do this check after computing a patch radius
@@ -393,10 +392,11 @@ class SuperScene:
 
         # Now we sort by outer distance.
         # TODO: *might* want to sort by just distance
-        order = np.argsort(outer)
+        metric = outer
+        order = np.argsort(metric)
 
         # How many sources have an outer distance within max patch size
-        N_inside = np.argmin(outer[order] < self.maxradius)
+        N_inside = (metric < self.maxradius).sum()
         # restrict to <= maxactive.
         N_active = min(self.maxactive, N_inside)
 
