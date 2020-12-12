@@ -38,6 +38,7 @@ REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('dispatcher')
 
+
 class SuperScene:
     """An object that describes *all* sources in a scene.
     It contains methods for checking out regions, and checking
@@ -346,6 +347,8 @@ class SuperScene:
         self.sourcecat["is_active"][:] = False
         self.sourcecat["n_iter"][:] = 0
         self.sourcecat["n_patch"][:] = 0
+        self.n_active = 0
+        self.n_fixed = 0
 
     def get_circular_scene(self, center):
         """
