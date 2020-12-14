@@ -78,6 +78,14 @@ def update_config(config, args):
         except(AttributeError):
             print("could not update {}storefile path".format(store))
 
+    # expand shell variables
+    for k, v in vars(config).items():
+        try:
+            s = os.path.expandvars(v)
+            setattr(config, k, s)
+        except(TypeError):
+            pass
+
     return config
 
 
