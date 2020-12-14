@@ -124,6 +124,8 @@ class JadesPatch(Patch):
         # order
         meta = self.find_exposures(region, allbands)
         self.hdrs, self.wcses, self.epaths, self.bands = meta
+        if len(self.epaths) == 0:
+            raise ValueError("No exposures overlap the region")
 
         # --- Get BAND information for the exposures ---
         # band_ids must be an int identifier (does not need to be contiguous)

@@ -283,6 +283,13 @@ class Patch:
                 pass
         return s
 
+    def clear(self):
+        for arrname in self.patch_struct_dtype.names:
+            try:
+                delattr(self, arrname)
+            except(AttributeError):
+                pass
+
     def free(self):
         # Release ALL the device-side arrays
         try:
@@ -303,6 +310,7 @@ class Patch:
 
     def __del__(self):
         self.free()  # do we want to do this?
+        self.clear()
 
     def test_struct_transfer(self, gpu_patch, cache_dir=False):
         """Run a simple PyCUDA kernel that checks that the data sent was the
