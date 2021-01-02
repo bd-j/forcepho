@@ -45,8 +45,10 @@ class JadesPatch(Patch):
                  return_residual=False,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
+                 debug=0,
                  ):
 
+        self.debug = debug
         self.meta_dtype = meta_dtype
         self.pix_dtype = pix_dtype
         self.return_residual = return_residual
@@ -345,7 +347,12 @@ class JadesPatch(Patch):
             pixdat = self.find_pixels(self.epaths[e], wcs, region)
             # use size instead of len here because we are going to flatten.
             n_pix = pixdat[0].size
-            assert n_pix > 0, "There were no valid pixels in exposure {}".format(self.epaths[e])
+            msg = "There were no valid pixels in exposure {}".format(self.epaths[e])
+            assert n_pix > 0, msg
+            if self.debug > 0:
+                msg = "There were non-finite pixels in exposure {}".format(self.epaths[e])
+                assert np.all(np.isfinite(pixdat[0] * pixdat[1])), msg
+
             if e > 0 and self.bands[e] != self.bands[e - 1]:
                 b += 1
             self.band_N[b] += 1

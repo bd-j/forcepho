@@ -137,17 +137,19 @@ class PixelStore:
             `None` or `False` for bkg and mask will result in no background
             subtraction and no masking beyond NaNs and infs
         """
-        # Read the header and set identifiers
+        # --- Read the header and set identifiers ---
         hdr = imset.hdr
         band, expID = imset.band, imset.expID
 
         im = imset.im
         ierr = imset.ierr
+        # -- backgound subtract ---
         if imset.bkg is not None:
             bkg = imset.bkg
             im -= bkg
         else:
             bkg = np.zeros_like(im)
+        # --- mask pixels ---
         mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
         if imset.mask is not None:
             pmask = imset.mask
@@ -156,8 +158,11 @@ class PixelStore:
                 pmask = np.bitwise_and(pmask, bitmask) != 0
             mask = mask | pmask
         ierr[mask] = 0
-        # masked pixels provide a sampling of the subtracted background
-        im[mask] = bkg[mask]
+        im[mask] = 0
+        # let masked pixels provide a sampling of the subtracted background
+        gb = np.isfinite(bkg)
+        im[mask & gb] = bkg[mask & gb]
+        # --- flux calibrate ---
         if do_fluxcal:
             # this does nominal flux calibration of the image.
             # Returns the calibration factor applied
@@ -167,7 +172,7 @@ class PixelStore:
         else:
             fluxconv, unitname = 1.0, "image"
 
-        # Superpixelize
+        # --- Superpixelize ---
         imsize = np.array(im.shape)
         assert np.all(np.mod(imsize, self.super_pixel_size) == 0)
         if np.any(imsize != self.nside_full):
@@ -175,8 +180,10 @@ class PixelStore:
             # images are the same size
             raise ValueError("Image is not the expected size")
         superpixels = self.superpixelize(im, ierr)
+        msg = "There were non-finite pixels in exposure {}".format(expID)
+        assert np.all(np.isfinite(superpixels)), msg
 
-        # Put into the HDF5 file; note this opens and closes the file
+        # --- Put into the HDF5 file; note this opens and closes the file ---
         with h5py.File(self.h5file, "r+") as h5:
             path = "{}/{}".format(band, expID)
             try:
@@ -250,7 +257,18 @@ class PixelStore:
     # should test for open file handle and return it, otherwise create and cache it
     @property
     def data(self):
-        return h5py.File(self.h5file, "a", swmr=True)
+        try:
+            return self._read_handle
+        except(AttributeError):
+            self._read_handle = h5py.File(self.h5file, "r", swmr=True)
+            return self._read_handle
+
+    def close(self):
+        try:
+            self._read_handle.close()
+            del self._read_handle
+        except(AttributeError):
+            pass
 
 
 class MetaStore:
