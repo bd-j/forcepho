@@ -78,7 +78,7 @@ class PixelStore:
         except(KeyError, OSError):
             # file or attrs do not exist, create them
             nside_full = np.array(nside_full)
-            print("Adding nside_full={}, super_ixel_sze={} to attrs".format(nside_full, super_pixel_size))
+            print("Adding nside_full={}, super_pixel_size={} to attrs".format(nside_full, super_pixel_size))
             #super_pixel_size = np.array(super_pixel_size)
             with h5py.File(self.h5file, "a") as h5:
                 h5.attrs["nside_full"] = nside_full

@@ -87,6 +87,12 @@ class Result(object):
         out.bandlist = bands
         out.shapenames = shapenames
 
+        # --- basic info ---
+        out.ncall = model.ncall
+        out.npix = patch.npix
+        out.nexp = len(patch.epaths)
+        #out.exposures = np.array(patch.epaths)
+
         # --- region, active, fixed ---
         for k, v in region.__dict__.items():
             setattr(out, k, v)
@@ -149,6 +155,15 @@ class Result(object):
                         out.attrs[name] = value
                     except:
                         print("could not save {} with value {} to {}".format(name, value, filename))
+
+    def read_from_h5(self, filename):
+        import h5py
+        out = self
+        with h5py.File(filename, "r") as f:
+            for k, v in f.items():
+                setattr(out, k, f[k][:])
+            for k, v in f.attrs.items():
+                setattr(out, k, v)
 
 
 def priors(scene, stamps, npix=2.0):
