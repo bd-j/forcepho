@@ -67,7 +67,7 @@ class Proposer:
                            options=options, no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
-    def evaluate_proposal(self, proposal, verbose=False):
+    def evaluate_proposal(self, proposal, verbose=False, unpack=True):
         """Call the GPU kernel to evaluate the likelihood of a parameter proposal.
 
         Parameters
@@ -112,8 +112,9 @@ class Proposer:
 
         # Unpack residuals
         if self.patch.return_residual:
-            residuals_flat = self.retrieve_array("residual")
-            residuals = self.unpack_residuals(residuals_flat)
+            residuals = self.retrieve_array("residual")
+            if unpack:
+                residuals = self.unpack_residuals(residuals)
 
         if self.patch.return_residual:
             return chi_out, chi_derivs_out, residuals

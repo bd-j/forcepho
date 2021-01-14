@@ -125,7 +125,7 @@ class Reconstructor:
 
         # --- evaluate proposal, including residuals
         self.patcher.return_residual = True
-        out = proposer.evaluate_proposal(proposal)
+        out = proposer.evaluate_proposal(proposal, unpack=False)
         residual = out[-1]
         if split:
             residual = np.split(residual, np.cumsum(self.patcher.exposure_N)[:-1])
