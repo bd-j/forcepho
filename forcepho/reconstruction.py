@@ -29,26 +29,31 @@ def _make_imset(out, paths, name, arrs):
             print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
 
 
-class Samples:
+class Samples(Result):
 
     def __init__(self, filename):
         self.read_patch(filename)
 
     def read_patch(self, filename):
-        result = Result()
-        result.read_from_h5(filename)
 
-        self.result = result
-        self.reference_coordinates = result.reference_coordinates
-        self.region = CircularRegion(result.ra, result.dec, result.radius)
-        self.bands = [b.decode("utf") for b in result.bandlist]
-        self.shape_cols = [s.decode("utf") for s in result.shapenames]
+        self.read_from_h5(filename)
+        self.region = CircularRegion(self.ra, self.dec, self.radius)
+        self.bands = [b.decode("utf") for b in self.bandlist]
+        self.shape_cols = [s.decode("utf") for s in self.shapenames]
 
-        self.chaincat = make_chaincat(result.chain, self.bands, result.active,
-                                      result.reference_coordinates, shapes=self.shape_cols)
-        self.active = result.active
-        self.fixed = result.fixed
-        self.bounds = result.bounds
+        self.chaincat = make_chaincat(self.chain, self.bands, self.active,
+                                      self.reference_coordinates, shapes=self.shape_cols)
+        self.n_active = len(self.active)
+        self.dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
+
+    def get_sample_cat(self, iteration):
+        sample = np.zeros(self.n_active, dtype=self.dtype_sample)
+        for d in sample.dtype.names:
+            try:
+                sample[d] = self.chaincat[d][:, iteration]
+            except(IndexError):
+                sample[d] = self.chaincat[d]
+        return sample
 
     def show_chain(self, source_idx=0, bandlist=None, axes=None,
                    span=0.999999426697, post_kwargs=dict(alpha=0.5, color="royalblue"),
@@ -137,7 +142,7 @@ class Reconstructor:
         self.shapes = results.shape_cols
         self.parameters = parameters
         if parameters is None:
-            self.parameters = results.chaincat[-1]
+            self.parameters = results.get_sample_cat(-1)
 
         assert len(parameters) <= self.MAXSOURCES
 
