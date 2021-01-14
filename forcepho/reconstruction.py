@@ -95,7 +95,8 @@ class Reconstructor:
     def model_data(self, parameters, split=True):
         """Model the pixels for a given scene
         """
-        blocks = np.split(parameters, self.MAXSOURCES)
+        inds = np.arange(self.MAXSOURCES, len(parameters), self.MAXSOURCES)
+        blocks = np.array_split(parameters, inds)
 
         model = np.zeros_like(self.patcher.data)
         for i, block in enumerate(blocks):
@@ -128,6 +129,7 @@ class Reconstructor:
 
     def build_arrays(self, results, parameters=None):
         """Build the relevant arrays based on a Samples() structure instance.
+        Only works if len(parameters) <= self.MAXSOURCES
         """
         self.results = results
         self.fixed = results.fixed
@@ -137,17 +139,20 @@ class Reconstructor:
         if parameters is None:
             self.parameters = results.chaincat[-1]
 
+        assert len(parameters) <= self.MAXSOURCES
+
         # get the pixels
         self.fetch_data(results.region, results.bands)
 
-        # model the pixels for these parameters, and chache the meta parameters
-        model = self.model_data(self.parameters, split=False)
+        # model the pixels for these parameters, and cache the meta parameters
+        residual = self.get_residuals(self.parameters, split=False)
         for a in self.metas:
             setattr(self, a, getattr(self.patcher, a))
         if self.fixed:
-            model += self.model_data(self.fixed, split=False)
+            rf = self.get_residuals(self.fixed, split=False)
+            residual += rf - self.patcher.data
 
-        self.residual = np.split(self.patcher.data - model, np.cumsum(self.patcher.exposure_N)[:-1])
+        self.residual = np.split(residual, np.cumsum(self.patcher.exposure_N)[:-1])
 
     def write_arrays(self, filename):
         """Write relevant arrays to HDF5 file
