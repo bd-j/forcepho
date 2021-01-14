@@ -91,10 +91,8 @@ class Reconstructor:
         self.ierr = self.patcher.split_pix("ierr")
         self.epaths = self.patcher.epaths
         self.bands = bands
-        for a in self.metas:
-            setattr(self, a, getattr(self.patcher, a))
 
-    def model_data(self, parameters):
+    def model_data(self, parameters, split=True):
         """Model the pixels for a given scene
         """
         blocks = np.split(parameters, self.MAXSOURCES)
@@ -104,7 +102,8 @@ class Reconstructor:
             residual = self.get_residuals(block, split=False)
             model += self.patcher.data - residual
 
-        model = np.split(model, np.cumsum(self.patcher.exposure_N)[:-1])
+        if split:
+            model = np.split(model, np.cumsum(self.patcher.exposure_N)[:-1])
         return model
 
     def get_residuals(self, parameters, split=True):
@@ -141,11 +140,14 @@ class Reconstructor:
         # get the pixels
         self.fetch_data(results.region, results.bands)
 
-        # model the pixels for these parameters
-        model = self.model_data(self.parameters)
+        # model the pixels for these parameters, and chache the meta parameters
+        model = self.model_data(self.parameters, split=False)
+        for a in self.metas:
+            setattr(self, a, getattr(self.patcher, a))
         if self.fixed:
-            model += self.model_data(self.fixed)
-        self.residual = self.original - model
+            model += self.model_data(self.fixed, split=False)
+
+        self.residual = np.split(self.patcher.data - model, np.cumsum(self.patcher.exposure_N)[:-1])
 
     def write_arrays(self, filename):
         """Write relevant arrays to HDF5 file
@@ -153,7 +155,7 @@ class Reconstructor:
         with h5py.File(filename, "w") as out:
             out.create_dataset("epaths", data=np.array(self.epaths, dtype="S"))
             out.create_dataset("exposure_start", data=self.patcher.exposure_start)
-            out.create_dataset("parameters", data=self.parameters)
+            out.create_dataset("active", data=self.parameters)
             out.create_dataset("fixed", data=self.results.fixed)
 
         for band in self.bands:
