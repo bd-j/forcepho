@@ -43,7 +43,7 @@ mkdir ./stores
 python preprocess_galsim.py
 # Now generate the model image and save it
 mkdir ./output
-python model_galsim_image.py
+python model_galsim_image.py --outbase=./output
 ```
 
 Then, to generate images of the residuals for the S/N=100 objects:
@@ -52,6 +52,8 @@ Then, to generate images of the residuals for the S/N=100 objects:
 cd display
 python inspect_residuals.py
 ```
+
+## Sampling
 
 Now sample the posterior and regenerate the image from the best fits for each object:
 
@@ -73,3 +75,4 @@ It would be nice to show
  1. The covariances between adjacent sources as a function of the ratio distance/rhalf
  2. The difference in posteriors between fitting multiple (different resolution) bands separately versus simultaneously.
  3. Biases due to color gradients, or unmodeled substructure.
+ 4. The impact of covariances.

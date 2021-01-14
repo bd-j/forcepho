@@ -13,11 +13,11 @@ import argparse
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from forcepho.proposal import Proposer
+from forcepho.reconstruction import Reconstructor
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
 
-from forcepho.utils import Logger, rectify_catalog, get_results, read_config
+from forcepho.utils import rectify_catalog, get_results, read_config
 
 try:
     import pycuda
@@ -65,7 +65,7 @@ def reconstruct_scene(results_files_list):
     return bests, inds
 
 
-def parse_image(hdr, cat, n_gal=16):
+def parse_image(hdr):
     """The image is small, so we will just predict the entire image for each set of sources.
     We are limited in the number of sources by GPU memory, currently the max is ~20
     """
@@ -80,29 +80,6 @@ def parse_image(hdr, cat, n_gal=16):
     return region, actives
 
 
-def get_model_gpu(active, patcher):
-    # --- Build the things
-    patcher.pack_meta(active)
-    gpu_patch = patcher.send_to_gpu()
-    proposer = Proposer(patcher)
-
-    # --- Get parameter vector and proposal
-    q = patcher.scene.get_all_source_params()
-    prop = patcher.scene.get_proposal()
-
-    # --- evaluate proposal, including residuals
-    proposer.patch.return_residual = True
-    out = proposer.evaluate_proposal(prop)
-
-    result = {"residual": out[-1],
-              "reference_coordinates": patcher.patch_reference_coordinates.copy(),
-              "parameter_vector": q,
-              "proposal": prop
-              }
-
-    return result
-
-
 if __name__ == "__main__":
 
     # Configure
@@ -115,46 +92,39 @@ if __name__ == "__main__":
     config.patch_dir = config.patch_dir.replace("run1", config.run_id)
     bands = config.bandlist
 
-    # Find patch results and reconstruct scene
-    files = glob.glob(os.path.join(args.patch_dir, "patch????_results.h5"))
-    fullcat, inds = reconstruct_scene(files)
-    cat = fullcat[inds]
-
+    # Build patcher and reconstructor
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
                          pixelstore=config.pixelstorefile,
                          splinedata=config.splinedatafile,
                          return_residual=True)
+    recon = Reconstructor(patcher, MAXSOURCES=config.maxactive_per_patch)
 
-    iexp = 0
+    # Find patch results and reconstruct scene
+    files = glob.glob(os.path.join(args.patch_dir, "patch????_results.h5"))
+    fullcat, inds = reconstruct_scene(files)
+    cat = fullcat[inds]
+
+    # Get a region that encompasses all the images
     hdrs = [hdr for band in patcher.metastore.headers.keys()
             for hdr in list(patcher.metastore.headers[band].values())[:1]]
+    region = parse_image(hdrs[0])
 
-    region, actives = parse_image(hdrs[0], cat, n_gal=config.maxactive_per_patch)
-    patcher.build_patch(region, None, allbands=config.bandlist)
 
-    data = patcher.split_pix("data")[iexp]
-    xpix = patcher.split_pix("xpix")[iexp].astype(int)
-    ypix = patcher.split_pix("ypix")[iexp].astype(int)
-    band, exp = patcher.epaths[iexp].split("/")
-    hdr = patcher.metastore.headers[band][exp]
+    recon.fetch_data(region, bands)
+    model = recon.model_data(fullcat)
+    iexp = 0
+    image, hdr, epath = recon.get_model_image(model, iexp=iexp)
 
-    im = np.zeros([hdr["NAXIS1"], hdr["NAXIS2"], len(actives)])
-
-    if HASGPU is False:
+    if not HASGPU:
         sys.exit()
 
-    for i, active in enumerate(actives):
-        # TODO: This could work by successive data/residual swaps on the GPU
-        result = get_model_gpu(active, patcher)
-        model = data - result["residual"][0]
-        im[xpix, ypix, i] += model
 
     # write out the sum
-    outfile = os.path.join(args.output_dir, exp.replace("noisy", "forcebest") + ".fits")
+    outfile = os.path.basename(epath).replace("noisy", "forcebest") + ".fits"
+    outfile = os.path.join(args.output_dir, outfile)
     os.makedirs(os.path.dirname(outfile), exist_ok=True)
-    image = im.sum(axis=-1).T
-    with fits.HDUList(fits.PrimaryHDU(image)) as hdul:
+    with fits.HDUList(fits.PrimaryHDU(image.T)) as hdul:
         hdul[0].header.update(hdr[6:])
         hdul[0].header["NOISE"] = 0
         hdul.writeto(outfile, overwrite=True)
