@@ -168,12 +168,12 @@ class Reconstructor:
             out.create_dataset("active", data=self.parameters)
             out.create_dataset("fixed", data=self.results.fixed)
 
-        for band in self.bands:
-            g = out.create_group(band)
+            for band in self.bands:
+                g = out.create_group(band)
 
-        for a in self.pixattrs + self.metas:
-            arr = getattr(self, a)
-            _make_imset(out, self.epaths, a, arr)
+            for a in self.pixattrs + self.metas:
+                arr = getattr(self, a)
+                _make_imset(out, self.epaths, a, arr)
 
     def read_arrays(self, filename):
         """Read relevant arrays from HDF5 file
