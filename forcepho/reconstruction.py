@@ -153,7 +153,7 @@ class Reconstructor:
         residual = self.get_residuals(self.parameters, split=False)
         for a in self.metas:
             setattr(self, a, getattr(self.patcher, a))
-        if self.fixed:
+        if self.fixed is not None:
             rf = self.get_residuals(self.fixed, split=False)
             residual += rf - self.patcher.data
 
