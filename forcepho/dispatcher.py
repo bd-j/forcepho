@@ -214,7 +214,7 @@ class SuperScene:
             self._scene_coordinates = np.array([self.scene_x, self.scene_y]).T
             return self._scene_coordinates
 
-    def checkout_region(self, seed_index=None):
+    def checkout_region(self, seed_index=-1):
         """Get a proposed region and the active and fixed sources that belong
         to that region.  Active sources are marked as such in the `sourcecat`
         and both active and fixed sources are marked as invalid for further
@@ -223,7 +223,7 @@ class SuperScene:
         Parameters
         ----------
         seed_index : int (optional)
-            If provided, use this (zero-indexed) source to seed the region.
+            If >=0, use this (zero-indexed) source to seed the region.
 
         Returns
         -------
@@ -420,7 +420,7 @@ class SuperScene:
             fixed_inds = finds[:1]
         return radius, kinds[active_inds], kinds[fixed_inds]
 
-    def draw_center(self, seed_index=None):
+    def draw_center(self, seed_index=-1):
         """Randomly draw a center for the proposed patch.  Currently this
         works by drawing an object at random, with weights given by the
         `seed_weight` method.
@@ -438,7 +438,7 @@ class SuperScene:
         dec : float
             Declination of the center (decimal degrees)
         """
-        if seed_index:
+        if seed_index >= 0:
             k = seed_index
         else:
             k = np.random.choice(self.n_sources, p=self.seed_weight())

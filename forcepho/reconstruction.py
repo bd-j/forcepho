@@ -46,6 +46,8 @@ class Samples:
 
         self.chaincat = make_chaincat(result.chain, self.bands, result.active,
                                       result.reference_coordinates, shapes=self.shape_cols)
+        self.active = result.active
+        self.fixed = result.fixed
         self.bounds = result.bounds
 
     def show_chain(self, source_idx=0, bandlist=None, axes=None,
