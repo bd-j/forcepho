@@ -1,4 +1,6 @@
 name: fpho
+channels:
+  - conda-forge
 dependencies:
   # Infrastructure
   - ipython  # optional
@@ -14,10 +16,11 @@ dependencies:
   # Inference
   - dynesty # optional
   - pip:
+    - pycuda
     - littlemcmc=0.2.*
   # Optional but recommended
-  - pycuda
-  - mpi4py>=3.1.0
+  #- mpi4py>=3.1.0
+  # get via pip install git+https://github.com/mpi4py/mpi4py
 
 # --- via setup.py ---
 # forcepho
