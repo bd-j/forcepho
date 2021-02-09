@@ -248,7 +248,7 @@ class PixelStore:
             # math from Sandro
             conv = 1e9 * 10**(0.4 * (8.9 - zp))
         else:
-            print("Warning, no phootmetric calibration applied")
+            print("Warning, no photometric calibration applied")
             image_units = "counts"
             conv = 1.0
         return conv, image_units

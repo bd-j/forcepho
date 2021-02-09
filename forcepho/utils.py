@@ -64,7 +64,8 @@ def update_config(config, args):
         d = vars(args)
         for k, v in d.items():
             try:
-                setattr(config, k, v)
+                if v:
+                    setattr(config, k, v)
             except:
                 print("could not update {}={}".format(k, v))
 

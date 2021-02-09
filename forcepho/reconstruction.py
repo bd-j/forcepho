@@ -77,6 +77,7 @@ class Samples(Result):
         return ax
 
 
+#TODO: This should really subclass JadesPatch
 class Reconstructor:
 
     def __init__(self, patcher, MAXSOURCES=15):
@@ -165,6 +166,7 @@ class Reconstructor:
         with h5py.File(filename, "w") as out:
             out.create_dataset("epaths", data=np.array(self.epaths, dtype="S"))
             out.create_dataset("exposure_start", data=self.patcher.exposure_start)
+            out.create_dataset("reference_coordinates", data=self.patcher.reference_coordinates)
             out.create_dataset("active", data=self.parameters)
             out.create_dataset("fixed", data=self.results.fixed)
 
@@ -179,14 +181,19 @@ class Reconstructor:
         """Read relevant arrays from HDF5 file
         """
         attrs = self.pixattrs + self.metas
-        [setattr(self, a, []) for a in attrs]
+        _ = [setattr(self, a, []) for a in attrs]
         with h5py.File(filename, "r") as out:
             self.epaths = out["epaths"][:]
-            self.parameters = out["parameters"][:]
+            self.parameters = out["active"][:]
             self.fixed = out["fixed"][:]
+            try:
+                self.reference_coordinates = out["reference_coordinates"][:]
+            except:
+                pass
             for i, e in enumerate(self.epaths):
                 for a in attrs:
-                    setattr(self, a, getattr(self, a).append(out[e][a][:]))
+                    at = getattr(self, a)
+                    at.append(out[e][a][:])
 
     def get_model_image(self, model, iexp=0, epath=""):
         """Generate the model and use it to fill pixels corresponding to the original image
@@ -199,7 +206,8 @@ class Reconstructor:
         return image, hdr, epath
 
     def show_residuals(self, figure_name=None, exposure_inds=[0, -1],
-                       show_fixed=True, show_active=True, imshow_kwargs={}):
+                       show_fixed=True, show_active=True,
+                       normed=False, match_scales=False, imshow_kwargs={}):
 
         active = self.parameters
         fixed = self.fixed
@@ -211,15 +219,25 @@ class Reconstructor:
 
         for i, e in enumerate(exposure_inds):
             ee = self.epaths[e].decode("utf")
+            x, y = self.xpix[e], self.ypix[e]
             model = self.original[e] - self.residual[e]
             pix = [self.original[e], self.residual[e], model]
-            x, y = self.xpix[e], self.ypix[e]
+            if normed:
+                pix = [p * self.ierr[e] for p in pix]
+                lims = dict(vmin=-2, vmax=10)
+            elif match_scales:
+                m, sigma = pix[0].mean(), pix[0].std()
+                lims = dict(vmin=m - 2*sigma, vmax=m + 10*sigma)
+            else:
+                lims = {}
+            imshow_kwargs.update(lims)
+
 
             for j, v in enumerate(pix):
                 ax = axes[i, j]
                 show_exp(x, y, v, ax=ax, **imshow_kwargs)
-            axes[i, 0].set_ylabel(" ".join(ee.replace(".flx", "").split("_")[-3:]))
 
+            axes[i, 0].set_ylabel(" ".join(ee.replace(".flx", "").split("_")[-3:]))
             if show_active:
                 ax = self.mark_sources(active["ra"], active["dec"], e,
                                        ref_coords=ref, ax=ax, color="red")
@@ -228,10 +246,11 @@ class Reconstructor:
                     ax = axes[i, j]
                     ax = self.mark_sources(fixed["ra"], fixed["dec"], e,
                                            ref_coords=ref, ax=ax, color="magenta")
-            if figure_name:
-                fig.savefig(figure_name)
 
-            return fig, axes
+        if figure_name:
+            fig.savefig(figure_name)
+
+        return fig, axes
 
     def mark_sources(self, ra, dec, exp_idx, ref_coords=None, ax=None,
                      plot_kwargs={"marker": "x", "linestyle": "", "color": "red"},
