@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import os
+from argparse import Namespace
 import numpy as np
 import time
 from astropy.io import fits
@@ -8,8 +10,8 @@ import h5py
 from forcepho.sources import Galaxy
 #from forcepho.fitting import Result  # indirect pycuda import
 
-__all__ = ["Logger",
-           "rectify_catalog",
+__all__ = ["Logger", "read_config", "update_config",
+           "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
            "get_results",
            "make_statscat", "make_chaincat"]
@@ -33,6 +35,59 @@ class Logger:
     def serialize(self):
         log = "\n".join([c[0] for c in self.comments])
         return log
+
+
+def read_config(config_file, args=None):
+    """Read a yaml formatted config file.
+    """
+    import yaml
+    with open(config_file) as f:
+        config_dict = yaml.load(f, Loader=yaml.Loader)
+    config = Namespace()
+    for k, v in config_dict.items():
+        if type(v) is list:
+            v = np.array(v)
+        if "dtype" in k:
+            v = np.typeDict[v]
+        setattr(config, k, v)
+
+    config = update_config(config, args)
+
+    return config
+
+
+def update_config(config, args):
+    """Update a configuration namespace with parsed command line arguments.
+    Also prepends config.store_directory to *storefile names
+    """
+    if args is not None:
+        d = vars(args)
+        for k, v in d.items():
+            try:
+                if v:
+                    setattr(config, k, v)
+            except:
+                print("could not update {}={}".format(k, v))
+
+    # update the store paths
+    for store in ["pixel", "meta", "psf"]:
+        try:
+            attr = "{}storefile".format(store)
+            n = getattr(config, attr)
+            new = os.path.join(config.store_directory, n)
+            setattr(config, attr, new)
+        except(AttributeError):
+            print("could not update {}storefile path".format(store))
+
+    # expand shell variables
+    for k, v in vars(config).items():
+        try:
+            s = os.path.expandvars(v)
+            setattr(config, k, s)
+        except(TypeError):
+            pass
+
+    return config
 
 
 def sourcecat_dtype(source_type=np.float64, bands=[]):

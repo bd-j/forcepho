@@ -13,7 +13,9 @@ import h5py
 from astropy.io import fits
 from astropy.wcs import WCS
 
-ImageNameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
+ImageNameSet = namedtuple("ImageNames", ["im", "err", "mask", "bkg"])
+ImageSet = namedtuple("Images", ["im", "ierr", "mask", "bkg",
+                                 "hdr", "band", "expID", "names"])
 
 EXP_FMT = "{}/{}"
 
@@ -21,9 +23,9 @@ EXP_FMT = "{}/{}"
 PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 
 
-def header_to_id(hdr, nameset):
+def header_to_id(hdr, name):
     band = hdr["FILTER"]
-    expID = os.path.basename(nameset.im).replace(".fits", "")
+    expID = os.path.basename(name).replace(".fits", "")
     return band, expID
 
 
@@ -76,7 +78,7 @@ class PixelStore:
         except(KeyError, OSError):
             # file or attrs do not exist, create them
             nside_full = np.array(nside_full)
-            print("Adding nside_full={}, super_ixel_sze={} to attrs".format(nside_full, super_pixel_size))
+            print("Adding nside_full={}, super_pixel_size={} to attrs".format(nside_full, super_pixel_size))
             #super_pixel_size = np.array(super_pixel_size)
             with h5py.File(self.h5file, "a") as h5:
                 h5.attrs["nside_full"] = nside_full
@@ -122,7 +124,7 @@ class PixelStore:
         ypix = packed[:, :, self.super_pixel_size**2:].astype(np.int16)
         return xpix, ypix
 
-    def add_exposure(self, nameset, bitmask=None):
+    def add_exposure(self, imset, bitmask=None, do_fluxcal=False):
         """Add an exposure to the pixel data store, including background
         subtraction (if `nameset.bkg`), flux conversion, setting ierr for masked
         pixels to 0, and super-pixel ordering.  This opens the HDF5 files, adds
@@ -135,37 +137,42 @@ class PixelStore:
             `None` or `False` for bkg and mask will result in no background
             subtraction and no masking beyond NaNs and infs
         """
-        # Read the header and set identifiers
-        hdr = fits.getheader(nameset.im)
-        band, expID = header_to_id(hdr, nameset)
+        # --- Read the header and set identifiers ---
+        hdr = imset.hdr
+        band, expID = imset.band, imset.expID
 
-        # Read data and perform basic operations
-        # NOTE: we transpose to get a more familiar order where the x-axis
-        # (NAXIS1) is the first dimension and y is the second dimension.
-        im = np.array(fits.getdata(nameset.im)).T
-        ierr = 1 / np.array(fits.getdata(nameset.err)).T
-        if nameset.bkg:
-            bkg = np.array(fits.getdata(nameset.bkg)).T
+        im = imset.im
+        ierr = imset.ierr
+        # -- backgound subtract ---
+        if imset.bkg is not None:
+            bkg = imset.bkg
             im -= bkg
         else:
             bkg = np.zeros_like(im)
+        # --- mask pixels ---
         mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
-        if nameset.mask:
-            pmask = np.array(fits.getdata(nameset.mask)).T
+        if imset.mask is not None:
+            pmask = imset.mask
             if bitmask:
                 # just check that any of the bad bits are set
                 pmask = np.bitwise_and(pmask, bitmask) != 0
             mask = mask | pmask
         ierr[mask] = 0
-        # masked pixels provide a sampling of the subtracted background
-        im[mask] = bkg[mask]
-        # this does nominal flux calibration of the image.
-        # Returns the calibration factor applied
-        fluxconv, unitname = self.flux_calibration(hdr)
-        im *= fluxconv
-        ierr *= 1. / fluxconv
+        im[mask] = 0
+        # let masked pixels provide a sampling of the subtracted background
+        gb = np.isfinite(bkg)
+        im[mask & gb] = bkg[mask & gb]
+        # --- flux calibrate ---
+        if do_fluxcal:
+            # this does nominal flux calibration of the image.
+            # Returns the calibration factor applied
+            fluxconv, unitname = self.flux_calibration(hdr)
+            im *= fluxconv
+            ierr *= 1. / fluxconv
+        else:
+            fluxconv, unitname = 1.0, "image"
 
-        # Superpixelize
+        # --- Superpixelize ---
         imsize = np.array(im.shape)
         assert np.all(np.mod(imsize, self.super_pixel_size) == 0)
         if np.any(imsize != self.nside_full):
@@ -173,8 +180,10 @@ class PixelStore:
             # images are the same size
             raise ValueError("Image is not the expected size")
         superpixels = self.superpixelize(im, ierr)
+        msg = "There were non-finite pixels in exposure {}".format(expID)
+        assert np.all(np.isfinite(superpixels)), msg
 
-        # Put into the HDF5 file; note this opens and closes the file
+        # --- Put into the HDF5 file; note this opens and closes the file ---
         with h5py.File(self.h5file, "r+") as h5:
             path = "{}/{}".format(band, expID)
             try:
@@ -188,9 +197,15 @@ class PixelStore:
             pdat.attrs["flux_units"] = unitname
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
-            for i, f in enumerate(nameset._fields):
-                if type(nameset[i]) is str:
-                    pdat.attrs[f] = nameset[i]
+            if imset.names:
+                if type(imset.names) is str:
+                    pdat.attrs["image_name"] = imset.names
+                try:
+                    for i, f in enumerate(imset.names._fields):
+                        if type(imset.names[i]) is str:
+                            pdat.attrs[f] = imset.names[i]
+                except(AttributeError):
+                    pass
 
     def superpixelize(self, im, ierr, pix_dtype=None):
         """Take native image data and reshape into super-pixel order.
@@ -233,7 +248,7 @@ class PixelStore:
             # math from Sandro
             conv = 1e9 * 10**(0.4 * (8.9 - zp))
         else:
-            print("Warning, no phootmetric calibration applied")
+            print("Warning, no photometric calibration applied")
             image_units = "counts"
             conv = 1.0
         return conv, image_units
@@ -242,7 +257,18 @@ class PixelStore:
     # should test for open file handle and return it, otherwise create and cache it
     @property
     def data(self):
-        return h5py.File(self.h5file, "a", swmr=True)
+        try:
+            return self._read_handle
+        except(AttributeError):
+            self._read_handle = h5py.File(self.h5file, "r", swmr=True)
+            return self._read_handle
+
+    def close(self):
+        try:
+            self._read_handle.close()
+            del self._read_handle
+        except(AttributeError):
+            pass
 
 
 class MetaStore:
@@ -274,9 +300,10 @@ class MetaStore:
                     w = w.dropaxis(2)
                 self.wcs[band][expID] = w
 
-    def add_exposure(self, nameset):
-        hdr = fits.getheader(nameset.im)
-        band, expID = header_to_id(hdr, nameset)
+    def add_exposure(self, imset):
+        # Read the header and set identifiers
+        hdr = imset.hdr
+        band, expID = imset.band, imset.expID
         if band not in self.headers:
             self.headers[band] = {}
         self.headers[band][expID] = hdr
@@ -288,7 +315,7 @@ class MetaStore:
         Parameters
         ----------
         filename : str
-            The name of the file fro the metadata.  Will be overwritten if it
+            The name of the file for the metadata.  Will be overwritten if it
             already exists
         """
         import json

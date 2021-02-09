@@ -1,7 +1,14 @@
 .ipynb_checkpoints/
+.DS_Store
+.vscode
 __pycache__/
 slurm-*.out
 /forcepho.egg-info/
+/build/
+/dist/
 /output/
 /demo/data/
 /demo/stores/
+/doc/
+/tests/
+/demo/display/

@@ -47,7 +47,7 @@ class Posterior:
     def __init__(self, **kwargs):
         '''
         Initializes fields that are common to all subclasses.
-        
+
         Parameters
         ----------
         transform: Transform, optional
@@ -60,19 +60,19 @@ class Posterior:
             if given. Mutually exclusive with `transform`.
         '''
         self.ncall = 0
-        
+
         if (np.any(kwargs.get('lower')) and np.any(kwargs.get('upper'))) == bool(kwargs.get('transform')):
             raise ValueError('Must specify either "transform" or ("lower","upper")')
-        
-        transform = kwargs.pop('transform',None)
+
+        transform = kwargs.pop('transform', None)
         if transform is not None:
             self.transform = transform
         else:
             self.transform = BoundedTransform(kwargs.pop('lower'), kwargs.pop('upper'))
-            
+
         if kwargs:
             raise ValueError(f'Passed argument(s) {list(kwargs.keys())} to Posterior that were not understood')
-            
+
 
     def evaluate(self, z):
         """Method to actually evaluate ln-probability and its gradient, at the
@@ -248,9 +248,9 @@ class GPUPosterior(Posterior):
     def __init__(self, proposer, scene=None, lnprior=None, transform=None,
                  name="", print_interval=1000, verbose=False, debug=False,
                  logging=False, **kwargs):
-        
+
         super().__init__(transform=transform, **kwargs)
-        
+
         # --- Assign ingredients ---
         self.proposer = proposer
         self.scene = scene if scene else proposer.patch.scene
