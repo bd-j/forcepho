@@ -211,7 +211,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
         for j, col in enumerate(colnames):
             cat[s][col] = chain[:, s * n_param_per_source + j]
 
-    # rectify parameters
+    # -- rectify parameters ---
     cat["ra"] += ref[0]
     cat["dec"] += ref[1]
 

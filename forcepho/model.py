@@ -359,11 +359,14 @@ class GPUPosterior(Posterior):
     def residuals(self, z):
         """Return residual images
         """
-        assert self.proposer.patch.return_residual
+        orig = self.proposer.patch.return_residual
+        self.proposer.patch.return_residual = True
         self.scene.set_all_source_params(z)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal)
         _, _, self._residuals = ret
+        self.proposer.patch.return_residual = orig
+
         return self._residuals
 
 

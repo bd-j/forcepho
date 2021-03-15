@@ -13,7 +13,8 @@ import numpy as np
 
 from .likelihood import lnlike_multi, negative_lnlike_multi
 from .model import ConstrainedTransformedPosterior as Posterior
-from .utils import make_statscat, extract_block_diag
+from .utils import make_statscat, make_chaincat, extract_block_diag
+from .region import CircularRegion
 
 
 __all__ = ["Result", "run_lmc", "run_opt",
@@ -71,7 +72,7 @@ class Result(object):
             sampling parameters.  If the prior bounds change, the covariance matrix
             is no longer valid (or must be retransformed)
         """
-
+        # shortcuts
         patch = model.proposer.patch
         scene = model.scene
         bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
@@ -79,69 +80,71 @@ class Result(object):
         ref = np.array(patch.patch_reference_coordinates)
         block_covs = None
 
-        out = self
-
         # --- Header ---
-        out.patchID = patchID
-        out.reference_coordinates = ref
-        out.bandlist = bands
-        out.shapenames = shapenames
+        self.patchID = patchID
+        self.reference_coordinates = ref
+        self.bandlist = bands
+        self.shapenames = shapenames
 
         # --- basic info ---
-        out.ncall = model.ncall
-        out.npix = patch.npix
-        out.nexp = len(patch.epaths)
-        #out.exposures = np.array(patch.epaths)
+        self.ncall = model.ncall
+        self.npix = patch.npix
+        self.nexp = len(patch.epaths)
+        self.exposures = np.array(patch.epaths, dtype="S")
 
         # --- region, active, fixed ---
         for k, v in region.__dict__.items():
-            setattr(out, k, v)
-        out.active = np.array(active)
+            setattr(self, k, v)
+        self.active = np.array(active)
         if fixed is not None:
-            out.fixed = np.array(fixed)
+            self.fixed = np.array(fixed)
 
-        # --- chain and covariance ---
-        # keep chain as a structured array? all info is saved to make it later
-        #chaincat = make_chaincat(out.chain, bands, active, ref,
-        #                         shapes=shapenames)
+        # --- chain as structured array ---
+        self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
+                                      self.reference_coordinates, shapes=self.shapenames)
+
+        # --- covariance ---
         if step is not None:
             try:
-                out.cov = np.array(step.potential._cov.copy())
+                self.cov = np.array(step.potential._cov.copy())
             except(AttributeError):
-                out.cov = np.diag(step.potential._var.copy())
+                self.cov = np.diag(step.potential._var.copy())
             if stats is not None:
-                out.stats = make_statscat(stats, step)
+                self.stats = make_statscat(stats, step)
 
             n_param = len(bands) + len(shapenames)
-            block_covs = extract_block_diag(out.cov, n_param)
+            block_covs = extract_block_diag(self.cov, n_param)
 
         # --- priors ---
         if bounds is not None:
-            out.bounds = bounds
+            self.bounds = bounds
 
         # --- last position as structured array ---
-        # FIXME: do this another way; maybe take a dtype from the superscene
-        # or use make_chaincat
-        qlast = out.chain[-1, :]
-        scene.set_all_source_params(qlast)
-        patch.unzerocoords(scene)
-        for i, source in enumerate(scene.sources):
-            source.id = active[i]["source_index"]
-        qcat = scene.to_catalog(extra_cols=["source_index"])
-        qcat["source_index"][:] = active["source_index"]
-        out.final = qcat
-
-        # qcat = active.copy()
-        # for f in chaincat.dtype.names:
-        #     if f in qcat.dtype.names:
-        #         try:
-        #             qcat[f][:] = chaincat[f][:, -1]
-        #         except(IndexError):
-        #             qcat[f][:] = chaincat[f][:]
-
+        # FIXME: do this another way; use get_sample_cat with iteration = -1
+        #qlast = self.chain[-1, :]
+        #scene.set_all_source_params(qlast)
+        #patch.unzerocoords(scene)
+        #for i, source in enumerate(scene.sources):
+        #    source.id = active[i]["source_index"]
+        #qcat = scene.to_catalog(extra_cols=["source_index"])
+        #qcat["source_index"][:] = active["source_index"]
+        #self.final = qcat
+        qcat = self.get_sample_cat(-1)
+        self.final = qcat
 
         return qcat, block_covs
 
+    def get_sample_cat(self, iteration):
+        #dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
+        #sample = np.zeros(self.n_active, dtype=dtype_sample)
+        sample = self.active.copy()
+        for d in sample.dtype.names:
+            if d in self.chaincat.dtype.names:
+                try:
+                    sample[d] = self.chaincat[d][:, iteration]
+                except(IndexError):
+                    sample[d] = self.chaincat[d]
+        return sample
 
     def dump_to_h5(self, filename):
         import h5py
@@ -164,6 +167,14 @@ class Result(object):
                 setattr(out, k, f[k][:])
             for k, v in f.attrs.items():
                 setattr(out, k, v)
+
+    def reconstruct(self):
+        self.bands = [b.decode("utf") for b in self.bandlist]
+        self.shape_cols = [s.decode("utf") for s in self.shapenames]
+        self.region = CircularRegion(self.ra, self.dec, self.radius)
+        if not hasattr(self, "chaincat"):
+            self.chaincat = make_chaincat(self.chain, self.bands, self.active,
+                                          self.reference_coordinates, shapes=self.shape_cols)
 
 
 def priors(scene, stamps, npix=2.0):

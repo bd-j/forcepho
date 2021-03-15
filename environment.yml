@@ -17,7 +17,7 @@ dependencies:
   - dynesty # optional
   - pip:
     - pycuda
-    - littlemcmc=0.2.*
+    - littlemcmc==0.2.*
   # Optional but recommended
   #- mpi4py>=3.1.0
   # get via pip install git+https://github.com/mpi4py/mpi4py
