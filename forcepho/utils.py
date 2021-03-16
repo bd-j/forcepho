@@ -199,7 +199,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     assert (n_source == len(active))
 
     # --- generate dtype ---
-    colnames = bands + shapes
+    colnames = [b for b in bands] + [s for s in shapes]
     cols = [("source_index", np.int32)] + [(c, np.float64, (n_iter,))
                                            for c in colnames]
     dtype = np.dtype(cols)

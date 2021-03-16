@@ -161,7 +161,8 @@ def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
 
     D_mat : ndarray of shape (2, 2)
         The matrix giving pixels per second of arc in RA and DEC.  Equivalent
-        to the matrix inverse of 3600 times wcs.pixel_scale_matrix()
+        to the matrix inverse of 3600 times wcs.pixel_scale_matrix() if there are
+        no distortions.
     """
     ra, dec = sky
     # get dsky for step dx, dy = dpix

@@ -106,8 +106,11 @@ class Result(object):
             self.fixed = np.array(fixed)
 
         # --- chain as structured array ---
-        self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
-                                      self.reference_coordinates, shapes=self.shapenames)
+        try:
+            self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
+                                          self.reference_coordinates, shapes=self.shapenames)
+        except:
+            pass
 
         # --- covariance ---
         if step is not None:
