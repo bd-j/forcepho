@@ -134,7 +134,7 @@ class PostageStamp(object):
                              **compute_keywords)
 
 
-def scale_at_sky(sky, wcs, dpix=1.0, origin=1):
+def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
     """Get the local linear approximation of the scale and CW matrix at the
     celestial position given by `sky`.  This is a simple numerical calculation
 
@@ -165,22 +165,29 @@ def scale_at_sky(sky, wcs, dpix=1.0, origin=1):
     """
     ra, dec = sky
     # get dsky for step dx, dy = dpix
-    pos0_sky = np.array([ra, dec])
-    pos0_pix = wcs.all_world2pix([pos0_sky], origin)[0]
-    pos1_pix = pos0_pix + np.array([dpix, 0.0])
-    pos2_pix = pos0_pix + np.array([0.0, dpix])
-    pos1_sky = wcs.all_pix2world([pos1_pix], origin)[0]
-    pos2_sky = wcs.all_pix2world([pos2_pix], origin)[0]
+    if wcs.has_distortion or make_approx:
+        pos0_sky = np.array([ra, dec])
+        pos0_pix = wcs.all_world2pix([pos0_sky], origin)[0]
+        pos1_pix = pos0_pix + np.array([dpix, 0.0])
+        pos2_pix = pos0_pix + np.array([0.0, dpix])
+        pos1_sky = wcs.all_pix2world([pos1_pix], origin)[0]
+        pos2_sky = wcs.all_pix2world([pos2_pix], origin)[0]
 
-    # compute dpix_dsky matrix
-    P = np.eye(2) * dpix
-    St = np.array([pos1_sky - pos0_sky, pos2_sky - pos0_sky])
-    CW_mat = (np.dot(np.linalg.inv(St), P)).transpose()
+        # compute dpix_dsky matrix
+        P = np.eye(2) * dpix
+        St = np.array([pos1_sky - pos0_sky, pos2_sky - pos0_sky])
+        CW_mat = np.linalg.solve(St, P).T
 
-    # compute D matrix
-    Winv = np.eye(2)
-    Winv[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
-    D_mat = 1.0 / 3600.0 * np.matmul(CW_mat, Winv)
+        # compute D matrix
+        Winv = np.eye(2)
+        Winv[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
+        D_mat = 1.0 / 3600.0 * np.matmul(CW_mat, Winv)
+
+    else:
+        W = np.eye(2)
+        W[0, 0] = np.cos(np.deg2rad(dec))
+        D_mat = np.linalg.inv(wcs.pixel_scale_matrix * 3600.0)
+        CW_mat = np.matmul(D_mat * 3600.0, W)
 
     return CW_mat, D_mat
 

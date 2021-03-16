@@ -25,7 +25,13 @@ class Result(object):
     """A simple namespace for storing information about a run.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, filename=None, **kwargs):
+        if filename:
+            self.read_from_h5(filename)
+            try:
+                self.reconstruct()
+            except:
+                pass
         for k, v in kwargs.items():
             setattr(self, k, v)
 
