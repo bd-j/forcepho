@@ -183,6 +183,28 @@ class Result(object):
                                           self.reference_coordinates, shapes=self.shape_cols)
 
 
+    def show_chain(self, source_idx=0, bandlist=None, axes=None,
+                   span=0.999999426697, post_kwargs=dict(alpha=0.5, color="royalblue"),
+                   truth=None, truth_kwargs=dict(linestyle="--", color="tomato")):
+        if bandlist is None:
+            bandlist = self.bands
+        cols = bandlist + self.shape_cols
+        q = 100 * np.array([0.5 - 0.5 * span, 0.5 + 0.5 * span])
+        for i, col in enumerate(cols):
+            ax = axes.flat[i]
+            xx = self.chaincat[source_idx][col]
+            lim = np.percentile(xx, list(q))
+            if self.bounds is not None:
+                lim = self.bounds[source_idx][col]
+
+            ax.plot(xx, **post_kwargs)
+            ax.set_ylim(*lim)
+            ax.set_ylabel(col)
+            if truth is not None:
+                ax.axhline(truth[col], **truth_kwargs)
+        return ax
+
+
 def priors(scene, stamps, npix=2.0):
     # --------------------------------
     # --- Priors ---

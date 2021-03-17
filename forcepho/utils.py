@@ -208,6 +208,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
 
 
 def write_residuals(model, filename):
+    # TODO: Should this be a method on Patch or Posterior
     pixattrs = ["data", "xpix", "ypix", "ierr"]
     metas = ["D", "CW", "crpix", "crval"]
     patcher = model.proposer.patch
@@ -215,7 +216,7 @@ def write_residuals(model, filename):
 
     with h5py.File(filename, "w") as out:
         out.create_dataset("epaths", data=np.array(epaths, dtype="S"))
-        out.create_dataset("exposure_start", data=patcher.exposure_start)
+        #out.create_dataset("exposure_start", data=patcher.exposure_start)
         out.create_dataset("reference_coordinates", data=patcher.patch_reference_coordinates)
         #out.create_dataset("active", data=)
         #out.create_dataset("fixed", data=fixed)

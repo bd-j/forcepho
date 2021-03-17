@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     # read command lines
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_file", type=str, default="galsim.yml")
+    parser.add_argument("--config_file", type=str, default="galsim_config.yml")
     args = parser.parse_args()
 
     # read config file

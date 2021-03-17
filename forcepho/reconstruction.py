@@ -12,8 +12,8 @@ from .patches import JadesPatch
 from .proposal import Proposer
 
 
-__all__ = ["Samples", "Reconstructor",
-           "show_exp"]
+__all__ = ["Residuals", "Samples", "Reconstructor",
+           "show_exp", "_make_imset"]
 
 
 def _make_imset(out, paths, name, arrs):
@@ -29,52 +29,35 @@ def _make_imset(out, paths, name, arrs):
             print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
 
 
-class Samples(Result):
+class Residuals:
 
     def __init__(self, filename):
-        self.read_patch(filename)
+        self.filename = filename
+        self.handle = h5py.File(self.filename, "r")
+        self.exposures = self.handle["epaths"][:]
 
-    def read_patch(self, filename):
+    def show(self, e=None, exp="", axes=[]):
+        if not exp:
+            exp = self.exposures[e]
+        xpix, ypix = self.handle[exp]["xpix"][:], self.handle[exp]["ypix"][:]
+        data = self.handle[exp]["data"][:]
+        resid = self.handle[exp]["residual"][:]
+        model = data - resid
 
-        self.read_from_h5(filename)
-        self.region = CircularRegion(self.ra, self.dec, self.radius)
-        self.bands = [b.decode("utf") for b in self.bandlist]
-        self.shape_cols = [s.decode("utf") for s in self.shapenames]
+        # keep the scales the same
+        kwargs = dict(vmin=data.min(), vmax=data.max())
+        _ = show_exp(xpix, ypix, data, ax=axes.flat[0], **kwargs)
+        _ = show_exp(xpix, ypix, resid, ax=axes.flat[1], **kwargs)
+        _ = show_exp(xpix, ypix, model, ax=axes.flat[2], **kwargs)
 
-        self.chaincat = make_chaincat(self.chain, self.bands, self.active,
-                                      self.reference_coordinates, shapes=self.shape_cols)
-        self.n_active = len(self.active)
-        self.dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
+        return data, model, resid
 
-    def get_sample_cat(self, iteration):
-        sample = np.zeros(self.n_active, dtype=self.dtype_sample)
-        for d in sample.dtype.names:
-            try:
-                sample[d] = self.chaincat[d][:, iteration]
-            except(IndexError):
-                sample[d] = self.chaincat[d]
-        return sample
 
-    def show_chain(self, source_idx=0, bandlist=None, axes=None,
-                   span=0.999999426697, post_kwargs=dict(alpha=0.5, color="royalblue"),
-                   truth=None, truth_kwargs=dict(linestyle="--", color="tomato")):
-        if bandlist is None:
-            bandlist = self.bands
-        cols = bandlist + self.shape_cols
-        q = 100 * np.array([0.5 - 0.5 * span, 0.5 + 0.5 * span])
-        for i, col in enumerate(cols):
-            ax = axes.flat[i]
-            xx = self.chaincat[source_idx][col]
-            lim = np.percentile(xx, list(q))
-            if self.bounds is not None:
-                lim = self.bounds[source_idx][col]
-
-            ax.plot(xx, **post_kwargs)
-            ax.set_ylim(*lim)
-            ax.set_ylabel(col)
-            if truth is not None:
-                ax.axhline(truth[col], **truth_kwargs)
-        return ax
+class Samples(Result):
+    """Just an alias for the new Result class
+    """
+    def __init__(self, filename):
+        super(Samples, self).__init__(filename)
 
 
 #TODO: This should really subclass JadesPatch

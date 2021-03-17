@@ -30,7 +30,7 @@ module load astropy littlemcmc
 module load openmpi mpi4py
 ```
 
-## Correctness
+## Test Data
 
 Test against a simple image created from `galsim`:
 
@@ -41,7 +41,13 @@ python make_galsim_image.py
 # preprocess to create data stores in the format expected by forcepho
 mkdir ./stores
 python preprocess_galsim.py
-# Now generate the model image and save it
+```
+
+## Correctness
+
+Now generate the model image and save it
+
+```sh
 mkdir ./output
 python model_galsim_image.py --outbase=./output
 ```

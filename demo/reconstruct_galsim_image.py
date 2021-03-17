@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     # Configure
     parser = ArgumentParser()
-    parser.add_argument("--config_file", type=str, default="galsim.yml")
+    parser.add_argument("--config_file", type=str, default="galsim_confg.yml")
     parser.add_argument("--run_id", type=str, default="run1")
     args = parser.parse_args()
     config = read_config(args.config_file, args)
