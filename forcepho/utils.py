@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
 
-import os
+import os, time
 from argparse import Namespace
 import numpy as np
-import time
+
 from astropy.io import fits
 import h5py
 
-from forcepho.sources import Galaxy
-#from forcepho.fitting import Result  # indirect pycuda import
+from .sources import Galaxy
+from .reconstruction import _make_imset
 
-__all__ = ["Logger", "read_config", "update_config",
+
+__all__ = ["Logger",
+           "read_config", "update_config",
            "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
-           "get_results",
-           "make_statscat", "make_chaincat"]
+           "make_statscat", "make_chaincat",
+           "write_residuals", "sky_to_pix"]
 
 
 class Logger:
@@ -175,19 +177,6 @@ def make_statscat(stats, step):
     return stats_arr
 
 
-def get_results(fn):
-    with h5py.File(fn, "r") as res:
-        chain = res["chain"][:]
-        #bands = res["bandlist"][:].astype("U").tolist()
-        bands = ["Fclear"]
-        ref = res["reference_coordinates"][:]
-        active = res["active"][:]
-        stats = res["stats"][:]
-
-    cat = make_chaincat(chain, bands, active, ref)
-    return cat, active, stats
-
-
 def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     # --- Get sizes of things ----
     n_iter, n_param = chain.shape
@@ -216,6 +205,34 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     cat["dec"] += ref[1]
 
     return cat
+
+
+def write_residuals(model, filename):
+    pixattrs = ["data", "xpix", "ypix", "ierr"]
+    metas = ["D", "CW", "crpix", "crval"]
+    patcher = model.proposer.patch
+    epaths = patcher.epaths
+
+    with h5py.File(filename, "w") as out:
+        out.create_dataset("epaths", data=np.array(epaths, dtype="S"))
+        out.create_dataset("exposure_start", data=patcher.exposure_start)
+        out.create_dataset("reference_coordinates", data=patcher.patch_reference_coordinates)
+        #out.create_dataset("active", data=)
+        #out.create_dataset("fixed", data=fixed)
+
+        for band in patcher.bandlist:
+            g = out.create_group(band)
+
+        #residual = np.split(model._residuals, np.cumsum(patcher.exposure_N)[:-1])
+        _make_imset(out, epaths, "residual", model._residuals)
+
+        for a in pixattrs:
+            arr = patcher.split_pix(a)
+            _make_imset(out, epaths, a, arr)
+
+        for a in metas:
+            arr = getattr(patcher, a)
+            _make_imset(out, epaths, a, arr)
 
 
 def sky_to_pix(self, ra, dec, exp=None, ref_coords=0.):

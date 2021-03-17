@@ -25,24 +25,87 @@ except:
     HASGPU = False
 
 
+def do_child(patcher, task, config):
+    rank = 1
+    global logger
+    logger = logging.getLogger(f'dispatcher-child-{rank}')
+
+    # --- Event Loop ---
+    for taskid in range(1):
+        logger.info(f'Received task')
+        # if shutdown break and quit
+        if task is None:
+            break
+
+        # --- unpack all the task variables ---
+        region, active, fixed = task['region'], task['active'], task['fixed']
+        bounds, cov = task['bounds'], task['cov']
+        bands, shape_cols = task['bands'], task['shape_cols']
+        sourceID = active[0]["source_index"]
+        del task
+        logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
+        logger.info(f"source ID: {sourceID}")
+
+        # --- Build patch & prepare model--- (child)
+        patcher.build_patch(region, None, allbands=bands)
+        model, q = patcher.prepare_model(active=active, fixed=fixed,
+                                         bounds=bounds, shapes=sceneDB.shape_cols)
+        logger.info("Prepared patch and model")
+        if config.sampling_draws == 0:
+            return patcher
+
+        # --- Sample using covariances--- (child)
+        weight = max(10, active["n_iter"].min())
+        logger.info(f"sampling with covariance weight={weight}")
+        out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
+                                   full=config.full_cov, z_cov=cov, adapt=True,
+                                   weight=weight, warmup=config.warmup,
+                                   progressbar=getattr(config, "progressbar", False))
+        logger.info(f"Sampling complete ({model.ncall} calls), preparing output.")
+
+        # --- develop the payload ---
+        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
+                               step=step, stats=stats, patchID=taskid)
+        payload = dict(out=out, final=final, covs=covs)
+
+        # --- write the output for this task ---
+        outfile = os.path.join(config.patch_dir, f"patch{taskid}_samples.h5")
+        logger.info(f"Writing to {outfile}")
+        #out.config = json.dumps(vars(config))
+        out.dump_to_h5(outfile)
+
+        # --- Write image data and residuals if requested ---
+        if config.write_residuals:
+            outfile = os.path.join(config.patch_dir, f"patch{taskid}_residuals.h5")
+            logger.info(f"Writing residuals to {outfile}")
+            patcher.return_residual = True
+            z = out.chain[-1, :]  # last position in chain
+            model.evaluate(z)
+            write_residuals(model, outfile)
+            patcher.return_residual = False
+
+        # --- send to parent, free GPU memory ---
+        logger.info(f"Child {rank} sent {region.ra} for patch {taskid}")
+
+    return payload
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_file", type=str, default="./test.yml")
-    parser.add_argument("--logging", action="store_true")
-    parser.add_argument("--run_id", type=str, default="run1")
+    parser.add_argument("--config_file", type=str, default="./galsim_config.yml")
+    parser.add_argument("--outbase", type=str, default="./output/sample_galsim/")
+    parser.add_argument("--seed_index", type=int, default=0)
+    parser.add_argument("--full_cov", type=int, default=1)
+    parser.add_argument("--write_residuals", type=int, default=1)
+    parser.add_argument("--progressbar", action="store_true")
     args = parser.parse_args()
     config = read_config(args.config_file, args)
-    config.outbase = config.outbase.replace("run1", config.run_id)
-    config.patch_dir = config.patch_dir.replace("run1", config.run_id)
-    os.makedirs(args.outbase, exist_ok=True)
+    config.patch_dir = os.path.join(config.outbase, "patches")
+    [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
+    _ = shutil.copy(config.config_file, config.outbase)
 
-    if args.logging:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
-        logger = logging.getLogger(__name__)
-    else:
-        logger = Logger(__name__)
+    logger = Logger(__name__)
 
     # --- Wire the data --- (child)
     patcher = JadesPatch(metastore=config.metastorefile,
@@ -61,54 +124,27 @@ if __name__ == "__main__":
                          statefile=os.path.join(args.outbase, args.scene_catalog),
                          bounds_kwargs={})
     logger.info("Made SceneDB")
-    error = None
 
     # --- Sample the patches ---
     while sceneDB.undone:
         # --- checkout a scene --- (parent)
-        region, active, fixed = sceneDB.checkout_region()
-        if active is None:
-            continue
-        patchID = "{:04.0f}".format(active["source_index"][0])
-        logger.info("Checked out scene with {} active sources".format(len(active)))
-
-        # --- Build patch & prepare model--- (child)
-        patcher.build_patch(region, None, allbands=bands)
-
+        for _ in range(100):
+            region, active, fixed = sceneDB.checkout_region()
+            if active is not None:
+                break
         bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
-        model, q = patcher.prepare_model(active=active, fixed=fixed,
-                                         bounds=bounds, shapes=sceneDB.shape_cols)
 
-        # ---  Sample --- (child)
-        weight = max(10, active["n_iter"].min())
-        logger.info("Model made, sampling with covariance weight={}".format(weight))
-        try:
-            out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
-                                       full=config.full_cov, z_cov=cov, adapt=True,
-                                       weight=weight, warmup=config.warmup, progressbar=True)
-        except(ValueError) as e:
-            print("error with patchID = {}".format(patchID))
-            print(active)
-            print("starting position = {}".format(q))
-            print("-------\n")
-            fits.writeto("emergency_dump_active{}.fits".format(patchID), active, overwrite=True)
+        # --- send to child ---
+        chore = {'region': region, 'active': active, 'fixed': fixed,
+                 'bounds': bounds, 'cov': cov,
+                 'bands': bands, 'shape_cols': sceneDB.shape_cols}
+        result = do_child(patcher, chore, config)
 
-            error = e
-            break
-
-        # --- Deal with results --- (child/parent)
-        logger.info("Sampling complete, preparing output.")
-        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
-                                       step=step, stats=stats, patchID=patchID)
+        # --- deal with results ---
         logger.info("Checking region back in")
-        sceneDB.checkin_region(final, fixed, config.sampling_draws, block_covs=covs, taskID=patchID)
-
-        outfile = os.path.join(args.patch_dir, "patch{}_results.h5".format(patchID))
-        os.makedirs(os.path.dirname(outfile), exist_ok=True)
-        logger.info("Writing to {}".format(outfile))
-        out.dump_to_h5(outfile)
+        sceneDB.checkin_region(result['final'], result['out'].fixed,
+                               len(result['out'].chain),
+                               block_covs=result['covs'],
+                               taskID=1)
 
     sceneDB.writeout()
-
-    if error is not None:
-        raise(error)

@@ -17,7 +17,8 @@ from forcepho.reconstruction import Reconstructor
 from forcepho.patches import JadesPatch
 from forcepho.region import RectangularRegion
 
-from forcepho.utils import rectify_catalog, get_results, read_config
+from forcepho.fitting import Result
+from forcepho.utils import rectify_catalog, read_config
 
 try:
     import pycuda
@@ -29,37 +30,19 @@ except:
 
 
 def reconstruct_scene(results_files_list):
-    cat, _, _ = get_results(results_files_list[0])
-    #lnps = [r[-1]["model_logp"] for r in res]
-    #inds = [np.argmax(lnp) for lnp in lnps]
 
     # --- pull the best fit model from each chain ---
     bests, lnps = [], np.zeros(len(results_files_list))
-    descr = [desc[:2] for desc in cat.dtype.descr]
-    descr += [("lnp", np.float)]
-    dtype = np.dtype(descr)
     for i, fn in enumerate(results_files_list):
-        cat, _, stats = get_results(fn)
-        ind = np.argmax(stats["model_logp"])
-        lnp = stats["model_logp"][ind]
-        lnps[i] = lnp
+        result = Result(fn)
+        ind = np.argmax(result.stats["model_logp"])
+        lnps[i] = result.stats["model_logp"][ind]
+        best.append(result.get_sample_cat(ind))
 
-        best = np.zeros(len(cat), dtype=dtype)
-        best["lnp"] = lnp
-        for j, row in enumerate(best):
-            for col in dtype.names:
-                try:
-                    row[col] = cat[col][j][ind]
-                except(IndexError):
-                    row[col] = cat[col][j]
-                except(ValueError):
-                    pass
-
-        bests.append(best)
     bests = np.concatenate(bests)
 
     # -- choose a particular model for duplicates ---
-    order = np.argsort(bests["lnp"])[::-1]
+    order = np.argsort(lnps)[::-1]
     bests = bests[order]
     _, inds = np.unique(bests["source_index"], return_index=True)
     return bests, inds
@@ -74,10 +57,7 @@ def parse_image(hdr):
     y = [0, 0, hdr["NAXIS2"], hdr["NAXIS2"]]
     ra, dec = wcs.all_pix2world(x, y, 0)
     region = RectangularRegion(ra.min(), ra.max(), dec.min(), dec.max())
-
-    n_patch = int(np.ceil(len(cat) / n_gal))
-    actives = np.array_split(cat, n_patch)
-    return region, actives
+    return region
 
 
 if __name__ == "__main__":
@@ -101,7 +81,7 @@ if __name__ == "__main__":
     recon = Reconstructor(patcher, MAXSOURCES=config.maxactive_per_patch)
 
     # Find patch results and reconstruct scene
-    files = glob.glob(os.path.join(args.patch_dir, "patch????_results.h5"))
+    files = glob.glob(os.path.join(args.patch_dir, "patch*_samples.h5"))
     fullcat, inds = reconstruct_scene(files)
     cat = fullcat[inds]
 
@@ -110,7 +90,6 @@ if __name__ == "__main__":
             for hdr in list(patcher.metastore.headers[band].values())[:1]]
     region = parse_image(hdrs[0])
 
-
     recon.fetch_data(region, bands)
     model = recon.model_data(fullcat)
     iexp = 0
@@ -118,7 +97,6 @@ if __name__ == "__main__":
 
     if not HASGPU:
         sys.exit()
-
 
     # write out the sum
     outfile = os.path.basename(epath).replace("noisy", "forcebest") + ".fits"
