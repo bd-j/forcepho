@@ -4,17 +4,18 @@
 """sample_test_image.py - Fit a scene to a test image, using littlemcmc
 """
 
-import os, sys, argparse, time
+import os, sys, time
+import argparse
+import logging
 import numpy as np
 from astropy.io import fits
-# import h5py
 
 from forcepho.dispatcher import SuperScene
 from forcepho.sources import Galaxy
 from forcepho.patches import JadesPatch
 
 from forcepho.fitting import Result, run_lmc
-from forcepho.utils import Logger, rectify_catalog, read_config
+from forcepho.utils import Logger, rectify_catalog, read_config, write_residuals
 
 try:
     import pycuda
@@ -27,8 +28,7 @@ except:
 
 def do_child(patcher, task, config):
     rank = 1
-    global logger
-    logger = logging.getLogger(f'dispatcher-child-{rank}')
+    logger = Logger(f'child-{rank}')
 
     # --- Event Loop ---
     for taskid in range(1):
@@ -49,7 +49,7 @@ def do_child(patcher, task, config):
         # --- Build patch & prepare model--- (child)
         patcher.build_patch(region, None, allbands=bands)
         model, q = patcher.prepare_model(active=active, fixed=fixed,
-                                         bounds=bounds, shapes=sceneDB.shape_cols)
+                                         bounds=bounds, shapes=shape_cols)
         logger.info("Prepared patch and model")
         if config.sampling_draws == 0:
             return patcher
@@ -58,7 +58,7 @@ def do_child(patcher, task, config):
         weight = max(10, active["n_iter"].min())
         logger.info(f"sampling with covariance weight={weight}")
         out, step, stats = run_lmc(model, q.copy(), config.sampling_draws,
-                                   full=config.full_cov, z_cov=cov, adapt=True,
+                                   full=bool(config.full_cov), z_cov=cov, adapt=True,
                                    weight=weight, warmup=config.warmup,
                                    progressbar=getattr(config, "progressbar", False))
         logger.info(f"Sampling complete ({model.ncall} calls), preparing output.")
@@ -105,7 +105,9 @@ if __name__ == "__main__":
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
     _ = shutil.copy(config.config_file, config.outbase)
 
-    logger = Logger(__name__)
+    print(config.full_cov)
+
+    logger = Logger("dispatcher")
 
     # --- Wire the data --- (child)
     patcher = JadesPatch(metastore=config.metastorefile,
