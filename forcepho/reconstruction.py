@@ -6,27 +6,14 @@ import numpy as np
 import h5py
 
 from .region import CircularRegion
-from .utils import read_config, make_chaincat, make_statscat
+from .utils import read_config, make_chaincat, make_statscat, make_imset
 from .fitting import Result
 from .patches import JadesPatch
 from .proposal import Proposer
 
 
 __all__ = ["Residuals", "Samples", "Reconstructor",
-           "show_exp", "_make_imset"]
-
-
-def _make_imset(out, paths, name, arrs):
-    for i, epath in enumerate(paths):
-        try:
-            g = out[epath]
-        except(KeyError):
-            g = out.create_group(epath)
-
-        try:
-            g.create_dataset(name, data=np.array(arrs[i]))
-        except:
-            print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
+           "show_exp"]
 
 
 class Residuals:
@@ -158,7 +145,7 @@ class Reconstructor:
 
             for a in self.pixattrs + self.metas:
                 arr = getattr(self, a)
-                _make_imset(out, self.epaths, a, arr)
+                make_imset(out, self.epaths, a, arr)
 
     def read_arrays(self, filename):
         """Read relevant arrays from HDF5 file

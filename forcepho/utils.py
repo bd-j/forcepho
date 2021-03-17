@@ -8,14 +8,13 @@ from astropy.io import fits
 import h5py
 
 from .sources import Galaxy
-from .reconstruction import _make_imset
 
 
 __all__ = ["Logger",
            "read_config", "update_config",
            "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
-           "make_statscat", "make_chaincat",
+           "make_statscat", "make_chaincat", "make_imset",
            "write_residuals", "sky_to_pix"]
 
 
@@ -225,15 +224,27 @@ def write_residuals(model, filename):
             g = out.create_group(band)
 
         #residual = np.split(model._residuals, np.cumsum(patcher.exposure_N)[:-1])
-        _make_imset(out, epaths, "residual", model._residuals)
+        make_imset(out, epaths, "residual", model._residuals)
 
         for a in pixattrs:
             arr = patcher.split_pix(a)
-            _make_imset(out, epaths, a, arr)
+            make_imset(out, epaths, a, arr)
 
         for a in metas:
             arr = getattr(patcher, a)
-            _make_imset(out, epaths, a, arr)
+            make_imset(out, epaths, a, arr)
+
+def make_imset(out, paths, name, arrs):
+    for i, epath in enumerate(paths):
+        try:
+            g = out[epath]
+        except(KeyError):
+            g = out.create_group(epath)
+
+        try:
+            g.create_dataset(name, data=np.array(arrs[i]))
+        except:
+            print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
 
 
 def sky_to_pix(self, ra, dec, exp=None, ref_coords=0.):
