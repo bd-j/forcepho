@@ -356,12 +356,17 @@ class GPUPosterior(Posterior):
 
         return grads.reshape(-1)
 
-    def residuals(self, z):
+    def residuals(self, q):
         """Return residual images
+
+        Parameters
+        ----------
+        q : ndarray
+            The parameters in the *constrained* space
         """
         orig = self.proposer.patch.return_residual
         self.proposer.patch.return_residual = True
-        self.scene.set_all_source_params(z)
+        self.scene.set_all_source_params(q)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal)
         _, _, self._residuals = ret

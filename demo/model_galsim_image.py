@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # read command lines
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_file", type=str, default="galsim_config.yml")
-    parser.add_argument("--outbase", type=str, default="output")
+    parser.add_argument("--outbase", type=str, default="./output/model_galsim/")
     args = parser.parse_args()
 
     # read config file
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # write out the model image
     outfile = os.path.basename(epath).replace("noisy", "forcetruth") + ".fits"
-    outfile = os.path.join(args.outbase, outfile)
+    outfile = os.path.join(config.outbase, outfile)
     os.makedirs(os.path.dirname(outfile), exist_ok=True)
     with fits.HDUList(fits.PrimaryHDU(image.T)) as hdul:
         hdul[0].header.update(hdr[6:])

@@ -4,6 +4,7 @@
 """sample_test_image.py - Fit a scene to a test image, using littlemcmc
 """
 
+import shutil
 import os, sys, time
 import argparse
 import logging
@@ -28,7 +29,8 @@ except:
 
 def do_child(patcher, task, config):
     rank = 1
-    logger = Logger(f'child-{rank}')
+    global logger
+    logger = logging.getLogger(f'dispatcher-child-{rank}')
 
     # --- Event Loop ---
     for taskid in range(1):
@@ -78,10 +80,9 @@ def do_child(patcher, task, config):
         if config.write_residuals:
             outfile = os.path.join(config.patch_dir, f"patch{taskid}_residuals.h5")
             logger.info(f"Writing residuals to {outfile}")
-            patcher.return_residual = True
-            z = out.chain[-1, :]  # last position in chain
-            model.evaluate(z)
-            write_residuals(model, outfile)
+            q = out.chain[-1, :]  # last position in chain
+            residuals = model.residuals(q)
+            write_residuals(patcher, outfile, residuals=residuals)
             patcher.return_residual = False
 
         # --- send to parent, free GPU memory ---
@@ -95,19 +96,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_file", type=str, default="./galsim_config.yml")
     parser.add_argument("--outbase", type=str, default="./output/sample_galsim/")
+    parser.add_argument("--sampling_draws", type=int, default=None)
     parser.add_argument("--seed_index", type=int, default=0)
-    parser.add_argument("--full_cov", type=int, default=1)
+    parser.add_argument("--full_cov", type=int, default=None)
     parser.add_argument("--write_residuals", type=int, default=1)
-    parser.add_argument("--progressbar", action="store_true")
+    parser.add_argument("--progressbar", type=int, default=None)
     args = parser.parse_args()
     config = read_config(args.config_file, args)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
     _ = shutil.copy(config.config_file, config.outbase)
 
-    print(config.full_cov)
-
-    logger = Logger("dispatcher")
+    global logger
+    logger = logging.getLogger('dispatcher-parent')
+    logger.info(f"using full covariance:{config.full_cov}")
 
     # --- Wire the data --- (child)
     patcher = JadesPatch(metastore=config.metastorefile,
@@ -115,7 +117,7 @@ if __name__ == "__main__":
                          pixelstore=config.pixelstorefile,
                          splinedata=config.splinedatafile,
                          return_residual=True)
-    logger.info("Data loaded, HASGPU={}".format(HASGPU))
+    logger.info(f"Data loaded, HASGPU={HASGPU}")
 
     # --- Get the patch dispatcher ---  (parent)
     cat, bands, chdr = rectify_catalog(config.raw_catalog)
@@ -123,7 +125,7 @@ if __name__ == "__main__":
                          maxactive_per_patch=config.maxactive_per_patch,
                          maxradius=config.patch_maxradius,
                          target_niter=config.sampling_draws,
-                         statefile=os.path.join(args.outbase, args.scene_catalog),
+                         statefile=os.path.join(config.outbase, config.scene_catalog),
                          bounds_kwargs={})
     logger.info("Made SceneDB")
 

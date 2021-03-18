@@ -65,7 +65,7 @@ def update_config(config, args):
         d = vars(args)
         for k, v in d.items():
             try:
-                if v:
+                if v is not None:
                     setattr(config, k, v)
             except:
                 print("could not update {}={}".format(k, v))
@@ -206,11 +206,10 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     return cat
 
 
-def write_residuals(model, filename):
+def write_residuals(patcher, filename, residuals=None):
     # TODO: Should this be a method on Patch or Posterior
     pixattrs = ["data", "xpix", "ypix", "ierr"]
     metas = ["D", "CW", "crpix", "crval"]
-    patcher = model.proposer.patch
     epaths = patcher.epaths
 
     with h5py.File(filename, "w") as out:
@@ -224,7 +223,8 @@ def write_residuals(model, filename):
             g = out.create_group(band)
 
         #residual = np.split(model._residuals, np.cumsum(patcher.exposure_N)[:-1])
-        make_imset(out, epaths, "residual", model._residuals)
+        if residuals is not None:
+            make_imset(out, epaths, "residual", residuals)
 
         for a in pixattrs:
             arr = patcher.split_pix(a)
@@ -233,6 +233,7 @@ def write_residuals(model, filename):
         for a in metas:
             arr = getattr(patcher, a)
             make_imset(out, epaths, a, arr)
+
 
 def make_imset(out, paths, name, arrs):
     for i, epath in enumerate(paths):
