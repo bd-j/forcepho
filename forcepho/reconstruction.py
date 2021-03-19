@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 
 from .region import CircularRegion
-from .utils import read_config, make_chaincat, make_statscat, make_imset
+from .utils import read_config, make_chaincat, make_statscat, make_imset, sky_to_pix
 from .fitting import Result
 from .patches import JadesPatch
 from .proposal import Proposer
@@ -22,8 +22,9 @@ class Residuals:
         self.filename = filename
         self.handle = h5py.File(self.filename, "r")
         self.exposures = self.handle["epaths"][:]
+        self.reference_coordinates = self.handle["reference_coordinates"][:]
 
-    def show(self, e=None, exp="", axes=[]):
+    def show(self, e=0, exp="", axes=[], **plot_kwargs):
         if not exp:
             exp = self.exposures[e]
         xpix, ypix = self.handle[exp]["xpix"][:], self.handle[exp]["ypix"][:]
@@ -32,12 +33,30 @@ class Residuals:
         model = data - resid
 
         # keep the scales the same
-        kwargs = dict(vmin=data.min(), vmax=data.max())
+        kwargs = dict(vmin=min(data.min(), model.min(), resid.min()),
+                      vmax=max(data.max(), model.max(), resid.max()))
+        kwargs.update(**plot_kwargs)
         _ = show_exp(xpix, ypix, data, ax=axes.flat[0], **kwargs)
         _ = show_exp(xpix, ypix, resid, ax=axes.flat[1], **kwargs)
         _ = show_exp(xpix, ypix, model, ax=axes.flat[2], **kwargs)
 
         return data, model, resid
+
+    def mark_sources(self, ra, dec, e=0, exp="", axes=[],
+                     plot_kwargs=dict(marker="x", linestyle="", color="red"),
+                     **extras):
+        if not exp:
+            exp = self.exposures[e]
+        ee = self.handle[exp]
+
+        apix = sky_to_pix(ra, dec, ee, ref_coords=self.reference_coordinates)
+
+        plot_kwargs.update(extras)
+        axes = np.atleast_1d(axes)
+        [ax.plot(apix[:, 0], apix[:, 1], **plot_kwargs) for ax in axes]
+
+        return axes
+
 
 
 class Samples(Result):

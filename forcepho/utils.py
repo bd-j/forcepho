@@ -248,7 +248,7 @@ def make_imset(out, paths, name, arrs):
             print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
 
 
-def sky_to_pix(self, ra, dec, exp=None, ref_coords=0.):
+def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
     """
     Parameters
     ----------
