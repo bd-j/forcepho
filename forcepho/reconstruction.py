@@ -54,7 +54,7 @@ class Residuals:
 
         return axes
 
-    def sky_to_pix(self, ra, dec, e=0, exp="")
+    def sky_to_pix(self, ra, dec, e=0, exp=""):
         if not exp:
             exp = self.exposures[e]
         ee = self.handle[exp]
