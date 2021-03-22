@@ -531,7 +531,7 @@ def sigmoid_grad(z):
     """
     #ex = np.exp(-z)
     #return ex / (1 + ex)**2
-    return = (0.5 / np.cosh(0.5*z))**2
+    return (0.5 / np.cosh(0.5*z))**2
 
 
 class Transform(object):
