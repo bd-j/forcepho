@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """model.py
@@ -12,6 +11,7 @@ transform.
 """
 
 import numpy as np
+from scipy.special import expit
 try:
     import theano
     theano.gof.compilelock.set_lock_status(False)
@@ -517,9 +517,9 @@ class LogLikeWithGrad(Op):
 
 # --- TRANSFORMS ---
 
-
 def sigmoid(x):
-    return 1. / (1. + np.exp(-x))
+    return expit(x)
+    #return 1. / (1. + np.exp(-x))
 
 
 def logit(y):
@@ -527,7 +527,11 @@ def logit(y):
 
 
 def sigmoid_grad(z):
-    return sigmoid(z) * (1 - sigmoid(z))
+    """sigmoid(z) * (1 - sigmoid(z))
+    """
+    #ex = np.exp(-z)
+    #return ex / (1 + ex)**2
+    return = (0.5 / np.cosh(0.5*z))**2
 
 
 class Transform(object):
@@ -575,7 +579,7 @@ class BoundedTransform(Transform):
         return Theta
 
     def jacobian(self, z):
-        return self.range * sigmoid(z) * (1.0 - sigmoid(z))
+        return self.range * sigmoid_grad(z)
 
     def lndetjac_grad(self, z):
         return (1 - 2.0 * sigmoid(z))

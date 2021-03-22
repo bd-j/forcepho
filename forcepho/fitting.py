@@ -365,7 +365,6 @@ def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
         cov = np.cov(trace, rowvar=True)
         init_mean = np.mean(trace, axis=-1)
 
-    print("get_pot: covariance shape={}".format(cov.shape))
     ntimes = 0
     while ntimes < 5:
         try:

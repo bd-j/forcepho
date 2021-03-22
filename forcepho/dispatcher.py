@@ -30,13 +30,19 @@ from .model import GPUPosterior, BoundedTransform
 from .utils import rectify_catalog, read_config
 
 
+__all__ = ["REQUIRED_COLUMNS",
+           "SuperScene", "MPIQueue",
+           "make_bounds", "bounds_vectors",
+           "do_child", "do_parent"]
+
+
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
                     "source_index", "is_active", "is_valid",
                     "n_iter", "n_patch")
 
 # TODO: does setting up logging here conflict with other modules' use of logger?
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('dispatcher')
+#logging.basicConfig(level=logging.DEBUG)
+#logger = logging.getLogger('dispatcher')
 
 
 class SuperScene:
@@ -54,8 +60,8 @@ class SuperScene:
     that seed source.  The weighting logic for the seeds can be adjusted by
     over-writing the `seed_weight()` method.
 
-    Sources in regions that are checked out have their sources unavailable for further
-    checkouts, until they are checked back in, with new parameters
+    Sources in regions that are checked out have their sources unavailable for
+    further checkouts, until they are checked back in, with new parameters
     """
 
     def __init__(self, statefile="superscene.fits",                 # disk locations
@@ -486,7 +492,7 @@ class SuperScene:
 
 def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
                 n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
-                sqrtq_range=(0.3, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
+                sqrtq_range=(0.4, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
                 rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
     """Make a catalog of upper and lower bounds for the parameters of each
     source. This catalog is a structured array with fields for each of the
@@ -900,6 +906,7 @@ def main(config=None):
 
 class ArgParseFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
     pass
+
 
 if __name__ == "__main__":
     # Hide this MPI import in __main__ so one can import this module without MPI

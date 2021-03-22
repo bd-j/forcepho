@@ -45,11 +45,8 @@ class Residuals:
     def mark_sources(self, ra, dec, e=0, exp="", axes=[],
                      plot_kwargs=dict(marker="x", linestyle="", color="red"),
                      **extras):
-        if not exp:
-            exp = self.exposures[e]
-        ee = self.handle[exp]
 
-        apix = sky_to_pix(ra, dec, ee, ref_coords=self.reference_coordinates)
+        apix = self.sky_to_pix(ra, dec, e, exp)
 
         plot_kwargs.update(extras)
         axes = np.atleast_1d(axes)
@@ -57,6 +54,12 @@ class Residuals:
 
         return axes
 
+    def sky_to_pix(self, ra, dec, e=0, exp="")
+        if not exp:
+            exp = self.exposures[e]
+        ee = self.handle[exp]
+        pix = sky_to_pix(ra, dec, ee, ref_coords=self.reference_coordinates)
+        return pix
 
 
 class Samples(Result):
