@@ -356,7 +356,7 @@ class GPUPosterior(Posterior):
 
         return grads.reshape(-1)
 
-    def residuals(self, q):
+    def residuals(self, q, unpack=True):
         """Return residual images
 
         Parameters
@@ -368,7 +368,7 @@ class GPUPosterior(Posterior):
         self.proposer.patch.return_residual = True
         self.scene.set_all_source_params(q)
         proposal = self.scene.get_proposal()
-        ret = self.proposer.evaluate_proposal(proposal)
+        ret = self.proposer.evaluate_proposal(proposal, unpack=unpack)
         _, _, self._residuals = ret
         self.proposer.patch.return_residual = orig
 
