@@ -74,6 +74,7 @@ class SuperScene:
         self.bands = bands
         self.shape_cols = Galaxy.SHAPE_COLS
         if sourcecat is not None:
+            self.bounds_kwargs = bounds_kwargs
             self.ingest(sourcecat, **bounds_kwargs)
 
         self.n_active = 0

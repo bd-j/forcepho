@@ -8,7 +8,7 @@ from ..sources import Scene, Galaxy
 from ..stamp import scale_at_sky
 
 from ..proposal import Proposer
-from ..model import GPUPosterior
+from ..model import GPUPosterior, Transform
 from ..dispatcher import bounds_vectors
 
 from .storage import MetaStore, PixelStore, PSFStore
@@ -96,9 +96,12 @@ class JadesPatch(Patch):
             self.swap_on_gpu()
 
         proposer.patch.return_residual = False
-        lower, upper = bounds_vectors(bounds, self.bandlist, shapes=shapes,
-                                      reference_coordinates=self.patch_reference_coordinates)
-        model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
+        if bounds is None:
+            model = GPUPosterior(proposer, transform=Transform(len(q)), **model_kwargs)
+        else:
+            lower, upper = bounds_vectors(bounds, self.bandlist, shapes=shapes,
+                                          reference_coordinates=self.patch_reference_coordinates)
+            model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
 
         return model, q
 
