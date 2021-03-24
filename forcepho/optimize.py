@@ -15,19 +15,24 @@ def split_band(patcher, arr):
     asplit : list of ndarrays
         List of band specific ndarrays of shape (n_pix_band,)
     """
-    band_N_pix = np.zeros(patcher.n_bands-1, dtype=np.int32)
+    band_N_pix = np.zeros(patcher.n_bands, dtype=np.int32)
     for i, s in enumerate(patcher.band_start[:-1]):
         band_N_pix[i] = patcher.exposure_N[s:s+1].sum()
-    asplit = np.split(arr, np.cumsum(band_N_pix))
+    band_N_pix[-1] = patcher.exposure_N[s+1:].sum()
+    asplit = np.split(arr, np.cumsum(band_N_pix[:-1]))
     return asplit
 
 
-def design_matrix(patcher, active):
+def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     """
     Returns
     -------
-    X : list of ndarrays
-       List of design matrices, each of shape (n_active, n_pix_band)
+    Xes : list of ndarrays
+       List of design matrices, each of shape (n_active, n_pix_band),
+       Giving the model flux image of a given source for total flux = 1
+
+    fixedX : list of ndarrays
+       List of flux images of the fixed sources in each band.
     """
 
     band_N_pix = np.zeros(patcher.n_bands, dtype=np.int32)
@@ -37,14 +42,23 @@ def design_matrix(patcher, active):
 
     Xes = [np.zeros((len(active), n)) for n in band_N_pix]
 
+    if fixed is not None:
+        model, q = patcher.prepare_model(active=fixed,
+                                         shapes=shape_cols)
+        m = patcher.data - model.residuals(q, unpack=False)
+        fixedX = np.split(m, np.cumsum(band_N_pix[:-1]))
+    else:
+        fixedX = None
+
     for i, source in enumerate(active):
-        model, q = patcher.prepare_model(active=[source], fixed=fixed, shapes=shape_cols)
+        model, q = patcher.prepare_model(active=np.atleast_1d(source),
+                                         shapes=shape_cols)
         m = patcher.data - model.residuals(q, unpack=False)
         msplit = np.split(m, np.cumsum(band_N_pix[:-1]))
         for j, b in enumerate(patcher.bandlist):
-            Xes[j][i,:] = msplit[j]
+            Xes[j][i, :] = msplit[j] / source[b]
 
-    return Xes
+    return Xes, fixedX
 
 
 def optimize(patcher, active):
