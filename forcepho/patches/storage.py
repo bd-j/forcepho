@@ -301,6 +301,17 @@ class MetaStore:
                 self.wcs[band][expID] = w
 
     def add_exposure(self, imset):
+        """Add the header for an exposure to the store.
+
+        Parameters
+        ----------
+        imset : namespace
+            Must have the following attributes:
+            * `hdr` - a FITS header containing WCS data
+            * `band` - string, the band of the image
+            * `expID` - string, unique identifier for the exposure the header
+                        information refers to.
+        """
         # Read the header and set identifiers
         hdr = imset.hdr
         band, expID = imset.band, imset.expID

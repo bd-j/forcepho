@@ -61,19 +61,34 @@ def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     return Xes, fixedX
 
 
-def optimize(patcher, active):
-    Xes = design_matrix(patcher, active)
+def optimize_one(X, w, y, fixedX=0):
+    Xp = X * w
+    yp = (y - fixedX) * w
+    ATA = np.dot(Xp, Xp.T)
+    Xyp = np.dot(Xp, yp[:, None])
+    flux = np.linalg.solve(ATA, Xyp)
+    model = np.dot(flux.T, X)
+    return flux, model
+
+
+def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
+    fluxes, models = [], []
+    Xes, fixedX = design_matrix(patcher, active,
+                                shape_cols=shape_cols, fixed=fixed)
     ws = split_band(patcher, patcher.ierr)
     ys = split_band(patcher, patcher.data)
-    for w, X, y in zip(ws, Xes, ys):
-        # TODO: check matrix math
-        Xp = X * w
-        yp = y * w
-        ATA = np.dot(Xp, Xp.T)
-        Xyp = np.dot(Xp, yp[:, None])
-        flux = np.linalg.solve(ATA, Xyp)
+    for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
+        if fixedX is not None:
+            fX = fixedX[i]
+        flux, model = optimize_one(X, w, y, fixedX=fX)
 
+        fluxes.append(np.squeeze(flux))
+        models.append(np.squeeze(model))
 
+    if return_all:
+        return fluxes, models, fixedX
+    else:
+        return fluxes
 
 if __name__ == "__main__":
     pass
