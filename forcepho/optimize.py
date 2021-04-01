@@ -67,8 +67,7 @@ def optimize_one(X, w, y, fixedX=0):
     ATA = np.dot(Xp, Xp.T)
     Xyp = np.dot(Xp, yp[:, None])
     flux = np.linalg.solve(ATA, Xyp)
-    model = np.dot(flux.T, X)
-    return flux, model, ATA
+    return flux, ATA
 
 
 def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
@@ -91,14 +90,16 @@ def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
                                 shape_cols=shape_cols, fixed=fixed)
     ws = split_band(patcher, patcher.ierr)
     ys = split_band(patcher, patcher.data)
+    fX = 0.0
     for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
         if fixedX is not None:
             fX = fixedX[i]
-        flux, model, precision = optimize_one(X, w, y, fixedX=fX)
-
+        flux, precision = optimize_one(X, w, y, fixedX=fX)
         fluxes.append(np.squeeze(flux))
-        models.append(np.squeeze(model))
         precisions.append(precision)
+        if return_all:
+            model = np.dot(flux.T, X)
+            models.append(np.squeeze(model))
 
     if return_all:
         return fluxes, precisions, models, fixedX
