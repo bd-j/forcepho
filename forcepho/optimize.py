@@ -68,11 +68,25 @@ def optimize_one(X, w, y, fixedX=0):
     Xyp = np.dot(Xp, yp[:, None])
     flux = np.linalg.solve(ATA, Xyp)
     model = np.dot(flux.T, X)
-    return flux, model
+    return flux, model, ATA
 
 
 def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
-    fluxes, models = [], []
+    """Do a simple wieghted least-squares to get the maximum likelihood fluxes,
+    conditional on source parameters.
+
+    Returns
+    -------
+    fluxes : list of ndarrays
+        List of ndarrays of shape (n_source,) giving the maximum likelihoood
+        fluxes of each source. The list has same length and order as
+        `patcher.bandlist`
+
+    precisions : list of ndarrays
+        List of ndarrays of shape (n_source, n_source) giving the flux precision
+        matrix in each band (i.e. the inverse of the flux covariance matrix)
+    """
+    fluxes, models, precisions = [], [], []
     Xes, fixedX = design_matrix(patcher, active,
                                 shape_cols=shape_cols, fixed=fixed)
     ws = split_band(patcher, patcher.ierr)
@@ -80,15 +94,17 @@ def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
     for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
         if fixedX is not None:
             fX = fixedX[i]
-        flux, model = optimize_one(X, w, y, fixedX=fX)
+        flux, model, precision = optimize_one(X, w, y, fixedX=fX)
 
         fluxes.append(np.squeeze(flux))
         models.append(np.squeeze(model))
+        precisions.append(precision)
 
     if return_all:
-        return fluxes, models, fixedX
+        return fluxes, precisions, models, fixedX
     else:
-        return fluxes
+        return fluxes, precisions
+
 
 if __name__ == "__main__":
     pass
