@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+"""optimize.py - methods for linear optimization of fluxes (conditional on shapes)
+"""
+
 import numpy as np
 
 
@@ -63,7 +66,14 @@ def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     return Xes, fixedX
 
 
-def optimize_one(X, w, y, fixedX=0):
+def optimize_one_band(X, w, y, fixedX=0):
+    """
+    Parameters
+    ----------
+    X : ndarray of shape (nsource, npix_band)
+        Normalized models for individual sources
+    w : ndarray
+    """
     Xp = X * w
     yp = (y - fixedX) * w
     ATA = np.dot(Xp, Xp.T)
@@ -96,7 +106,7 @@ def optimize(patcher, active, fixed=None, shape_cols=[], return_all=True):
     for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
         if fixedX is not None:
             fX = fixedX[i]
-        flux, precision = optimize_one(X, w, y, fixedX=fX)
+        flux, precision = optimize_one_band(X, w, y, fixedX=fX)
         fluxes.append(np.squeeze(flux))
         precisions.append(precision)
         if return_all:

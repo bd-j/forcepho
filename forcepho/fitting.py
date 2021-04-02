@@ -386,13 +386,13 @@ def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
 
 
 
-def run_opt(model, q, jac=True, **extras):
+def run_opt(model, q, jac=True, callback=None, **extras):
     """Simple BFGS optimization using scipy.optimize
     """
     from scipy.optimize import minimize
     opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
             'disp':True, 'iprint': 1, 'maxcor': 20}
-    callback = None
+    opts.update(**extras)
 
     if model.transform is not None:
         start = model.transform.inverse_transform(q)
@@ -415,7 +415,7 @@ def run_opt(model, q, jac=True, **extras):
     result.lnp = -0.5 * scires.fun
     result.wall_time = tsample
 
-    return result
+    return result, scires
 
 
 def run_pymc3(model, q, lower=-np.inf, upper=np.inf,
