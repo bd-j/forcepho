@@ -64,11 +64,12 @@ class SuperScene:
     further checkouts, until they are checked back in, with new parameters
     """
 
-    def __init__(self, statefile="superscene.fits",                 # disk locations
+    def __init__(self, sourcecat=None, bands=None,
+                 statefile="superscene.fits",                       # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
                  maxactive_per_patch=20, nscale=3,                  # patch boundaries
                  boundary_radius=8., maxradius=5., minradius=1,     # patch boundaries
-                 sourcecat=None, bands=None, bounds_kwargs={}):
+                 bounds_kwargs={}):
 
         self.statefilename = statefile
         self.bands = bands
@@ -88,9 +89,6 @@ class SuperScene:
         self.maxactive = maxactive_per_patch
         self.boundary_radius = boundary_radius
         self.nscale = 3
-
-        # --- build the KDTree ---
-        self.kdt = cKDTree(self.scene_coordinates)
 
     def __enter__(self):
         return self
@@ -121,9 +119,16 @@ class SuperScene:
         """Set the catalog, make bounds array, and initialize covariance matricices
         """
         self.set_catalog(sourcecat)
+
+        # --- build the KDTree ---
+        self.kdt = cKDTree(self.scene_coordinates)
+
+        # make the initial bounds catalog
         self.bounds_catalog = make_bounds(self.sourcecat, self.bands,
                                           shapenames=self.shape_cols,
                                           **bounds_kwargs)
+
+        # make initial covariance matrices (identities)
         n_param = len(self.parameter_columns)
         self.covariance_matrices =  np.reshape(np.tile(np.eye(n_param).flatten(), self.n_sources),
                                                 (self.n_sources, n_param, n_param))

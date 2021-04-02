@@ -36,9 +36,10 @@ def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     """
 
     band_N_pix = np.zeros(patcher.n_bands, dtype=np.int32)
-    for i, s in enumerate(patcher.band_start[:-1]):
-        band_N_pix[i] = patcher.exposure_N[s:s+1].sum()
-    band_N_pix[-1] = patcher.exposure_N[s+1:].sum()
+    for i in range(patcher.n_bands-1):
+        st, sp = patcher.band_start[i:i+2]
+        band_N_pix[i] = patcher.exposure_N[st:sp].sum()
+    band_N_pix[-1] = patcher.exposure_N[patcher.band_start[-1]:].sum()
 
     Xes = [np.zeros((len(active), n)) for n in band_N_pix]
 
