@@ -8,10 +8,10 @@ import numpy as np
 
 def split_band(patcher, arr):
     """
-        - self.band_start     [NBAND] exposure index corresponding to the start of each band
-        - self.band_N         [NBAND] number of exposures in each band
-        - self.exposure_start [NEXP]  pixel index corresponding to the start of each exposure
-        - self.exposure_N     [NEXP]  number of pixels (including warp padding) in each exposure
+    - self.band_start     [NBAND] exposure index corresponding to the start of each band
+    - self.band_N         [NBAND] number of exposures in each band
+    - self.exposure_start [NEXP]  pixel index corresponding to the start of each exposure
+    - self.exposure_N     [NEXP]  number of pixels (including warp padding) in each exposure
 
     Returns
     -------

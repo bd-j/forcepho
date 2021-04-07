@@ -401,8 +401,13 @@ def run_opt(model, q, jac=True, callback=None, **extras):
 
 
     t0 = time.time()
-    scires = minimize(model.nll, start.copy(), jac=jac,  method='BFGS',
-                      options=opts, bounds=None, callback=callback)
+    if jac:
+        scires = minimize(model.nll, start.copy(), jac=jac,  method='BFGS',
+                          options=opts, bounds=None, callback=callback)
+    else:
+        scires = minimize(model.nll_nograd, start.copy(), jac=jac,  method='BFGS',
+                          options=opts, bounds=None, callback=callback)
+
     tsample = time.time() - t0
 
     result = Result()

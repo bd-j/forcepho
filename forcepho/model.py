@@ -193,6 +193,11 @@ class Posterior:
             self.evaluate(z)
         return -self._lnp, -self._lnp_grad
 
+    def nll_nograd(self, z):
+        if np.any(z != self._z):
+            self.evaluate(z)
+        return -self._lnp
+
     def lnprob_and_grad(self, z):
         """Some samplers want a single function to return lnp, dlnp.
         This is that.
