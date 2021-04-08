@@ -604,7 +604,7 @@ if __name__ == "__main__":
     q = np.clip(np.random.normal(0, 1, size=(ndim,)), lower + epsilon, upper - epsilon)
 
     # --- Run the sampler ---
-    chain, step, stats = run_lmc(model, q, n_draws=1000, HASGPU=False,
+    chain, step, stats = run_lmc(model, q, n_draws=1000,
                                  warmup=[256, 512, 1024, 1024, 1024, 2048])
 
 

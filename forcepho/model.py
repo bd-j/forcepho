@@ -60,6 +60,7 @@ class Posterior:
             if given. Mutually exclusive with `transform`.
         '''
         self.ncall = 0
+        self.ndof = 1.0
 
         if (np.any(kwargs.get('lower')) and np.any(kwargs.get('upper'))) == bool(kwargs.get('transform')):
             raise ValueError('Must specify either "transform" or ("lower","upper")')
@@ -196,7 +197,7 @@ class Posterior:
     def nll_nograd(self, z):
         if np.any(z != self._z):
             self.evaluate(z)
-        return -self._lnp
+        return -self._lnp / self.ndof
 
     def lnprob_and_grad(self, z):
         """Some samplers want a single function to return lnp, dlnp.
@@ -204,7 +205,7 @@ class Posterior:
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        return self._lnp, self._lnp_grad
+        return self._lnp / self.ndof, self._lnp_grad / self.ndof
 
     def residuals(self, z):
         raise(NotImplementedError)

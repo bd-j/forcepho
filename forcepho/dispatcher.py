@@ -267,7 +267,7 @@ class SuperScene:
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
     def checkin_region(self, active, fixed, niter, block_covs=None,
-                       taskID=None, flush=False):
+                       new_bounds=None, taskID=None, flush=False):
         """Check-in a set of active source parameters, and also fixed sources.
         The parameters of the active sources are updated in the master catalog,
         they are marked as inactive, and along with the provided fixed sources
@@ -318,6 +318,10 @@ class SuperScene:
 
         self.n_active -= len(active_inds)
         self.n_fixed -= len(fixed_inds)
+
+        # update bounds if they were changed during initialization
+        if new_bounds:
+            self.bounds_catalog[active_inds] = new_bounds[:]
 
         # update mass matrix
         if block_covs is not None:
@@ -482,18 +486,6 @@ class SuperScene:
         w *= 1 / (1 + np.exp(-x))
 
         return w / w.sum()
-
-    def get_grown_scene(self):
-        # option 1
-        # grow the tree.
-        # stopping criteria:
-        #    you hit an active source;
-        #    you hit maxactive;
-        #    no new sources within tolerance
-
-        # add fixed boundary objects; these will be all objects
-        # within some tolerance (d / size) of every active source
-        raise NotImplementedError
 
 
 def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
