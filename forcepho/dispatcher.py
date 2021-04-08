@@ -320,7 +320,7 @@ class SuperScene:
         self.n_fixed -= len(fixed_inds)
 
         # update bounds if they were changed during initialization
-        if new_bounds:
+        if new_bounds is not None:
             self.bounds_catalog[active_inds] = new_bounds[:]
 
         # update mass matrix

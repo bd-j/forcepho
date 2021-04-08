@@ -192,7 +192,7 @@ class Posterior:
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        return -self._lnp, -self._lnp_grad
+        return -self._lnp / self.ndof, -self._lnp_grad / self.ndof
 
     def nll_nograd(self, z):
         if np.any(z != self._z):
@@ -205,7 +205,7 @@ class Posterior:
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        return self._lnp / self.ndof, self._lnp_grad / self.ndof
+        return self._lnp, self._lnp_grad
 
     def residuals(self, z):
         raise(NotImplementedError)
