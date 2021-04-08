@@ -420,6 +420,10 @@ def run_opt(model, q, jac=True, callback=None, **extras):
     result.lnp = -0.5 * scires.fun
     result.wall_time = tsample
 
+    result.fun = scires.fun
+    result.jac = scires.jac
+    result.message = scires.message
+
     return result, scires
 
 
