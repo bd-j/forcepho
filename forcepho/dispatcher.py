@@ -266,7 +266,7 @@ class SuperScene:
 
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
-    def checkin_region(self, active, fixed, niter, block_covs=None,
+    def checkin_region(self, active, fixed=None, niter=1, block_covs=None,
                        new_bounds=None, taskID=None, flush=False):
         """Check-in a set of active source parameters, and also fixed sources.
         The parameters of the active sources are updated in the master catalog,
@@ -301,9 +301,12 @@ class SuperScene:
         # Find where the sources are that are being checked in
         try:
             active_inds = active["source_index"].astype(int)
-            fixed_inds = fixed["source_index"].astype(int)
         except(KeyError):
             raise
+        if fixed is not None:
+            fixed_inds = fixed["source_index"].astype(int)
+        else:
+            fixed_inds = []
 
         # replace active source parameters with new parameters
         for f in self.parameter_columns:

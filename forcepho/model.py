@@ -100,13 +100,13 @@ class Posterior:
 
     def lnprob(self, z):
         """Get the ln-probability at parameter position `z`.  This uses the
-        cached value of the ln-probability if z has not chenged, and otherwise
+        cached value of the ln-probability if z has not changed, and otherwise
         calls the `evaluate` method.
 
         Parameters
         ----------
         z : ndarray of shape (ndim,)
-            The parameter position (in the sampling parameter space)
+            The parameter position (in the unconstrained sampling parameter space)
 
         Returns
         -------
@@ -120,8 +120,8 @@ class Posterior:
     def lnprob_grad(self, z):
         """Get the gradients of the ln-probability with respect to `z`, at
         parameter position `z`.  This uses the cached value of the
-        ln-probability if z has not chenged, and otherwise calls the `evaluate`
-        method.
+        ln-probability gradient if z has not changed, and otherwise calls the
+        `evaluate` method.
 
         Parameters
         ----------

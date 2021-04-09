@@ -6,11 +6,12 @@ import numpy as np
 
 from astropy.io import fits
 import h5py
+import json
 
 from .sources import Galaxy
 
 
-__all__ = ["Logger",
+__all__ = ["Logger", "NumpyEncoder",
            "read_config", "update_config",
            "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
@@ -36,6 +37,13 @@ class Logger:
     def serialize(self):
         log = "\n".join([c[0] for c in self.comments])
         return log
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 def read_config(config_file, args=None):
