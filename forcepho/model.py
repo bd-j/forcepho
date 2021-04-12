@@ -106,7 +106,8 @@ class Posterior:
         Parameters
         ----------
         z : ndarray of shape (ndim,)
-            The parameter position (in the unconstrained sampling parameter space)
+            The parameter position (in the unconstrained sampling parameter
+            space)
 
         Returns
         -------

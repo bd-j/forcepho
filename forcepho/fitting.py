@@ -407,7 +407,7 @@ def run_opt(model, q, jac=True, callback=None, **extras):
         scires = minimize(model.nll, start.copy(), jac=jac,  method='BFGS',
                           options=opts, bounds=None, callback=callback)
     else:
-        scires = minimize(model.nll_nograd, start.copy(), jac=jac,  method='BFGS',
+        scires = minimize(model.nll_nograd, start.copy(), jac=None,  method='BFGS',
                           options=opts, bounds=None, callback=callback)
 
     tsample = time.time() - t0
@@ -432,6 +432,7 @@ def run_opt(model, q, jac=True, callback=None, **extras):
 def run_opt_bounded(model, q, jac=True, callback=None, **extras):
     """Simple L-BFGS-B optimization using scipy.optimize
     """
+    bounds = extras.pop("bounds", None)
     from scipy.optimize import minimize
     opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
             'disp':True, 'iprint': 1, 'maxcor': 20}
@@ -442,7 +443,6 @@ def run_opt_bounded(model, q, jac=True, callback=None, **extras):
         bounds = list([(-200, 200) for p in q])
     else:
         start = q.copy()
-        bounds = extras.get("bounds", None)
 
 
     t0 = time.time()
@@ -450,7 +450,7 @@ def run_opt_bounded(model, q, jac=True, callback=None, **extras):
         scires = minimize(model.nll, start.copy(), jac=jac,  method='L-BFGS-B',
                           options=opts, bounds=bounds, callback=callback)
     else:
-        scires = minimize(model.nll_nograd, start.copy(), jac=jac,  method='L-BFGS-B',
+        scires = minimize(model.nll_nograd, start.copy(), jac=None,  method='L-BFGS-B',
                           options=opts, bounds=bounds, callback=callback)
 
     tsample = time.time() - t0
