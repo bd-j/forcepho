@@ -43,7 +43,7 @@ class Skin(LogPrior):
         return  -(x**self.alpha * (1 - x) ** self.alpha)
 
     def _lnprior_grad(self, x):
-        return self.alpha * (2*x - 1) * (-(x - 1) * x)**self.alpha
+        return self.alpha * (2*x - 1) * (-(x - 1) * x)**(self.alpha - 1)
 
 
 class Beta(LogPrior):
@@ -72,3 +72,22 @@ class StudentT(LogPrior):
 
 class LogUniform(LogPrior):
     pass
+
+
+
+def test_grad(pl):
+
+    lnprior = Skin(10, 30)
+    qq = np.linspace(10, 30, 1000)
+    lnp = np.array([lnprior(x)[0] for x in qq])
+    lnp_g = np.array([lnprior(x)[1] for x in qq])
+    nll_g_num = np.gradient(-lnp)/np.gradient(qq)
+
+    pl.ion()
+    fig, ax = pl.subplots()
+    ax.plot(qq, -lnp)
+    ax.plot(qq, -lnp_g)
+    #nll_g_num = np.diff(-lnp)/np.diff(qq)
+    ax.plot(qq, nll_g_num)
+    fig, ax = pl.subplots()
+    ax.plot(qq, -lnp_g / nll_g_num)
