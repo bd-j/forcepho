@@ -188,17 +188,27 @@ class Posterior:
             return np.array(z)
 
     def nll(self, z):
-        """A shortcut for the negative ln-likelihood, for use with
-        minimization algorithms. Returns both the NLL and it's gradient
+        """A shortcut for the negative ln-priobability, for use with
+        minimization algorithms. Returns both the NLL and it's gradient.
+        Note this *removes* the jacobian volume correction necessary for
+        good sampling.
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        return -self._lnp / self.ndof, -self._lnp_grad / self.ndof
+        nll = -(self._lnp - self._lndetjac)
+        nll_grad = -(self._lnp_grad - self._lndetjac_grad)
+        return  nll / self.ndof, nll_grad / self.ndof
 
     def nll_nograd(self, z):
+        """A shortcut for the negative ln-priobability, for use with
+        minimization algorithms. Returns both the NLL and it's gradient.
+        Note this *removes* the jacobian volume correction necessary for
+        good sampling, but that hinders optimization.
+        """
         if np.any(z != self._z):
             self.evaluate(z)
-        return -self._lnp / self.ndof
+        nll = -(self._lnp - self._lndetjac)
+        return nll / self.ndof
 
     def lnprob_and_grad(self, z):
         """Some samplers want a single function to return lnp, dlnp.
@@ -324,6 +334,7 @@ class GPUPosterior(Posterior):
             self._lnprior_grad = lpr_grad
 
         self._lnp = ll + lpr + self._lndetjac
+        # Assumes Jacobian is diagonal
         self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
         self._q = q
         self._z = z
@@ -553,6 +564,8 @@ class Transform(object):
         return np.ones(len(z))
 
     def lndetjac(self, z):
+        """ln(|dq/dz|)
+        """
         return np.log(np.abs(np.product(self.jacobian(z))))
         # return np.sum(np.log(self.jacobian(z)))
 
@@ -564,6 +577,12 @@ class Transform(object):
 
 
 class BoundedTransform(Transform):
+
+    """Use a sigmoid transform to go from the unconstrained
+    sampling space z to the constrained parameter space q or Theta.
+
+    This could be made slightly more efficient by caching sigmoid evaluations
+    """
 
     def __init__(self, lower, upper):
         self.lower = np.atleast_1d(lower)
@@ -579,16 +598,20 @@ class BoundedTransform(Transform):
         """Transform from the sampling variable `z` to the constrained
         variable `Theta`.  I.e., this is the function g s.t. Theta = g(z)
 
-        This uses the sigmoid function
+        This uses the sigmoid function.
         """
         y = sigmoid(z)
         Theta = self.lower + y * (self.range)
         return Theta
 
     def jacobian(self, z):
+        """J = dq/dz
+        """
         return self.range * sigmoid_grad(z)
 
     def lndetjac_grad(self, z):
+        """d |J| / dz
+        """
         return (1 - 2.0 * sigmoid(z))
 
     def inverse_transform(self, Theta):
