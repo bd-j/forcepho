@@ -473,6 +473,10 @@ def run_opt_bounded(model, q, jac=True, callback=None, **extras):
     return result, scires
 
 
+
+
+
+
 def run_pymc3(model, q, lower=-np.inf, upper=np.inf,
               priors=None, nwarm=2000, niter=1000):
     """Run a pymc3 fit
@@ -621,6 +625,94 @@ def run_hemcee(model, q, scales=1.0, nwarm=2000, niter=1000):
     result.step_size = sampler.step_size.get_step_size()
 
     return result
+
+
+def design_matrix(patcher, active, fixed=None, shape_cols=[]):
+    """Create the design matrices for linear least squares.
+
+    Returns
+    -------
+    Xes : list of ndarrays
+       List of design matrices, each of shape (n_active, n_pix_band),
+       Giving the model flux image of a given source for total flux = 1
+
+    fixedX : list of ndarrays
+       List of flux images of the fixed sources in each band.
+    """
+    Xes = [np.zeros((len(active), n)) for n in patcher.band_N_pix]
+
+    if fixed is not None:
+        model, q = patcher.prepare_model(active=fixed,
+                                         shapes=shape_cols)
+        m = patcher.data - model.residuals(q, unpack=False)
+        fixedX = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
+    else:
+        fixedX = None
+
+    for i, source in enumerate(active):
+        model, q = patcher.prepare_model(active=np.atleast_1d(source),
+                                         shapes=shape_cols)
+        m = patcher.data - model.residuals(q, unpack=False)
+        msplit = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
+        for j, b in enumerate(patcher.bandlist):
+            Xes[j][i, :] = msplit[j] / source[b]
+
+    return Xes, fixedX
+
+
+def optimize_one_band(X, w, y, fixedX=0):
+    """Linear least-squares to get the ML fluxes and precision matrix for a
+    single band.
+
+    Parameters
+    ----------
+    X : ndarray of shape (nsource, npix_band)
+        Normalized models for individual sources
+    w : ndarray
+    """
+    Xp = X * w
+    yp = (y - fixedX) * w
+    ATA = np.dot(Xp, Xp.T)
+    Xyp = np.dot(Xp, yp[:, None])
+    flux = np.linalg.solve(ATA, Xyp)
+    return flux, ATA
+
+
+def optimize_fluxes(patcher, active, fixed=None, shape_cols=[], return_all=True):
+    """Do a simple wieghted least-squares to get the maximum likelihood fluxes,
+    conditional on source shape parameters.
+
+    Returns
+    -------
+    fluxes : list of ndarrays
+        List of ndarrays of shape (n_source,) giving the maximum likelihoood
+        fluxes of each source. The list has same length and order as
+        `patcher.bandlist`
+
+    precisions : list of ndarrays
+        List of ndarrays of shape (n_source, n_source) giving the flux precision
+        matrix in each band (i.e. the inverse of the flux covariance matrix)
+    """
+    fluxes, models, precisions = [], [], []
+    Xes, fixedX = design_matrix(patcher, active,
+                                shape_cols=shape_cols, fixed=fixed)
+    ws = patcher.split_band("ierr")
+    ys = patcher.split_band("data")
+    fX = 0.0
+    for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
+        if fixedX is not None:
+            fX = fixedX[i]
+        flux, precision = optimize_one_band(X, w, y, fixedX=fX)
+        fluxes.append(np.squeeze(flux))
+        precisions.append(precision)
+        if return_all:
+            model = np.dot(flux.T, X)
+            models.append(np.squeeze(model))
+
+    if return_all:
+        return fluxes, precisions, models, fixedX
+    else:
+        return fluxes, precisions
 
 
 if __name__ == "__main__":

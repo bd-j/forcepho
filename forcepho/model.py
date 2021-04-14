@@ -158,7 +158,10 @@ class Posterior:
         lpr_grad : ndarray of shape (ndim,) or 0.0
             The gradient of `lpr` with respect to the scene parameters `q`
         """
-        return 0.0, 0.0
+        if self._lnpriorfn is None:
+            return 0.0, 0.0
+        else:
+            return self._lnpriorfn(q)
 
     def make_transform(self, z):
         """Transform the sampling parameters z in the unconstrained space to
@@ -270,8 +273,7 @@ class GPUPosterior(Posterior):
         # --- Assign ingredients ---
         self.proposer = proposer
         self.scene = scene if scene else proposer.patch.scene
-        if lnprior is not None:
-            self.lnprior = lnprior
+        self._lnpriorfn = lnprior
 
         # --- initialize some things ---
         self.sampling = sampling

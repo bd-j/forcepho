@@ -330,12 +330,14 @@ class JadesPatch(Patch):
         if not dtype:
             dtype = self.pix_dtype
 
+        # These index the exposures
         self.band_start = np.empty(self.n_bands, dtype=np.int16)
         self.band_N = np.zeros(self.n_bands, dtype=np.int16)
 
         # These index the pixel arrays (also sequential)
         self.exposure_start = np.empty(self.n_exp, dtype=np.int32)
         self.exposure_N = np.empty(self.n_exp, dtype=np.int32)
+        self.band_N_pix = np.empty(self.n_bands, dtype=np.int32)
 
         # wish I knew how many superpixels there would be;
         # One could set an upper bound based on region area * nexp
@@ -376,6 +378,8 @@ class JadesPatch(Patch):
         self.ypix = np.concatenate(ypix).reshape(-1).astype(dtype)
         self.band_start[0] = 0
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
+        self.band_N_pix[:-1] = np.diff(self.exposure_start[self.band_start])
+        self.band_N_pix[-1] = self.npix - self.band_N_pix[:-1].sum()
 
     def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
@@ -535,7 +539,20 @@ class JadesPatch(Patch):
         return scene
 
     def split_pix(self, attr):
-        """Split the pixel data into separate arrays for each exposure
+        """Split the pixel data into separate arrays for each exposure.
+
+        Returns
+        -------
+        pixdat : list of ndarray
+            List of N_exp ndarrays, each containing the `attr` pixel
+            information for that exposure.  List order is the same as
+            `self.epaths`
+        """
+        arr = getattr(self, attr)
+        return np.split(arr, np.cumsum(self.exposure_N[:-1]))
+
+    def split_band(self, attr):
+        """Split the pixel data into separate arrays for each band.
 
         Parameters
         ----------
@@ -545,10 +562,10 @@ class JadesPatch(Patch):
 
         Returns
         -------
-        pixdat : list of ndarray
-            List of N_exp ndarrays, each contianing the `attr` pixel
-            information for that exposure.  List order is the same as
-            `self.epaths`
+        asplit : list of ndarrays
+            List of N_band ndarrays of shape (n_pix_band,)  each containing the
+            `attr` pixel information for that band.  List order is the same as
+            `self.bandlist`
         """
         arr = getattr(self, attr)
-        return np.split(arr, np.cumsum(self.exposure_N)[:-1])
+        return np.split(arr, np.cumsum(self.band_N_pix[:-1]))
