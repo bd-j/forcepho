@@ -195,8 +195,8 @@ class Posterior:
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        nll = -(self._lnp - self._lndetjac)
-        nll_grad = -(self._lnp_grad - self._lndetjac_grad)
+        nll = -self._lnp
+        nll_grad = -self._lnp_grad
         return  nll / self.ndof, nll_grad / self.ndof
 
     def nll_nograd(self, z):
@@ -207,8 +207,7 @@ class Posterior:
         """
         if np.any(z != self._z):
             self.evaluate(z)
-        nll = -(self._lnp - self._lndetjac)
-        return nll / self.ndof
+        return -self._lnp / self.ndof
 
     def lnprob_and_grad(self, z):
         """Some samplers want a single function to return lnp, dlnp.
@@ -264,7 +263,7 @@ class GPUPosterior(Posterior):
 
     def __init__(self, proposer, scene=None, lnprior=None, transform=None,
                  name="", print_interval=1000, verbose=False, debug=False,
-                 logging=False, **kwargs):
+                 logging=False, sampling=True, **kwargs):
 
         super().__init__(transform=transform, **kwargs)
 
@@ -275,6 +274,7 @@ class GPUPosterior(Posterior):
             self.lnprior = lnprior
 
         # --- initialize some things ---
+        self.sampling = sampling
         self.ncall = 0
         self._z = -99
         self._q = -99
@@ -333,11 +333,16 @@ class GPUPosterior(Posterior):
             self._lnprior = lpr
             self._lnprior_grad = lpr_grad
 
-        self._lnp = ll + lpr + self._lndetjac
+        self._lnp = ll + lpr
         # Assumes Jacobian is diagonal
-        self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian + self._lndetjac_grad
+        self._lnp_grad = (ll_grad + lpr_grad) * self._jacobian
         self._q = q
         self._z = z
+        # do volume correction when sampling
+        if self.sampling:
+            self._lnp += self._lndetjac
+            self._lnp_grad += self._lndetjac_grad
+
 
         # --- Logging/Debugging ---
         if self.debug:

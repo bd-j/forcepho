@@ -2,6 +2,10 @@
 
 import numpy as np
 
+__all__ = ["LogPrior",
+           "ExpBeta", "Barrier"]
+
+
 class LogPrior:
 
     def __init__(self, min=0, max=1):
