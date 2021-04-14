@@ -71,8 +71,8 @@ class Barrier(LogPrior):
         lpr[g] = lpr[g] + (1 - 1/z[g])**self.alpha
         g = (y > 0) #& (y < 1)
         #print(1 - 1/y[g])
-        print(x)
-        print(y)
+        #print(x)
+        #print(y)
         lpr[g] = lpr[g] + (1 - 1/y[g])**self.alpha
         return  lpr
 
