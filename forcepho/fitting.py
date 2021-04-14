@@ -392,8 +392,9 @@ def run_opt(model, q, jac=True, callback=None, **extras):
     """Simple BFGS optimization using scipy.optimize
     """
     from scipy.optimize import minimize
-    opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
-            'disp':True, 'iprint': 1, 'maxcor': 20}
+#    opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
+#            'disp':True, 'iprint': 1, 'maxcor': 20}
+    opts = {}
     opts.update(**extras)
 
     if model.transform is not None:
