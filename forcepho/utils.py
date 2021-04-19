@@ -52,8 +52,12 @@ def read_config(config_file, args=None):
     """Read a yaml formatted config file.
     """
     import yaml
-    with open(config_file) as f:
-        config_dict = yaml.load(f, Loader=yaml.Loader)
+    if type(config_file) is str:
+        with open(config_file) as f:
+            config_dict = yaml.load(f, Loader=yaml.Loader)
+    elif type(config_file) is dict:
+        config_dict = yaml.load(config_file, Loader=yaml.Loader)
+
     config = Namespace()
     for k, v in config_dict.items():
         if type(v) is list:
