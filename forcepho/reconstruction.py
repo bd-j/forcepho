@@ -61,6 +61,16 @@ class Residuals:
         pix = sky_to_pix(ra, dec, ee, ref_coords=self.reference_coordinates)
         return pix
 
+    def fill_images(self, images={}, fill_type="residual", imshape=(2048, 2048)):
+        for e in self.exposures:
+            if e not in images:
+                images[e] = np.zeros(imshape) + np.nan
+            xpix, ypix = self.handle[e]["xpix"][:].astype(int), self.handle[e]["ypix"][:].astype(int)
+            arr = self.handle[e][fill_type][:]
+            images[e][xpix, ypix] = arr
+
+        return images
+
 
 class Samples(Result):
     """Just an alias for the new Result class
@@ -296,7 +306,6 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
               extent=(lo[0], hi[0], lo[1], hi[1]),
               **imshow_kwargs)
     return ax
-
 
 
 if __name__ == "__main__":

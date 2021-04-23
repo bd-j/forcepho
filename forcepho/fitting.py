@@ -473,10 +473,6 @@ def run_opt_bounded(model, q, jac=True, callback=None, **extras):
     return result, scires
 
 
-
-
-
-
 def run_pymc3(model, q, lower=-np.inf, upper=np.inf,
               priors=None, nwarm=2000, niter=1000):
     """Run a pymc3 fit

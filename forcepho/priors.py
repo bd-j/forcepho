@@ -54,6 +54,8 @@ class ExpBeta(LogPrior):
 
 class Barrier(LogPrior):
     """Used for optimization; heavily weights the model against values near min and max
+
+    n.b. does not seem to actually work
     """
     def __init__(self, min, max, alpha=-2, edgewidth=0.05):
         self.min = min
@@ -61,7 +63,7 @@ class Barrier(LogPrior):
         self.range = self.max - self.min
         self.alpha = alpha
         self.edgewidth = edgewidth
-
+        raise NotImplementedError
 
     def _lnprior(self, x):
         lpr = np.zeros_like(x)
