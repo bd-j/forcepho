@@ -60,47 +60,44 @@ class JadesPatch(Patch):
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
 
-    def prepare_model(self, active=None, fixed=None,
-                      bounds=None, shapes=None, model_kwargs=None):
+    def subtract_fixed(self, fixed, active, maxactive=15):
+        if fixed is not None:
+            inds = np.arange(maxactive, len(fixed), maxactive)
+            blocks = np.array_split(fixed, inds)
+        blocks.append(active)
+
+        self.return_residual = True
+        self.pack_meta(blocks[0])
+        gpu_patch = self.send_to_gpu()
+        proposer = Proposer(self)
+        for i, block in enumerate(blocks[1:]):
+            # evaluate previous block
+            prop_fixed = self.scene.get_proposal()
+            out = proposer.evaluate_proposal(prop_fixed)
+            # pack this block
+            self.pack_meta(block)
+            # replace data on GPU with residual
+            # replace meta of previous block with this block
+            self.swap_on_gpu()
+        return proposer
+
+    def prepare_model(self, active=None, fixed=None, bounds=None,
+                      maxactive=15, shapes=None, model_kwargs={}):
         """Prepare the patch for model making
         """
-        if model_kwargs is None:
-            model_kwargs = {}
         if shapes is None:
             shapes = Galaxy.SHAPE_COLS
 
-        if fixed is not None:
-            cat = fixed
-        else:
-            cat = active
-
-        # --- Build the things
-        self.pack_meta(cat)
-        self.return_residual = True
-        gpu_patch = self.send_to_gpu()
-        proposer = Proposer(self)
-
-        # --- Get parameter vector and proposal
-        q = self.scene.get_all_source_params().copy()
-
-        # --- subtract fixed sources ---
-        if fixed is not None:
-            q_fixed = q
-            prop_fixed = self.scene.get_proposal()
-            out = proposer.evaluate_proposal(prop_fixed)
-            residual_fixed = out[-1]
-
-            self.pack_meta(active)
-            q = self.scene.get_all_source_params().copy()
-            self.swap_on_gpu()
-
+        proposer = self.subtract_fixed(fixed, active, maxactive=maxactive)
         proposer.patch.return_residual = False
+
         if bounds is None:
-            model = GPUPosterior(proposer, transform=Transform(len(q)), **model_kwargs)
+            model = GPUPosterior(proposer, transform=Transform(len(q)),
+                                 **model_kwargs)
         else:
-            lower, upper = bounds_vectors(bounds, self.bandlist, shapes=shapes,
-                                          reference_coordinates=self.patch_reference_coordinates)
-            model = GPUPosterior(proposer, lower=lower, upper=upper, **model_kwargs)
+            lo, hi = bounds_vectors(bounds, self.bandlist, shapes=shapes,
+                                    reference_coordinates=self.patch_reference_coordinates)
+            model = GPUPosterior(proposer, lower=lo, upper=hi, **model_kwargs)
 
         return model, q
 
