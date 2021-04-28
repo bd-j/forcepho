@@ -58,7 +58,7 @@ class SuperScene:
                  statefile="superscene.fits",                       # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
                  maxactive_per_patch=20, nscale=3,                  # patch boundaries
-                 boundary_radius=8., maxradius=5., minradius=1,     # patch boundaries
+                 boundary_radius=8., maxradius=6., minradius=1,     # patch boundaries
                  bounds_kwargs={}):
 
         self.statefilename = statefile

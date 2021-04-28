@@ -8,7 +8,7 @@ from ..stamp import scale_at_sky
 
 from ..proposal import Proposer
 from ..model import GPUPosterior, Transform
-from ..dispatcher import bounds_vectors
+from ..superscene import bounds_vectors
 
 from .storage import MetaStore, PixelStore, PSFStore
 from .storage import PSF_COLS

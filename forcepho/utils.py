@@ -110,9 +110,11 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
     that will hold the source parameters
     """
     nband = len(bands)
-    tags = ["id", "source_index", "is_active", "is_valid", "n_iter", "n_patch"]
+    tags = ["id", "source_index", "is_active", "is_valid",
+            "n_iter", "n_patch"]
 
     dt = [(t, np.int32) for t in tags]
+    dt += [("roi", np.float32)]
     dt += [(c, source_type)
            for c in Galaxy.SHAPE_COLS]
     dt += [(c, source_type)
