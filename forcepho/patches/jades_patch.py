@@ -64,6 +64,8 @@ class JadesPatch(Patch):
         if fixed is not None:
             inds = np.arange(maxactive, len(fixed), maxactive)
             blocks = np.array_split(fixed, inds)
+        else:
+            blocks = []
         blocks.append(active)
 
         self.return_residual = True
@@ -90,6 +92,7 @@ class JadesPatch(Patch):
 
         proposer = self.subtract_fixed(fixed, active, maxactive=maxactive)
         proposer.patch.return_residual = False
+        q = self.scene.get_all_source_params().copy()
 
         if bounds is None:
             model = GPUPosterior(proposer, transform=Transform(len(q)),
