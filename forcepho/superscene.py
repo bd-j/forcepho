@@ -99,7 +99,7 @@ class SuperScene:
 
     @property
     def undone(self):
-        return np.any(self.sourcecat["n_iter"] < self.target_niter)
+        return np.any(np.abs(self.sourcecat["n_iter"]) < self.target_niter)
 
     @property
     def parameter_columns(self):
@@ -459,8 +459,9 @@ class SuperScene:
 
     def exp_weight(self):
         # just one for inactive, zero if active
-        w = (~self.sourcecat["is_active"]).astype(np.float)
-        n = self.sourcecat["n_iter"]
+        w = (~self.sourcecat["is_valid"]).astype(np.float)
+        # multiply by exponential
+        n = np.abs(self.sourcecat["n_iter"])
         mu = min(n.min(), self.target_niter)
         sigma = 20
         w *= np.exp((n.mean() - n) / sigma)
@@ -614,13 +615,42 @@ class LinkedSuperScene(SuperScene):
 
         return region, active_inds, fixed_inds
 
-    def checkout_region(self, seed_index=-1):
+    def checkout_region(self, seed_index=-1, max_fixed=None):
+        """Checkout a region based on a particular or randomly drawn scene;
+        sources are added to the scene using a friends-of-friends algorithm.
+        The final region is centered on the mean ra and dec of the active
+        sources.
+
+        Parameters
+        ----------
+        seed_index : int, optional (default: -1)
+            If provided, grow the FoF scene using this source as the seed.
+            Otherwise draw a source at random (weighted by `self.seed_weight`)
+
+        max_fixed : int, optional
+            If provided, only the closest `max_fixed` sources will be used in
+            the fixed scene.  If not provided (default) then
+            `maxactive_per_patch` will be used
+
+        Returns
+        -------
+        region : a forcepho.regions.CircularRegion instance
+            A region object describing the sky coordinates of the patch.
+
+        active : structured ndarray
+            The `sourcecat` entries for the active sources.  Will be `None` if
+            the seed resulted in an invalid source.
+
+        fixed : structured ndarray
+            The sourcecat entries for the fixed sources in the scene.  Can be
+            `None` if there were no fixed sources within the minimum radius.
+        """
         if seed_index < 0:
             seed_index = np.random.choice(self.n_sources, p=self.seed_weight())
 
-        region, active_inds, fixed_inds = self.grow_scene(seed_index)
+        region, active_inds, fixed_inds = self.grow_scene(seed_index, max_fixed)
         if active_inds is None:
-            return region, None, None
+            return (region, seed_index), None, None
         if len(fixed_inds) == 0:
             fixed = None
         else:
@@ -666,6 +696,26 @@ class LinkedSuperScene(SuperScene):
         else:
             order = slice(None)
         return np.array(kinds)[overlaps][order]
+
+    def make_group_catalog(self):
+        """Compute and assign each source to a group using the
+        friends of friends algortihm.
+
+        Returns
+        -------
+        groupID : ndarray of shape (n_sources,)
+            The index of the FoF group to which the source belongs
+            (starting at zero)
+        """
+        groupID = np.zeros(self.n_sources) - 1
+        gind = 0
+        for i in range(self.n_sources):
+            if groupID[i] >= 0:
+                continue
+            assoc = self.grow_source(i)
+            groupID[assoc] = gind
+            gind += 1
+        return groupID
 
 
 def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
@@ -833,11 +883,4 @@ if __name__ == "__main__":
 
     sys.exit()
     # make a group catalog
-    groupID = np.zeros(sceneDB.n_sources) - 1
-    gind = 0
-    for i in range(len(raw)):
-        if groupID[i] >= 0:
-            continue
-        assoc = sceneDB.grow_source(i)
-        groupID[assoc] = gind
-        gind += 1
+    gid = sceneDB.make_group_catalog()
