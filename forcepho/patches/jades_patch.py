@@ -66,7 +66,8 @@ class JadesPatch(Patch):
             blocks = np.array_split(fixed, inds)
         else:
             blocks = []
-        blocks.append(active)
+        if active is not None:
+            blocks.append(active)
 
         self.return_residual = True
         self.pack_meta(blocks[0])
