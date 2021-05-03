@@ -86,9 +86,11 @@ class SuperScene:
     def __exit__(self, type, value, traceback):
         self.writeout()
 
-    def writeout(self):
-        fits.writeto(self.statefilename, self.sourcecat, overwrite=True)
-        with open(self.statefilename.replace(".fits", "_log.json"), "w") as fobj:
+    def writeout(self, filename=None):
+        if filename is None:
+            filename = self.statefilename
+        fits.writeto(filename, self.sourcecat, overwrite=True)
+        with open(filename.replace(".fits", "_log.json"), "w") as fobj:
             logs = dict(sourcelog=self.sourcelog, patchlog=self.patchlog)
             json.dump(logs, fobj)
 
@@ -783,7 +785,7 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
         try:
             sigma_flux = active["{}_unc".format(b)]
             lo, hi = (pm1[None, :] * n_sig_flux * sigma_flux[:, None]).T
-        except(ValueError):
+        except(ValueError, KeyError):
             #sigma_flux = np.sqrt(np.abs(active[b]))
             lo, hi = flux_bounds(active[b], n_sig_flux)
         bcat[b][:, 0] = lo

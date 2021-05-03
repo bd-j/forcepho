@@ -699,7 +699,7 @@ def optimize_fluxes(patcher, active, fixed=None, shape_cols=[], return_all=True)
         if fixedX is not None:
             fX = fixedX[i]
         flux, precision = optimize_one_band(X, w, y, fixedX=fX)
-        fluxes.append(np.squeeze(flux))
+        fluxes.append(np.atleast_1d(np.squeeze(flux)))
         precisions.append(precision)
         if return_all:
             model = np.dot(flux.T, X)
