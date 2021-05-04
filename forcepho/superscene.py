@@ -542,8 +542,9 @@ class LinkedSuperScene(SuperScene):
             members += seeds
             # find unique sub-sources that are not already members
             for s in seeds:
-                seed = self.sourcecat[s]
-                center = self.sky_to_scene(seed["ra"], seed["dec"])
+                #seed = self.original[s]
+                #center = self.sky_to_scene(seed["ra"], seed["dec"])
+                center = self.scene_coordinates[s]
                 branches = self.find_overlaps(center, self.roi[s])
                 buds = []
                 [buds.append(b) for b in branches if b not in leaves]
@@ -577,8 +578,9 @@ class LinkedSuperScene(SuperScene):
         fixed : structured ndarray
             The catalog of the fixed sources in the scene.
         """
-        seed = self.sourcecat[seed_index]
-        center = self.sky_to_scene(seed["ra"], seed["dec"])
+        seed = self.original[seed_index]
+        #center = self.sky_to_scene(seed["ra"], seed["dec"])
+        center = self.scene_coordinates[seed_index]
         candidates = self.find_overlaps(center, self.boundary_radius, sort=True)
         # check for active sources; if any exist, return None
         if np.any(self.sourcecat[candidates]["is_active"]):
