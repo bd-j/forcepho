@@ -123,7 +123,7 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
 
 
 def rectify_catalog(sourcecatfile, rhrange=(0.051, 0.29), qrange=(0.2, 0.99),
-                    rotate=False, reverse=False):
+                    rotate=False, reverse=False, sqrt_q=False):
     cat = fits.getdata(sourcecatfile)
     header = fits.getheader(sourcecatfile)
     bands = [b.strip() for b in header["FILTERS"].split(",")]
@@ -139,7 +139,9 @@ def rectify_catalog(sourcecatfile, rhrange=(0.051, 0.29), qrange=(0.2, 0.99),
 
     # --- Rectify shape columns ---
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhrange)
-    sourcecat["q"][:] = np.clip(np.sqrt(sourcecat["q"]), *qrange)
+    if sqrt_q:
+        sourcecat["q"][:] = np.sqrt(sourcecat["q"])
+    sourcecat["q"][:] = np.clip(sourcecat["q"], *qrange)
     # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
     if rotate:
         p = sourcecat["pa"] > 0

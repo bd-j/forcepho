@@ -307,7 +307,7 @@ class SuperScene:
         # update metadata
         self.sourcecat["n_iter"][active_inds] += niter
         self.sourcecat["is_active"][active_inds] = False
-        self.sourcecat["n_patch"][active_inds] += 1
+        self.sourcecat["n_patch"][active_inds] += int(niter > 0)
         self.sourcecat["is_valid"][active_inds] = True
         self.sourcecat["is_valid"][fixed_inds] = True
 

@@ -29,7 +29,7 @@ class Result(object):
         if filename:
             self.read_from_h5(filename)
             try:
-                self.reconstruct()
+                self._reconstruct()
             except:
                 pass
         for k, v in kwargs.items():
@@ -176,7 +176,7 @@ class Result(object):
             for k, v in f.attrs.items():
                 setattr(out, k, v)
 
-    def reconstruct(self):
+    def _reconstruct(self):
         self.bands = [b.decode("utf") for b in self.bandlist]
         self.shape_cols = [s.decode("utf") for s in self.shapenames]
         self.region = CircularRegion(self.ra, self.dec, self.radius)
@@ -184,13 +184,14 @@ class Result(object):
             self.chaincat = make_chaincat(self.chain, self.bands, self.active,
                                           self.reference_coordinates, shapes=self.shape_cols)
 
-
-    def show_chain(self, source_idx=0, bandlist=None, axes=None,
+    def show_chain(self, source_idx=0, bandlist=None, axes=None, show_shapes=True,
                    span=0.999999426697, post_kwargs=dict(alpha=0.5, color="royalblue"),
                    truth=None, truth_kwargs=dict(linestyle="--", color="tomato")):
         if bandlist is None:
             bandlist = self.bands
-        cols = bandlist + self.shape_cols
+        cols = bandlist
+        if show_shapes:
+            cols += self.shape_cols
         q = 100 * np.array([0.5 - 0.5 * span, 0.5 + 0.5 * span])
         for i, col in enumerate(cols):
             ax = axes.flat[i]
