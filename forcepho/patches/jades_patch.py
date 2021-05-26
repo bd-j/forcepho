@@ -18,6 +18,7 @@ JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
 
 # FIXME: make logic for scene setting and zerocoords more robust.
+# FIXME: Better logic for background offsets
 
 
 class JadesPatch(Patch):
@@ -59,6 +60,7 @@ class JadesPatch(Patch):
 
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
+        self.background_offsets = None
 
     def subtract_fixed(self, fixed, active, maxactive=15):
         if fixed is not None:
@@ -105,8 +107,8 @@ class JadesPatch(Patch):
 
         return model, q
 
-    def build_patch(self, region, sourcecat, allbands=JWST_BANDS):
-        """Given a ragion and a source catalog, this method finds and packs up
+    def build_patch(self, region, sourcecat, allbands=JWST_BANDS, tweak_background=False):
+        """Given a region and a source catalog, this method finds and packs up
         all the relevant meta- and pixel-data in a format suitable for transfer
         to the GPU
 
@@ -123,6 +125,12 @@ class JadesPatch(Patch):
         allbands : list of strings (optional)
             The names of the bands in the `flux` column of the source cat,
             corresponding to keys of the pixel and meta stores.
+
+        tweak_background : str, optional (default, empty string)
+            If given, collect exposure dependent backgrounds stored in the
+            the metadata header key given by this string.  If this header key
+            is not present, uses a value of 0.0.  These backgrounds are
+            subtracted during pixel packing.
         """
         # --- Find relevant exposures ---
         # The output lists are all of length n_exp and should all be in band
@@ -131,6 +139,12 @@ class JadesPatch(Patch):
         self.hdrs, self.wcses, self.epaths, self.bands = meta
         if len(self.epaths) == 0:
             raise ValueError("No exposures overlap the region")
+
+        if tweak_background:
+            self.background_offsets = [hdr.get(tweak_background, 0.0)
+                                       for hdr in self.hdrs]
+        else:
+            self.background_offsets = None
 
         # --- Get BAND information for the exposures ---
         # band_ids must be an int identifier (does not need to be contiguous)
@@ -358,12 +372,18 @@ class JadesPatch(Patch):
                 msg = "There were non-finite pixels in exposure {}".format(self.epaths[e])
                 assert np.all(np.isfinite(pixdat[0] * pixdat[1])), msg
 
+            # HACK: this could be cleaned up
+            if self.background_offsets is not None:
+                fluxes = pixdat[0] - self.background_offsets[e]
+            else:
+                fluxes = pixdat[0]
+
             if e > 0 and self.bands[e] != self.bands[e - 1]:
                 b += 1
             self.band_N[b] += 1
             self.exposure_start[e] = i
             self.exposure_N[e] = n_pix
-            data.append(pixdat[0])
+            data.append(fluxes)
             ierr.append(pixdat[1])
             xpix.append(pixdat[2])
             ypix.append(pixdat[3])
