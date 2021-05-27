@@ -233,8 +233,9 @@ def priors(scene, stamps, npix=2.0):
 
 
 def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
-            warmup=[10], trace=None, z_cov=None, progressbar=False,
-            random_seed=0xDEADBEEF, discard_tuned_samples=True):
+            warmup=[10], trace=None, z_cov=None, max_treedepth=10,
+            discard_tuned_samples=True, progressbar=False,
+            random_seed=0xDEADBEEF):
     """Use the littlemcmc barebones NUTS algorithm to sample from the
     posterior.
 
@@ -294,7 +295,8 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
     potential = get_pot(n_dim, adapt=adapt, full=full, weight=weight,
                         init_mean=start, init_cov=z_cov, trace=trace)
     step = NUTS(logp_dlogp_func=model.lnprob_and_grad,
-                model_ndim=n_dim, potential=potential)
+                model_ndim=n_dim, potential=potential,
+                max_treedepth=max_treedepth)
     trace, stats = sample_one(logp_dlogp_func=model.lnprob_and_grad,
                               model_ndim=n_dim, start=start, step=step,
                               draws=n_draws, tune=warmup[0],
