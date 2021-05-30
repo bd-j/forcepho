@@ -229,7 +229,7 @@ def do_parent(comm, config=None):
             # Check results back in
             for result in results:
                 sceneDB.checkin_region(result['final'], result['out'].fixed,
-                                       len(result['out'].chain),
+                                       config.sampling_draws,
                                        block_covs=result['covs'],
                                        taskID=taskid)
 

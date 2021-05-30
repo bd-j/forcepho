@@ -93,7 +93,7 @@ class Result(object):
         self.shapenames = shapenames
 
         # --- basic info ---
-        self.ncall = model.ncall
+        self.n_call = model.ncall
         self.npix = patch.npix
         self.nexp = len(patch.epaths)
         self.exposures = np.array(patch.epaths, dtype="S")
@@ -119,6 +119,8 @@ class Result(object):
                 self.cov = np.diag(step.potential._var.copy())
             if stats is not None:
                 self.stats = make_statscat(stats, step)
+                self.n_tune = np.sum(self.stats["tune"])
+                self.n_sample = len(self.stats) - self.n_tune
 
             n_param = len(bands) + len(shapenames)
             block_covs = extract_block_diag(self.cov, n_param)
@@ -208,30 +210,6 @@ class Result(object):
         return ax
 
 
-def priors(scene, stamps, npix=2.0):
-    # --------------------------------
-    # --- Priors ---
-    plate_scale = np.abs(np.linalg.eigvals(np.linalg.inv(stamps[0].dpix_dsky)))
-    rh_range = np.array(scene.sources[0].rh_range)
-    sersic_range = np.array(scene.sources[0].sersic_range)
-
-    lower = [s.nband * [0.] +
-             [s.ra - npix * plate_scale[0], s.dec - npix * plate_scale[1],
-              0.3, -np.pi / 1.5, sersic_range[0], rh_range[0]]
-             for s in scene.sources]
-    upper = [(np.array(s.flux) * 10).tolist() +
-             [s.ra + npix * plate_scale[0], s.dec + npix * plate_scale[1],
-              1.0, np.pi / 1.5, sersic_range[-1], rh_range[-1]]
-             for s in scene.sources]
-    upper = np.concatenate(upper)
-    lower = np.concatenate(lower)
-    fluxes = np.array([s.flux for s in scene.sources])
-    scales = np.concatenate([f.tolist() + [plate_scale[0], plate_scale[1], 0.1, 0.1, 0.1, 0.01]
-                             for f in fluxes])
-
-    return scales, lower, upper
-
-
 def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
             warmup=[10], trace=None, z_cov=None, max_treedepth=10,
             discard_tuned_samples=True, progressbar=False,
@@ -314,7 +292,7 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
     result.ndim = len(q)
     result.starting_position = q.copy()
     result.chain = chain
-    result.ncall = model.ncall
+    result.n_call = model.ncall
     result.wall_time = tsample
 
     return result, step, stats
@@ -435,6 +413,8 @@ def run_opt(model, q, jac=True, callback=None, **extras):
 
 def run_opt_bounded(model, q, jac=True, callback=None, **extras):
     """Simple L-BFGS-B optimization using scipy.optimize
+
+    tends not to work very well....
     """
     bounds = extras.pop("bounds", None)
     from scipy.optimize import minimize
@@ -477,7 +457,7 @@ def run_opt_bounded(model, q, jac=True, callback=None, **extras):
 
 
 def run_pymc3(model, q, lower=-np.inf, upper=np.inf,
-              priors=None, nwarm=2000, niter=1000):
+              nwarm=2000, niter=1000):
     """Run a pymc3 fit
     """
     import pymc3 as pm
