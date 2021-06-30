@@ -191,7 +191,7 @@ class StaticPatch(Patch):
             dtype = self.meta_dtype
 
         # number of sources in the patch
-        self.n_sources = miniscene.nactive
+        self.n_sources = miniscene.n_active
 
         # number of gaussians in the sersic
         # should be the same for all sources

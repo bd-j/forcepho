@@ -16,27 +16,27 @@ class PointSpreadFunction(object):
     """Gaussian Mixture approximation to a PSF. It has the following
     attributes:
 
-    * ngauss - INT, number of Gaussians in the mixture
-    * covariances - [NGAUSS, 2, 2] (units: pixels**2)
-    * means - [NGAUSS, 2] (units: pixels)
-    * amplitudes [NGAUSS] (units: total flux, should sum to 1.0)
+    * n_gauss - INT, number of Gaussians in the mixture
+    * covariances - [n_gauss, 2, 2] (units: pixels**2)
+    * means - [n_gauss, 2] (units: pixels)
+    * amplitudes [n_gauss] (units: total flux, should sum to 1.0)
     """
 
     def __init__(self, parameters=None, units='pixels'):
         if parameters is None:
-            self.ngauss = 1
-            self.covariances = np.array(self.ngauss * [[[1.,0.], [0., 1.]]])
-            self.means = np.zeros([self.ngauss, 2])
-            self.amplitudes = np.ones(self.ngauss)
+            self.n_gauss = 1
+            self.covariances = np.array(self.n_gauss * [[[1.,0.], [0., 1.]]])
+            self.means = np.zeros([self.n_gauss, 2])
+            self.amplitudes = np.ones(self.n_gauss)
         else:
             self.make_from_parameters(parameters)
 
         self.units = units
 
     def make_from_parameters(self, parameters):
-        """Make psf from a structured array of parameters, of length `ngauss`
+        """Make psf from a structured array of parameters, of length `n_gauss`
         """
-        self.ngauss = len(parameters)
+        self.n_gauss = len(parameters)
         cov = [np.array([[p["vxx"], p["vxy"]], [p["vxy"], p["vyy"]]])
                for p in parameters]
         self.covariances = np.array(cov)
@@ -49,11 +49,11 @@ class PointSpreadFunction(object):
 
         Returns
         -------
-        psf : list of tuples of length `ngauss`
+        psf : list of tuples of length `n_gauss`
             Each element of the list is a tuple of (a, x, y, cxx, cyy, cxy)
         """
         params = []
-        for i in range(self.ngauss):
+        for i in range(self.n_gauss):
             cov = self.covariances[i]
             cxx, cxy, cyy = cov[0, 0], cov[0, 1], cov[1, 1]
             amp = self.amplitudes[i]
@@ -63,7 +63,7 @@ class PointSpreadFunction(object):
 
 
 def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
-            ngauss=None, oversample=8, center=104):
+            n_gauss=None, oversample=8, center=104):
     """Given a filename and some other choices, try to build and return a PSF.
     This supercedes `make_psf` and can work with newstyle hdf5 PSF data.
 
@@ -75,9 +75,9 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
         solutions are found for a given PSF mixture by starting from different
         conditions)
 
-    :param ngauss, oversample, center:
+    :param n_gauss, oversample, center:
         Necessary parameters for oldstyle PSFs in pickle files, which are keyed
-        by `ngauss` and require knowledge of the central pixel and oversampling
+        by `n_gauss` and require knowledge of the central pixel and oversampling
         of the original PSF image.
 
     :param fwhm:
@@ -94,9 +94,9 @@ def get_psf(psfname=None, fwhm=1.0, psf_realization=0,
             with open(psfname, 'rb') as pf:
                 pdat = pickle.load(pf)
 
-            if ngauss is None:
-                ngauss = pdat.keys()[0]
-            answer = pdat[ngauss][psf_realization]
+            if n_gauss is None:
+                n_gauss = pdat.keys()[0]
+            answer = pdat[n_gauss][psf_realization]
             psf = make_psf(answer, oversample=oversample, center=center)
         # newstyle
         except:
@@ -119,7 +119,7 @@ def make_psf(answer, **kwargs):
     # Build the covariance matrices
     cov = [np.array([[xv, xyv], [xyv, yv]])
            for xv, yv, xyv in zip(vx, vy, vxy)]
-    psf.ngauss = len(x)
+    psf.n_gauss = len(x)
     psf.means = np.array([x, y]).T
     psf.amplitudes = amps
     psf.covariances = np.array(cov)
@@ -153,8 +153,8 @@ def params_to_gauss(answer, oversample=8, start=0, center=504):
         The amplitude of the gaussians
     """
     params = answer['fitted_params'].copy()
-    ngauss = len(params) / 6
-    params = params.reshape(int(ngauss), 6)
+    n_gauss = len(params) / 6
+    params = params.reshape(int(n_gauss), 6)
     # is this right?
     #TODO: work out zero index vs 0.5 index issues
     # need to flip x and y here

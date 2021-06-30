@@ -132,10 +132,10 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
         pmeans = psf.means
         pamps = psf.amplitudes
 
-    gig = GaussianImageGalaxy(source.ngauss, psf.ngauss,
+    gig = GaussianImageGalaxy(source.n_gauss, psf.n_gauss,
                               id=(source.id, stampid))
 
-    gig.gaussians = _convert_to_gaussians(source.ngauss, psf.ngauss,
+    gig.gaussians = _convert_to_gaussians(source.n_gauss, psf.n_gauss,
                                           scovar, pcovar,
                                           smean, samps, pmeans, pamps,
                                           flux)
@@ -147,7 +147,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
 
 
 @numba.njit
-def _convert_to_gaussians(source_ngauss, stamp_psf_ngauss, scovar, pcovar,
+def _convert_to_gaussians(source_n_gauss, stamp_psf_n_gauss, scovar, pcovar,
                           smean, samps, pmeans, pamps, flux):
     """This is a helper function to `convert_to_gaussians` that wraps the
     nested loops in a form suitable for compilation by numba.
@@ -155,9 +155,9 @@ def _convert_to_gaussians(source_ngauss, stamp_psf_ngauss, scovar, pcovar,
     # bootstrap the list, so numba knows what type it will be
     gaussians_out = [ImageGaussian()]
     # Loop over source profile Gaussians, then psf Gaussians
-    for i in range(source_ngauss):
+    for i in range(source_n_gauss):
         # scovar = np.matmul(T, np.matmul(source.covariances[i], T.T))
-        for j in range(stamp_psf_ngauss):
+        for j in range(stamp_psf_n_gauss):
             gauss = ImageGaussian()
             # is this needed or just debugging?
             # ifso need to add `id` field to jitclass
@@ -255,33 +255,33 @@ def get_gaussian_gradients(source, stamp, gig):
         pcovar = psf.covariances
         pamps = psf.amplitudes
 
-    derivs = _get_gaussian_gradients(source.ngauss, psf.ngauss,
+    derivs = _get_gaussian_gradients(source.n_gauss, psf.n_gauss,
                                      scovars, pcovar, samps, pamps,
                                      flux, G, T,
                                      dT_dq, dT_dpa, da_dn, da_dr, CW)
 
     # Unpack the results array returned by `_get_gaussian_gradients`
-    for i in range(source.ngauss):
-        for j in range(psf.ngauss):
-            gig.gaussians[i * psf.ngauss + j].derivs = derivs[i, j]
+    for i in range(source.n_gauss):
+        for j in range(psf.n_gauss):
+            gig.gaussians[i * psf.n_gauss + j].derivs = derivs[i, j]
 
     return gig
 
 
 @numba.njit
-def _get_gaussian_gradients(source_ngauss, stamp_psf_ngauss, scovars, pcovar,
+def _get_gaussian_gradients(source_n_gauss, stamp_psf_n_gauss, scovars, pcovar,
                             samps, pamps, flux, G, T,
                             dT_dq, dT_dpa, da_dn, da_dr, CW):
     """Wrap the core parts of `get_gaussian_gradients` in form suitable for
     numba.
     """
 
-    derivs = np.empty((source_ngauss, stamp_psf_ngauss, 7, 6))
+    derivs = np.empty((source_n_gauss, stamp_psf_n_gauss, 7, 6))
 
-    for i in range(source_ngauss):
+    for i in range(source_n_gauss):
         scovar = scovars[i]
         scovar_im = fast_dot_dot_2x2(T, scovar, T.T)
-        for j in range(stamp_psf_ngauss):
+        for j in range(stamp_psf_n_gauss):
             #gaussid = (source.id, stamp.id, i, j)
 
             # convolve the jth Source component with the ith PSF component
