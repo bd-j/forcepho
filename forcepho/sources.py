@@ -742,6 +742,22 @@ class Galaxy(Source):
             params = np.concatenate([params, [self.sersic, self.rhalf]])
         return params
 
+    def proposal(self):
+        """A parameter proposal in the form required for transfer to the GPU
+        """
+        self.proposal_struct["fluxes"][0, :self.n_bands] = self.flux
+        self.proposal_struct["ra"] = self.ra
+        self.proposal_struct["dec"] = self.dec
+        self.proposal_struct["q"] = self.q
+        self.proposal_struct["pa"] = self.pa
+        self.proposal_struct["nsersic"] = self.sersic
+        self.proposal_struct["rh"] = self.rhalf
+        self.proposal_struct["mixture_amplitudes"][0, :self.n_gauss] = self.amplitudes
+        self.proposal_struct["damplitude_drh"][0, :self.n_gauss] = self.damplitude_drh
+        self.proposal_struct["damplitude_dnsersic"][0, :self.n_gauss] = self.damplitude_dsersic
+
+        return self.proposal_struct
+
     def initialize_splines(self, splinedata, spline_smoothing=None):
         """Initialize Bivariate Splines used to interpolate and get derivatives
         for gaussian amplitudes as a function of sersic and rhalf
@@ -775,23 +791,6 @@ class Galaxy(Source):
         """
         return np.squeeze(np.array([spline(self.sersic, self.rhalf)
                                     for spline in self.splines]))
-
-    def proposal(self):
-        """A parameter proposal in the form required for transfer to the GPU
-        """
-        self.proposal_struct["fluxes"][0, :self.n_bands] = self.flux
-        self.proposal_struct["ra"] = self.ra
-        self.proposal_struct["dec"] = self.dec
-        self.proposal_struct["q"] = self.q
-        self.proposal_struct["pa"] = self.pa
-        self.proposal_struct["nsersic"] = self.sersic
-        self.proposal_struct["rh"] = self.rhalf
-        self.proposal_struct["mixture_amplitudes"][0, :self.n_gauss] = self.amplitudes
-        self.proposal_struct["damplitude_drh"][0, :self.n_gauss] = self.damplitude_drh
-        self.proposal_struct["damplitude_dnsersic"][0, :self.n_gauss] = self.damplitude_dsersic
-
-        return self.proposal_struct
-
 
     @property
     def damplitude_dsersic(self):
