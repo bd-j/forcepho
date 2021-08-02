@@ -854,19 +854,22 @@ def kron_radius(rhalf, sersic, rmax=None):
     return r_kron
 
 
-def I_eff(lum, radius, rhalf, sersic=1):
+def I_eff(lum, rhalf, flux_radius=None, sersic=1):
     """gamma(2n, b_n) = 1/2; b_n = (re / r0)**(1/n)
     """
-    k = gammaincinv(2 * sersic, 0.5)
-    x = k * (radius / rhalf)**(1. / sersic)
-    f = gammainc(2 * sersic, x) * gamma(2 * sersic)
-    conv = k**(2*sersic) / (sersic * np.exp(k)) / f
+    two_n = 2 * sersic
+    k = gammaincinv(two_n, 0.5)
+    f =  gamma(two_n)
+    if flux_radius is not None:
+        x = k * (flux_radius / rhalf)**(1. / sersic)
+        f *= gammainc(two_n, x)
+    conv = k**(two_n) / (sersic * np.exp(k)) / f
     Ie = lum * conv / (2 * np.pi * rhalf**2)
     return Ie
 
 
-def isophotal_radius(iso, flux, radius, r_half, sersic=1):
-    Ie = I_eff(flux, radius, r_half, sersic=sersic)
+def isophotal_radius(iso, flux, r_half, flux_radius=None, sersic=1):
+    Ie = I_eff(flux, r_half, flux_radius=flux_radius, sersic=sersic)
     k = gammaincinv(2 * sersic, 0.5)
     r_iso = (1 - np.log(iso / Ie) / k)**(sersic)
 
