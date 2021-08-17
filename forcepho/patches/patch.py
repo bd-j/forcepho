@@ -171,8 +171,8 @@ class Patch:
         # But, the number of Gaussians per source is constant within a band.
         psf_dtype = np.dtype([('gauss_params', self.meta_dtype, 6),
                               ('sersic_bin', np.int32)])
-        self.n_psf_per_source = np.empty(n_bands, dtype=np.int32)
-        n_psfgauss = self.n_psf_per_source * self.band_N * n_sources
+        self.n_psf_per_source = np.zeros(n_bands, dtype=np.int32)
+        n_psfgauss = (self.n_psf_per_source * self.band_N * n_sources).sum()
         self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
         self.psfgauss_start = np.zeros(n_exp, dtype=np.int32)
 
