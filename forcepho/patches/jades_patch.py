@@ -62,29 +62,46 @@ class JadesPatch(Patch):
         self.wcs_origin = 0
         self.background_offsets = None
 
-    def subtract_fixed(self, fixed, active, maxactive=15):
+    def subtract_fixed(self, fixed, active, maxactive=15, **scene_kwargs):
+        """Subtract a set of fixed sources from the data on the GPU.
+
+        Leaves the GPU-side *data* array filled with "residuals" from
+        subtracting the fixed sources, and either the last set of fixed sources
+        or the active sources (if supplied) in the GPU-side meta data arrays.
+        Optionally also fill the CPU-side data array with these residuals
+        """
         if fixed is not None:
             inds = np.arange(maxactive, len(fixed), maxactive)
             blocks = np.array_split(fixed, inds)
         else:
             blocks = []
+
         if active is not None:
             blocks.append(active)
+        else:
+            blocks.append(blocks[-1])
+
+        proposer = Proposer()
 
         self.return_residual = True
-        self.pack_meta(blocks[0])
-        gpu_patch = self.send_to_gpu()
-        proposer = Proposer(self)
+        scene = self.set_scene(blocks[0], **scene_kwargs)
+        self.pack_meta(scene)
+        # FIXME: we don't want to do this if we've already subtracted something
+        # on the GPU, as this sends the original data again!
+        # Perhaps add option at end to swap on CPU as well
+        _ = self.send_to_gpu()
         for i, block in enumerate(blocks[1:]):
             # evaluate previous block
-            prop_fixed = self.scene.get_proposal()
-            out = proposer.evaluate_proposal(prop_fixed)
-            # pack this block
-            self.pack_meta(block)
+            proposal = scene.get_proposal()
+            out = proposer.evaluate_proposal(proposal, patch=self)
+            # make scene and pack this block
+            scene = self.set_scene(block, **scene_kwargs)
+            self.pack_meta(scene)
             # replace data on GPU with residual
             # replace meta of previous block with this block
             self.swap_on_gpu()
-        return proposer
+
+        return proposer, scene
 
     def prepare_model(self, active=None, fixed=None, bounds=None,
                       maxactive=15, shapes=None, model_kwargs={}):
@@ -93,24 +110,25 @@ class JadesPatch(Patch):
         if shapes is None:
             shapes = Galaxy.SHAPE_COLS
 
-        proposer = self.subtract_fixed(fixed, active, maxactive=maxactive)
-        proposer.patch.return_residual = False
-        q = self.scene.get_all_source_params().copy()
+        proposer, scene = self.subtract_fixed(fixed, active, maxactive=maxactive)
+        self.return_residual = False
+        q = scene.get_all_source_params().copy()
 
         if bounds is None:
-            model = GPUPosterior(proposer, transform=Transform(len(q)),
-                                 **model_kwargs)
+            model = GPUPosterior(proposer, scene=scene, patch=self,
+                                 transform=Transform(len(q)), **model_kwargs)
         else:
             lo, hi = bounds_vectors(bounds, self.bandlist, shapes=shapes,
                                     reference_coordinates=self.patch_reference_coordinates)
-            model = GPUPosterior(proposer, lower=lo, upper=hi, **model_kwargs)
+            model = GPUPosterior(proposer, scene=scene, patch=self,
+                                 lower=lo, upper=hi, **model_kwargs)
 
         return model, q
 
-    def build_patch(self, region, sourcecat, allbands=JWST_BANDS, tweak_background=False):
-        """Given a region and a source catalog, this method finds and packs up
-        all the relevant meta- and pixel-data in a format suitable for transfer
-        to the GPU
+    def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS, tweak_background=False):
+        """Given a region this method finds and packs up all the relevant
+        pixel-data in a format suitable for transfer to the GPU.  Optionally
+        pack up metadata if a source catalog is provided.
 
         Parameters
         ---------
@@ -159,11 +177,12 @@ class JadesPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        if sourcecat is not None:
-            self.pack_meta(sourcecat)
         self.pack_pix(region)
+        if sourcecat is not None:
+            scene = self.set_scene(sourcecat)
+            self.pack_meta(scene)
 
-    def pack_meta(self, sourcecat):
+    def pack_meta(self, scene):
         """This method packs all the exposure and source metadata.  Most of
         this data is scene/source dependent, so in this way we can change the
         scene without repacking the pixel data.  This requires the following
@@ -183,19 +202,17 @@ class JadesPatch(Patch):
             to the forcepho native parameter names, with fluxes for each band in
             their own column.
         """
-        # --- Set the scene ---
-        # build scene from catalog
-        self.scene = self.set_scene(sourcecat)
         # Set a reference coordinate near center of scene;
         # Subtract this from source coordinates
-        self.patch_reference_coordinates = self.zerocoords(self.scene)
+        self.patch_reference_coordinates = self.zerocoords(scene)
         # Cache number of sources
-        self.n_sources = len(self.scene.sources)
+        self.n_sources = len(scene.sources)
 
-        self._pack_source_metadata(self.scene)
-        self._pack_astrometry(self.wcses, self.scene)
+        self._pack_source_metadata(scene)
+        self._pack_astrometry(self.wcses, scene)
         self._pack_fluxcal(self.hdrs)
-        self._pack_psf(self.bands, self.wcses, self.scene)
+        self._pack_psf(self.bands, self.wcses, scene)
+        self.scene = scene  # not really necessary
 
     def _pack_source_metadata(self, scene, dtype=None):
         """We don't actually pack sources in the Patch; that happens
@@ -493,7 +510,7 @@ class JadesPatch(Patch):
 
         return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
-    def set_scene(self, sourcecat):
+    def set_scene(self, sourcecat, splinedata=None):
         """Build a scene made of sources with the appropriate filters using
 
         Parameters
@@ -509,8 +526,10 @@ class JadesPatch(Patch):
         -------
         scene : An instance of sources.Scene
         """
+        if splinedata is None:
+            splinedata = self.splinedata
         scene = Scene(catalog=sourcecat, filternames=self.bandlist,
-                      source_type=Galaxy, splinedata=self.splinedata)
+                      source_type=Galaxy, splinedata=splinedata)
         #scene.from_catalog(sourcecat,)
         return scene
 

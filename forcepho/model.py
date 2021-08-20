@@ -261,10 +261,16 @@ class Posterior:
 class GPUPosterior(Posterior):
 
     """A Posterior subclass that uses a GPU to evaluate the likelihood
-    and its gradients.
+    and its gradients.  Key ingredients are:
+    * `lnprior`
+    * `scene`
+    * `transform`
+    * `proposer`
+    * `patch`
     """
 
-    def __init__(self, proposer, scene=None, lnprior=None, transform=None,
+    def __init__(self, proposer, patch,
+                 scene=None, lnprior=None, transform=None,
                  name="", print_interval=1000, verbose=False, debug=False,
                  logging=False, sampling=True, **kwargs):
 
@@ -272,7 +278,8 @@ class GPUPosterior(Posterior):
 
         # --- Assign ingredients ---
         self.proposer = proposer
-        self.scene = scene if scene else proposer.patch.scene
+        self.patch = patch
+        self.scene = scene if scene else self.patch.scene
         self._lnpriorfn = lnprior
 
         # --- initialize some things ---
@@ -314,7 +321,7 @@ class GPUPosterior(Posterior):
             print(proposal["fluxes"])
 
         # --- send to gpu and collect result ---
-        ret = self.proposer.evaluate_proposal(proposal)
+        ret = self.proposer.evaluate_proposal(proposal, patch=self.patch)
         if len(ret) == 3:
             chi2, chi2_derivs, self._residuals = ret
         else:
@@ -368,8 +375,8 @@ class GPUPosterior(Posterior):
         Final output should be [flux11, flux12, ..., flux1Nb, ra1, dec1, ..., rh1,
                                 flux21, flux22, ..., flux2Nb, ra2, dec2, ..., rh2]
         """
-        nsources = self.proposer.patch.n_sources
-        nbands = self.proposer.patch.n_bands
+        nsources = self.patch.n_sources
+        nbands = self.patch.n_bands
         grads = np.zeros([nsources, nbands + (NPARAMS-1)], dtype=np.float64)
         for band, derivs in enumerate(chi2_derivs):
             # shape params
@@ -389,13 +396,13 @@ class GPUPosterior(Posterior):
         q : ndarray
             The parameters in the *constrained* space
         """
-        orig = self.proposer.patch.return_residual
-        self.proposer.patch.return_residual = True
+        orig = self.patch.return_residual
+        self.patch.return_residual = True
         self.scene.set_all_source_params(q)
         proposal = self.scene.get_proposal()
-        ret = self.proposer.evaluate_proposal(proposal, unpack=unpack)
+        ret = self.proposer.evaluate_proposal(proposal, patch=self.patch, unpack=unpack)
         _, _, self._residuals = ret
-        self.proposer.patch.return_residual = orig
+        self.patch.return_residual = orig
 
         return self._residuals
 

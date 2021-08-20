@@ -272,6 +272,14 @@ class Patch:
 
         return self.gpu_patch
 
+    def retrieve_array(self, arrname="residual"):
+        """Retrieve an array from the GPU
+        """
+        flatdata = cuda.from_device(self.cuda_ptrs[arrname],
+                                    shape=self.xpix.shape,
+                                    dtype=self.pix_dtype)
+        return flatdata
+
     @property
     def size(self):
         s = 0
