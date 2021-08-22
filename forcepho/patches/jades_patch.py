@@ -62,7 +62,7 @@ class JadesPatch(Patch):
         self.wcs_origin = 0
         self.background_offsets = None
 
-    def subtract_fixed(self, fixed, active, maxactive=15, **scene_kwargs):
+    def subtract_fixed(self, fixed, active=None, maxactive=15, **scene_kwargs):
         """Subtract a set of fixed sources from the data on the GPU.
 
         Leaves the GPU-side *data* array filled with "residuals" from
