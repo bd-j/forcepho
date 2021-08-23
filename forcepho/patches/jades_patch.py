@@ -52,6 +52,7 @@ class JadesPatch(Patch):
         self.meta_dtype = meta_dtype
         self.pix_dtype = pix_dtype
         self.return_residual = return_residual
+        self._dirty_data = False
 
         self.metastore = MetaStore(metastore)
         self.psfstore = PSFStore(psfstore)
@@ -62,44 +63,57 @@ class JadesPatch(Patch):
         self.wcs_origin = 0
         self.background_offsets = None
 
-    def subtract_fixed(self, fixed, active=None, maxactive=15, **scene_kwargs):
-        """Subtract a set of fixed sources from the data on the GPU.
+    def subtract_fixed(self, fixed, active=None, big=None, maxactive=15,
+                       swap_on_cpu=False, big_scene_kwargs={}, **scene_kwargs):
+        """Subtract a set of big and/or fixed sources from the data on the GPU.
 
         Leaves the GPU-side *data* array filled with "residuals" from
         subtracting the fixed sources, and either the last set of fixed sources
         or the active sources (if supplied) in the GPU-side meta data arrays.
         Optionally also fill the CPU-side data array with these residuals
         """
+        scenes = []
+
+        if big is not None:
+            inds = np.arange(maxactive, len(big), maxactive)
+            blocks = np.array_split(big, inds)
+            scenes.extend([self.set_scene(block, **big_scene_kwargs) for block in blocks])
         if fixed is not None:
             inds = np.arange(maxactive, len(fixed), maxactive)
             blocks = np.array_split(fixed, inds)
-        else:
-            blocks = []
-
+            scenes.extend([self.set_scene(block, **scene_kwargs) for block in blocks])
         if active is not None:
-            blocks.append(active)
+            scenes.append(self.set_scene(active, **scene_kwargs))
         else:
-            blocks.append(blocks[-1])
+            print("Warning: The meta-data will be for a scene already subtracted from the GPU-side data array!")
+            assert swap_on_cpu
+            scenes.append(scenes[-1])
 
         proposer = Proposer()
 
         self.return_residual = True
-        scene = self.set_scene(blocks[0], **scene_kwargs)
-        self.pack_meta(scene)
-        # FIXME: we don't want to do this if we've already subtracted something
-        # on the GPU, as this sends the original data again!
-        # Perhaps add option at end to swap on CPU as well
+        self.pack_meta(scenes[0])
+        assert not self._dirty_data
         _ = self.send_to_gpu()
-        for i, block in enumerate(blocks[1:]):
-            # evaluate previous block
+        for i, scene in enumerate(scenes[1:]):
+            # evaluate previous scene
             proposal = scene.get_proposal()
             out = proposer.evaluate_proposal(proposal, patch=self)
-            # make scene and pack this block
-            scene = self.set_scene(block, **scene_kwargs)
+            # pack this scene
             self.pack_meta(scene)
             # replace data on GPU with residual
             # replace meta of previous block with this block
             self.swap_on_gpu()
+            # data array on GPU no longer matches self.data
+            self._dirty_data = True
+
+        if swap_on_cpu:
+            # replace the CPU side pixel data array with the final residual
+            # after subtracting all blocks except the last.  This makes
+            # 'send_to_gpu' safe to use without overwriting all the source
+            # subtraction we've done to this point
+            self.data = self.retrieve_array("data")
+            self._dirty_data = False
 
         return proposer, scene
 

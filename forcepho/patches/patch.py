@@ -220,7 +220,7 @@ class Patch:
 
         After this call the GPU uses the former "residual" vector as the "data"
         """
-        assert "residual" in self.cuda_ptrs
+        assert "residual" in self.cuda_ptrs, "Must instantiate the Patch with `return_residual=True`"
         # Replace the metadata on the GPU, as well as the Cuda pointers
         # This releases the device side arrays corresponding to old metadata
         for arrname in self.meta_names:
@@ -273,7 +273,7 @@ class Patch:
         return self.gpu_patch
 
     def retrieve_array(self, arrname="residual"):
-        """Retrieve an array from the GPU
+        """Retrieve a pixel array from the GPU
         """
         flatdata = cuda.from_device(self.cuda_ptrs[arrname],
                                     shape=self.xpix.shape,
