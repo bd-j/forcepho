@@ -270,7 +270,7 @@ def do_child(comm, config=None):
         # do a blocking receive
         task = comm.recv(source=parent, tag=MPI.ANY_TAG,
                          status=status)
-        logger.info(f'Received task id {status.tag}')
+        logger.info(f'Child {rank} received task id {status.tag}')
         # if shutdown break and quit
         if task is None:
             logger.info(f"Child {rank} shutting down.")
@@ -283,7 +283,7 @@ def do_child(comm, config=None):
         del task
 
         taskid = status.tag
-        logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
+        logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec}")
 
         # --- get pixel data and metadata, subtract fixed sources, build model ---
         patcher.build_patch(region, None, allbands=bands)

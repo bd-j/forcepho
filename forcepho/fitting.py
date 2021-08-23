@@ -51,7 +51,7 @@ class Result(object):
             The fixed sources and their parameters.
 
         model : a model.PosteriorModel object
-            Must contain `proposer.patch` and `scene` attributes
+            Must contain `patch` and `scene` attributes
 
         bounds : optional
             If given, a structured ndarrray of lower and upper bounds for
@@ -79,7 +79,7 @@ class Result(object):
             is no longer valid (or must be retransformed)
         """
         # shortcuts
-        patch = model.proposer.patch
+        patch = model.patch
         scene = model.scene
         bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
         shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="S")
