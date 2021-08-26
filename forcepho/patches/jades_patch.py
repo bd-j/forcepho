@@ -72,8 +72,10 @@ class JadesPatch(Patch):
         or the active sources (if supplied) in the GPU-side meta data arrays.
         Optionally also fill the CPU-side data array with these residuals
         """
+        # Build all the scenes we want to evaluate and subtract. The last scene
+        # will not actually be subtracted, but will have meta data transferred
+        # to GPU and ready to accept proposals.
         scenes = []
-
         if big is not None:
             inds = np.arange(maxactive, len(big), maxactive)
             blocks = np.array_split(big, inds)
@@ -89,12 +91,15 @@ class JadesPatch(Patch):
             assert swap_on_cpu
             scenes.append(scenes[-1])
 
+        # to communicate with the GPU
         proposer = Proposer()
 
+        # Pack first scene and send it with pixel data
         self.return_residual = True
-        self.pack_meta(scenes[0])
         assert not self._dirty_data
+        self.pack_meta(scenes[0])
         _ = self.send_to_gpu()
+        # loop over scenes
         for i, scene in enumerate(scenes[1:]):
             # evaluate previous scene
             proposal = scene.get_proposal()
@@ -112,6 +117,7 @@ class JadesPatch(Patch):
             # after subtracting all blocks except the last.  This makes
             # 'send_to_gpu' safe to use without overwriting all the source
             # subtraction we've done to this point
+            # TODO: do we need to use data[:] here?
             self.data = self.retrieve_array("data")
             self._dirty_data = False
 

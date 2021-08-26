@@ -690,8 +690,7 @@ class LinkedSuperScene(SuperScene):
             The indices of the sources that overlap, optionally sorted
             in order of distance from the center
         """
-        #FIXME: boundary radius is not correct usage here.
-        kinds = self.kdt.query_ball_point(center, self.boundary_radius)
+        kinds = self.kdt.query_ball_point(center, radius + self.boundary_radius)
         d = self.scene_coordinates[kinds] - center
         metric = np.hypot(*d.T) / (radius + self.roi[kinds])
         overlaps = (metric < 1) & (metric > 0)
@@ -700,6 +699,23 @@ class LinkedSuperScene(SuperScene):
         else:
             order = slice(None)
         return np.array(kinds)[overlaps][order]
+
+    def overlap_circle(self, ra, dec, radius):
+        """Get all sources with an roi that overlaps the given circle on the
+        sky.
+
+        Parameters
+        ----------
+        ra : float, degrees
+
+        dec : degrees
+
+        radius : circle radius in scene units, usually arcseconds (see
+                 `sky_to_scene()` for details)
+        """
+        center = self.sky_to_scene(ra, dec)
+        overlaps = self.find_overlaps(center, radius)
+        return self.sourcecat[overlaps]
 
     def make_group_catalog(self):
         """Compute and assign each source to a group using the
