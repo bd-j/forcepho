@@ -31,12 +31,11 @@ class Proposer:
     It may also manage pinned memory in a future version.
     """
 
-    def __init__(self, patch, thread_block=1024, shared_size=48000,
+    def __init__(self, patch=None, thread_block=1024, shared_size=48000,
                  max_registers=64, show_ptxas=False, debug=False,
                  kernel_name='EvaluateProposal', chi_dtype=np.float64,
                  kernel_fn='compute_gaussians_kernel.cu'):
 
-        self.grid = (patch.n_bands, 1)
         self.block = (thread_block, 1, 1)
         self.shared_size = shared_size
         self.chi_dtype = chi_dtype
@@ -66,7 +65,7 @@ class Proposer:
                            options=options, no_extern_c=True)
         self.evaluate_proposal_kernel = mod.get_function(kernel_name)
 
-    def evaluate_proposal(self, proposal, verbose=False, unpack=True):
+    def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
         """Call the GPU kernel to evaluate the likelihood of a parameter proposal.
 
         Parameters
@@ -88,10 +87,14 @@ class Proposer:
             The residual image (data - model) for each exposure.  No padding.
             Only returned if patch.return_residual.
         """
+        if patch is None:
+            patch = self.patch
 
-        chi_out = np.empty(self.patch.n_bands, dtype=self.chi_dtype)
-        chi_derivs_out = np.empty(self.patch.n_bands,
-                                  dtype=response_struct_dtype)
+        n_bands, n_sources = patch.n_bands, patch.n_sources
+        self.grid = (n_bands, 1)
+
+        chi_out = np.empty(n_bands, dtype=self.chi_dtype)
+        chi_derivs_out = np.empty(n_bands, dtype=response_struct_dtype)
 
         if verbose:
             msg = "Launching with grid {}, block {}, shared {}"
@@ -99,37 +102,31 @@ class Proposer:
             print(msg, file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
-        self.evaluate_proposal_kernel(self.patch.gpu_patch, cuda.In(proposal),     # inputs
+        self.evaluate_proposal_kernel(patch.gpu_patch, cuda.In(proposal),     # inputs
                                       cuda.Out(chi_out), cuda.Out(chi_derivs_out), # outputs
                                       grid=self.grid, block=self.block,            # launch config
                                       shared=self.shared_size)
 
         # Reshape the output
-        vshape = self.patch.n_bands, MAXSOURCES, NPARAMS
+        vshape = patch.n_bands, MAXSOURCES, NPARAMS
         chi_derivs_out = chi_derivs_out.view(np.float32).reshape(vshape)
-        chi_derivs_out = chi_derivs_out[:, :self.patch.n_sources]
+        chi_derivs_out = chi_derivs_out[:, :n_sources]
 
         # Unpack residuals
-        if self.patch.return_residual:
-            residuals = self.retrieve_array("residual")
+        if patch.return_residual:
+            residuals = patch.retrieve_array("residual")
             if unpack:
-                residuals = self.unpack_residuals(residuals)
+                residuals = self.unpack_residuals(residuals, patch)
 
-        if self.patch.return_residual:
+        if patch.return_residual:
             return chi_out, chi_derivs_out, residuals
         else:
             return chi_out, chi_derivs_out
 
-    def retrieve_array(self, arrname):
-        flatdata = cuda.from_device(self.patch.cuda_ptrs[arrname],
-                                    shape=self.patch.xpix.shape,
-                                    dtype=self.patch.pix_dtype)
-        return flatdata
-
-    def unpack_residuals(self, residuals_flat, reshape=False):
+    def unpack_residuals(self, residuals_flat, patch, reshape=False):
         """Unpack flat, padded residuals into original images
         """
-        residuals = np.split(residuals_flat, np.cumsum(self.patch.exposure_N)[:-1])
+        residuals = np.split(residuals_flat, np.cumsum(patch.exposure_N)[:-1])
 
         # This tries to reshape the residuals into square stamps after removing
         # padding, if that's how the data was originally packed.  Otherwise, one
@@ -137,8 +134,8 @@ class Proposer:
         # be able to reconstruct an image
         if reshape:
             for e, residual in enumerate(residuals):
-                residual = residual[:self.patch.original_sizes[e]]
-                residuals[e] = residual.reshape(self.patch.original_shapes[e])
+                residual = residual[:patch.original_sizes[e]]
+                residuals[e] = residual.reshape(patch.original_shapes[e])
 
         return residuals
 

@@ -122,7 +122,7 @@ class Reconstructor:
         # --- pack parameters and send to gpu ---
         self.patcher.pack_meta(parameters)
         gpu_patch = self.patcher.send_to_gpu()
-        proposer = Proposer(self.patcher)
+        proposer = Proposer(patch=self.patcher)
         proposal = self.patcher.scene.get_proposal()
         q = self.patcher.scene.get_all_source_params().copy()
 

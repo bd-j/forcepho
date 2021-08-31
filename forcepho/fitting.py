@@ -51,7 +51,7 @@ class Result(object):
             The fixed sources and their parameters.
 
         model : a model.PosteriorModel object
-            Must contain `proposer.patch` and `scene` attributes
+            Must contain `patch` and `scene` attributes
 
         bounds : optional
             If given, a structured ndarrray of lower and upper bounds for
@@ -79,7 +79,7 @@ class Result(object):
             is no longer valid (or must be retransformed)
         """
         # shortcuts
-        patch = model.proposer.patch
+        patch = model.patch
         scene = model.scene
         bands = np.array(patch.bandlist, dtype="S")  # Bands actually present in patch
         shapenames = np.array(scene.sources[0].SHAPE_COLS, dtype="S")
@@ -368,13 +368,12 @@ def get_pot(n_dim, init_mean=None, init_cov=None, trace=None,
     return potential
 
 
-
 def run_opt(model, q, jac=True, callback=None, **extras):
     """Simple BFGS optimization using scipy.optimize
     """
     from scipy.optimize import minimize
-#    opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
-#            'disp':True, 'iprint': 1, 'maxcor': 20}
+    #opts = {'ftol': 1e-5, 'gtol': 1e-5, 'factr': 10.,
+    #        'disp':True, 'iprint': 1, 'maxcor': 20}
     opts = {}
     opts.update(**extras)
 

@@ -114,6 +114,25 @@ class LogUniform(LogPrior):
     pass
 
 
+class TruncatedCauchy(LogPrior):
+
+    def sample(self, loc=0, scale=1, a=-1, b=1, size=None):
+        """
+        Generate random samples from a truncated Cauchy distribution.
+
+        `loc` and `scale` are the location and scale parameters of the distribution.
+        `a` and `b` define the interval [a, b] to which the distribution is to be
+        limited.
+
+        With the default values of the parameters, the samples are generated
+        from the standard Cauchy distribution limited to the interval [-1, 1].
+        """
+        ua = np.arctan((a - loc)/scale)/np.pi + 0.5
+        ub = np.arctan((b - loc)/scale)/np.pi + 0.5
+        U = np.random.uniform(ua, ub, size=size)
+        rvs =  loc + scale * np.tan(np.pi*(U - 0.5))
+        return rvs
+
 
 def test_grad(pl, ptype=Barrier):
 

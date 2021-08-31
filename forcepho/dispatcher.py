@@ -18,8 +18,8 @@ import numpy as np
 from astropy.io import fits
 
 from .superscene import SuperScene, LinkedSuperScene
-from .fitting import run_lmc
 from .utils import rectify_catalog, read_config
+#from .child import sampling_task, optimization_task
 
 
 __all__ = ["MPIQueue",
@@ -252,17 +252,24 @@ def do_parent(comm, config=None):
 
 def do_child(comm, config=None):
     rank = comm.Get_rank()
-    global logger
-    logger = logging.getLogger(f'dispatcher-child-{rank}')
+    logger = logging.getLogger(f'child-{rank}')
     parent = 0
 
     # --- Patch Maker (gets reused between patches) ---
     from .patches import JadesPatch
     patcher = JadesPatch(metastore=config.metastorefile,
-                            psfstore=config.psfstorefile,
-                            pixelstore=config.pixelstorefile,
-                            splinedata=config.splinedatafile,
-                            return_residual=True)
+                         psfstore=config.psfstorefile,
+                         pixelstore=config.pixelstorefile,
+                         splinedata=config.splinedatafile,
+                         return_residual=True)
+
+    # --- What are we doing? ---
+    #if config.mode == "optimization":
+    #    work = optimization_task
+    #elif config.mode == "sampling":
+    #    work = sampling_task
+    #else:
+    work = dummy_work
 
     # --- Event Loop ---
     while True:
@@ -270,58 +277,24 @@ def do_child(comm, config=None):
         # do a blocking receive
         task = comm.recv(source=parent, tag=MPI.ANY_TAG,
                          status=status)
-        logger.info(f'Received task id {status.tag}')
+        logger.info(f'Child {rank} received task id {status.tag}')
         # if shutdown break and quit
         if task is None:
             logger.info(f"Child {rank} shutting down.")
             break
 
-        # To be explicit, let's unpack all the task variables here
-        region, active, fixed = task['region'], task['active'], task['fixed']
-        bounds, cov = task['bounds'], task['cov']
-        bands, shape_cols = task['bands'], task['shape_cols']
-        del task
-
-        taskid = status.tag
-        logger.info(f"Child {rank} received RA {region.ra}, DEC {region.dec} with tag {taskid}")
-
-        # --- get pixel data and metadata, subtract fixed sources, build model ---
-        patcher.build_patch(region, None, allbands=bands)
-        model, q = patcher.prepare_model(active=active, fixed=fixed, bounds=bounds,
-                                         shapes=shape_cols)
-        logger.info("Prepared patch and model")
-
-        # --- Sample using covariances--- (child)
-        weight = max(10, active["n_iter"].min())
-        logger.info(f"sampling with covariance weight={weight}")
-        out, step, stats = run_lmc(model, q.copy(), n_draws=config.sampling_draws, warmup=config.warmup,
-                                   z_cov=cov, full=config.full_cov, adapt=True,
-                                   weight=weight, progressbar=getattr(config, "progressbar", False))
-
-        # --- develop the payload ---
-        logger.info("Sampling complete, preparing output.")
-        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
-                               step=step, stats=stats, patchID=taskid)
-        payload = dict(out=out, final=final, covs=covs)
-
-        # --- write the output for this task ---
-        if config.patch_dir:
-            outfile = os.path.join(config.patch_dir, "task{}_results.h5".format(taskid))
-            os.makedirs(os.path.dirname(outfile), exist_ok=True)
-            logger.info("Writing to {}".format(outfile))
-            out.dump_to_h5(outfile)
-
+        answer = work(patcher, task, config, logger)
 
         # --- blocking send to parent, free GPU memory ---
-        comm.send(payload, parent, status.tag)
-        logger.info(f"Child {rank} sent {region.ra} for patch {taskid}")
+        comm.send(answer, parent, status.tag)
+        logger.info(f"Child {rank} sent answer for task id {status.tag}")
 
         patcher.free()
 
     del patcher
 
 
-def dummy_work(region, active, fixed):
+def dummy_work(patcher, task, config, logger):
     """Pretend to do work, but sleep for 1 second
 
     Returns
@@ -329,11 +302,12 @@ def dummy_work(region, active, fixed):
     result : Namespace() instance
         A simple namespace object with niter=75
     """
+    logger.info("Sleeping for a second")
     time.sleep(1)
     result = Namespace()
     result.niter = 75
-    result.active = active
-    result.fixed = fixed
+    result.active = task["active"]
+    result.fixed = task["fixed"]
     return result
 
 
