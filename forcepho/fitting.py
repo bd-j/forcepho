@@ -619,6 +619,7 @@ def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     """
     Xes = [np.zeros((len(active), n)) for n in patcher.band_N_pix]
 
+    patcher._dirty_data = False # reset since we don't care about the GPU side data array anymore
     if fixed is not None:
         model, q = patcher.prepare_model(fixed=fixed, active=fixed[-1:], shapes=shape_cols)
         m = patcher.data - model.residuals(q, unpack=False)
