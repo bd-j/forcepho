@@ -89,6 +89,7 @@ class Patch:
         self.pix_dtype = pix_dtype
         self.meta_dtype = meta_dtype
         self.return_residual = return_residual
+        self._dirty_data = True
 
     @property
     def npix(self):
@@ -206,6 +207,8 @@ class Patch:
 
         _ = self.send_patchstruct_to_gpu()
 
+        self._dirty_data = False
+
         return self.gpu_patch
 
     def swap_on_gpu(self):
@@ -237,6 +240,8 @@ class Patch:
         self.cuda_ptrs["data"], self.cuda_ptrs["residual"] = self.cuda_ptrs["residual"], self.cuda_ptrs["data"]
         # Pack pointers into structure and send structure to device
         _ = self.send_patchstruct_to_gpu()
+        self._dirty_data = True
+
         return self.gpu_patch
 
     def send_patchstruct_to_gpu(self):
