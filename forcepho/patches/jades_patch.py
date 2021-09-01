@@ -121,7 +121,7 @@ class JadesPatch(Patch):
             self.data = self.retrieve_array("data")
             self._dirty_data = False
 
-        return proposer, scene
+        return proposer, scenes[-1]
 
     def prepare_model(self, active=None, fixed=None, bounds=None,
                       maxactive=15, shapes=None, model_kwargs={}):
