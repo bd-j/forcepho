@@ -620,16 +620,14 @@ def design_matrix(patcher, active, fixed=None, shape_cols=[]):
     Xes = [np.zeros((len(active), n)) for n in patcher.band_N_pix]
 
     if fixed is not None:
-        model, q = patcher.prepare_model(fixed=fixed,
-                                         shapes=shape_cols)
+        model, q = patcher.prepare_model(fixed=fixed, active=fixed[-1:], shapes=shape_cols)
         m = patcher.data - model.residuals(q, unpack=False)
         fixedX = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
     else:
         fixedX = None
 
     for i, source in enumerate(active):
-        model, q = patcher.prepare_model(active=np.atleast_1d(source),
-                                         shapes=shape_cols)
+        model, q = patcher.prepare_model(active=np.atleast_1d(source), shapes=shape_cols)
         m = patcher.data - model.residuals(q, unpack=False)
         msplit = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
         for j, b in enumerate(patcher.bandlist):
