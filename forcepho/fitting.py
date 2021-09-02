@@ -193,7 +193,7 @@ class Result(object):
             bandlist = self.bands
         cols = bandlist
         if show_shapes:
-            cols += self.shape_cols
+            cols = cols + self.shape_cols
         q = 100 * np.array([0.5 - 0.5 * span, 0.5 + 0.5 * span])
         for i, col in enumerate(cols):
             ax = axes.flat[i]
