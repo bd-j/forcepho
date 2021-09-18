@@ -63,87 +63,6 @@ class JadesPatch(Patch):
         self.wcs_origin = 0
         self.background_offsets = None
 
-    def subtract_fixed(self, fixed, active=None, big=None, maxactive=15,
-                       swap_on_cpu=False, big_scene_kwargs={}, **scene_kwargs):
-        """Subtract a set of big and/or fixed sources from the data on the GPU.
-
-        Leaves the GPU-side *data* array filled with "residuals" from
-        subtracting the fixed sources, and either the last set of fixed sources
-        or the active sources (if supplied) in the GPU-side meta data arrays.
-        Optionally also fill the CPU-side data array with these residuals
-        """
-        # Build all the scenes we want to evaluate and subtract. The last scene
-        # will not actually be subtracted, but will have meta data transferred
-        # to GPU and ready to accept proposals.
-        scenes = []
-        if big is not None:
-            inds = np.arange(maxactive, len(big), maxactive)
-            blocks = np.array_split(big, inds)
-            scenes.extend([self.set_scene(block, **big_scene_kwargs) for block in blocks])
-        if fixed is not None:
-            inds = np.arange(maxactive, len(fixed), maxactive)
-            blocks = np.array_split(fixed, inds)
-            scenes.extend([self.set_scene(block, **scene_kwargs) for block in blocks])
-        if active is not None:
-            scenes.append(self.set_scene(active, **scene_kwargs))
-        else:
-            print("Warning: The meta-data will be for a scene already subtracted from the GPU-side data array!")
-            assert swap_on_cpu
-            scenes.append(scenes[-1])
-
-        # to communicate with the GPU
-        proposer = Proposer()
-
-        # Pack first scene and send it with pixel data
-        self.return_residual = True
-        assert not self._dirty_data
-        self.pack_meta(scenes[0])
-        _ = self.send_to_gpu()
-        # loop over scenes
-        for i, scene in enumerate(scenes[1:]):
-            # evaluate previous scene
-            proposal = scene.get_proposal()
-            out = proposer.evaluate_proposal(proposal, patch=self)
-            # pack this scene
-            self.pack_meta(scene)
-            # replace data on GPU with residual
-            # replace meta of previous block with this block
-            self.swap_on_gpu()
-            # data array on GPU no longer matches self.data
-            self._dirty_data = True
-
-        if swap_on_cpu:
-            # replace the CPU side pixel data array with the final residual
-            # after subtracting all blocks except the last.  This makes
-            # 'send_to_gpu' safe to use without overwriting all the source
-            # subtraction we've done to this point
-            # TODO: do we need to use data[:] here?
-            self.data = self.retrieve_array("data")
-            self._dirty_data = False
-
-        return proposer, scenes[-1]
-
-    def prepare_model(self, active=None, fixed=None, bounds=None,
-                      maxactive=15, shapes=None, model_kwargs={}):
-        """Prepare the patch for model making
-        """
-        if shapes is None:
-            shapes = Galaxy.SHAPE_COLS
-
-        proposer, scene = self.subtract_fixed(fixed, active, maxactive=maxactive)
-        self.return_residual = False
-        q = scene.get_all_source_params().copy()
-
-        if bounds is None:
-            model = GPUPosterior(proposer, scene=scene, patch=self,
-                                 transform=Transform(len(q)), **model_kwargs)
-        else:
-            lo, hi = bounds_vectors(bounds, self.bandlist, shapes=shapes,
-                                    reference_coordinates=self.patch_reference_coordinates)
-            model = GPUPosterior(proposer, scene=scene, patch=self,
-                                 lower=lo, upper=hi, **model_kwargs)
-
-        return model, q
 
     def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS, tweak_background=False):
         """Given a region this method finds and packs up all the relevant
@@ -201,6 +120,178 @@ class JadesPatch(Patch):
         if sourcecat is not None:
             scene = self.set_scene(sourcecat)
             self.pack_meta(scene)
+
+    def prepare_model(self, active=None, fixed=None, big=None,
+                      bounds=None,
+                      maxactive=15, shapes=None,
+                      big_scene_kwargs={}, model_kwargs={}):
+        """Prepare the patch for sampling/evaluation.  This includes subtracting
+        big and fixed sources, and wrapping the patch in a GPUPosterior including transforms.
+
+        Returns
+        -------
+        model : instance of forcepho.model.GPUPosterior
+            The model object for this patch
+
+        q : ndarray of shape (n_dim,)
+            The initial parameter vector.
+        """
+        if shapes is None:
+            shapes = Galaxy.SHAPE_COLS
+
+        proposer, scene = self.subtract_fixed(fixed, active=active, big=big,
+                                              big_scene_kwargs=big_scene_kwargs,
+                                              maxactive=maxactive)
+        self.return_residual = False
+        q = scene.get_all_source_params().copy()
+
+        if bounds is None:
+            model = GPUPosterior(proposer, scene=scene, patch=self,
+                                 transform=Transform(len(q)), **model_kwargs)
+        else:
+            lo, hi = bounds_vectors(bounds, self.bandlist, shapes=shapes,
+                                    reference_coordinates=self.patch_reference_coordinates)
+            model = GPUPosterior(proposer, scene=scene, patch=self,
+                                 lower=lo, upper=hi, **model_kwargs)
+
+        return model, q
+
+
+    def subtract_fixed(self, fixed, active=None, big=None, maxactive=15,
+                       swap_on_cpu=False, big_scene_kwargs={}, **scene_kwargs):
+        """Subtract a set of big and/or fixed sources from the data on the GPU.
+
+        Leaves the GPU-side *data* array filled with "residuals" from
+        subtracting the fixed sources, and either the last set of fixed sources
+        or the active sources (if supplied) in the GPU-side meta data arrays.
+        Optionally also fill the CPU-side data array with these residuals.
+
+        Parameters
+        ----------
+        fixed : structured array of shape (n_fixed_sources,)
+            Catalog of fixed source parameters for sources to subtract from the
+            image.
+
+        active : structured array of shape (n_fixed_sources,)
+            Catalog of active source parameters.  These wil be sent to the
+
+        Returns
+        -------
+        proposer : instance of forcepho.proposal.Proposer
+            Communicator to the GPU for proposals
+
+        scene : instance of forcepho.sources.Scene
+            Scene corresponding to the meta-data currently on the GPU.  If
+            `active` was supplied then this will be the Scene for the active
+            sources
+        """
+        # Build all the scenes we want to evaluate and subtract. The last scene
+        # will not actually be subtracted, but will have meta data transferred
+        # to GPU and ready to accept proposals.
+        scenes = []
+        if big is not None:
+            inds = np.arange(maxactive, len(big), maxactive)
+            blocks = np.array_split(big, inds)
+            scenes.extend([self.set_scene(block, **big_scene_kwargs) for block in blocks])
+        if fixed is not None:
+            inds = np.arange(maxactive, len(fixed), maxactive)
+            blocks = np.array_split(fixed, inds)
+            scenes.extend([self.set_scene(block, **scene_kwargs) for block in blocks])
+        if active is not None:
+            scenes.append(self.set_scene(active, **scene_kwargs))
+        else:
+            print("Warning: The meta-data will be for a scene already subtracted from the GPU-side data array!")
+            assert swap_on_cpu
+            scenes.append(scenes[-1])
+
+        # to communicate with the GPU
+        proposer = Proposer()
+
+        # Pack first scene and send it with pixel data
+        self.return_residual = True
+        assert not self._dirty_data
+        self.pack_meta(scenes[0])
+        _ = self.send_to_gpu()
+        # loop over scenes
+        for i, scene in enumerate(scenes[1:]):
+            # evaluate previous scene
+            proposal = scenes[i].get_proposal()
+            out = proposer.evaluate_proposal(proposal, patch=self)
+            # pack this scene
+            self.pack_meta(scene)
+            # replace data on GPU with residual
+            # replace meta of previous block with this block
+            self.swap_on_gpu()
+            # data array on GPU no longer matches self.data
+            self._dirty_data = True
+
+        if swap_on_cpu:
+            # replace the CPU side pixel data array with the final residual
+            # after subtracting all blocks except the last.  This makes
+            # 'send_to_gpu' safe to use without overwriting all the source
+            # subtraction we've done to this point.
+            # However, this means original data requires a new `build_patch` call.
+            # TODO: do we need to use data[:] here?
+            self.data = self.retrieve_array("data")
+            self._dirty_data = False
+            raise NotImplementedError("Don't do this!")
+
+        return proposer, scenes[-1]
+
+    def design_matrix(self, active=None, proposer=None, **scene_kwargs):
+        """Assumes subtract_fixed was already run!
+
+        Parameters
+        ----------
+        active : structured array
+            Catalog of sources to get the models for
+
+        Extra Parameters
+        ----------------
+        scene_kwargs : dictionary
+            Keyword arguments for JadesPatch.set_scene()
+
+        Returns
+        -------
+        Xes : list of ndarrays, each of shape (n_source, n_pix_band)
+            The design matrix for each band, i.e. X s.t.
+               Y[band] = f[band] \dot Xes[band]
+            where f[band] is a vector of source fluxes in 'band'
+
+        ys : list of ndarrays of shape (n_bix_band,)
+           The target data, after all fixed and big sources subtracted
+        """
+        # Get the residuals after subtracting anything fixed
+        y = self.retrieve_array("data")
+        ys = np.split(y, np.cumsum(self.band_N_pix[:-1]))
+
+        Xes = [np.zeros((len(active), n)) for n in self.band_N_pix]
+        scenes = [self.set_scene(np.atleast_1d(a), **scene_kwargs)
+                  for a in active]
+
+        # to communicate with the GPU
+        if not proposer:
+            proposer = Proposer()
+
+        # Pack first scene and send it with pixel data
+        self.return_residual = True
+        # loop over scenes/sources
+        for i, scene in enumerate(scenes):
+            # get the metadata for this scene packed and sent (data pointers do not change)
+            self.pack_meta(scene)
+            self.replace_gpu_meta_ptrs()
+            self.send_patchstruct_to_gpu()
+
+            # evaluate scene
+            proposal = scene.get_proposal()
+            _, _, residual = proposer.evaluate_proposal(proposal, patch=self, unpack=False)
+            # get model and split by band, normalize
+            model = y - residual
+            split = np.split(model, np.cumsum(self.band_N_pix[:-1]))
+            for j, b in enumerate(self.bandlist):
+                Xes[j][i, :] = split[j] / active[i][b]
+
+        return Xes, ys
 
     def pack_meta(self, scene):
         """This method packs all the exposure and source metadata.  Most of

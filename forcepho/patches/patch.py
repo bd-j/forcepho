@@ -224,18 +224,8 @@ class Patch:
         After this call the GPU uses the former "residual" vector as the "data"
         """
         assert "residual" in self.cuda_ptrs, "Must instantiate the Patch with `return_residual=True`"
-        # Replace the metadata on the GPU, as well as the Cuda pointers
-        # This releases the device side arrays corresponding to old metadata
-        for arrname in self.meta_names:
-            try:
-                arr = getattr(self, arrname)
-                arr_dt = self.patch_struct_dtype[arrname]
-                if arr_dt == self.ptr_dtype:
-                    self.cuda_ptrs[arrname].free()
-                    self.cuda_ptrs[arrname] = cuda.to_device(arr)
-            except AttributeError:
-                if arrname != 'residual':
-                    raise
+        # replace gpu meta data pointers with currently packed meta
+        self.replace_gpu_meta_ptrs()
         # Swap Cuda pointers for data and residual
         self.cuda_ptrs["data"], self.cuda_ptrs["residual"] = self.cuda_ptrs["residual"], self.cuda_ptrs["data"]
         # Pack pointers into structure and send structure to device
@@ -243,6 +233,16 @@ class Patch:
         self._dirty_data = True
 
         return self.gpu_patch
+
+    def replace_gpu_meta_ptrs(self):
+        # Replace the metadata on the GPU, as well as the Cuda pointers
+        # This releases the device side arrays corresponding to old metadata
+        for arrname in self.meta_names:
+            arr = getattr(self, arrname)
+            arr_dt = self.patch_struct_dtype[arrname]
+            if arr_dt == self.ptr_dtype:
+                self.cuda_ptrs[arrname].free()
+                self.cuda_ptrs[arrname] = cuda.to_device(arr)
 
     def send_patchstruct_to_gpu(self):
         """Create new patch_struct and fill with values and with CUDA pointers

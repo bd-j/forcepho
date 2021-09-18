@@ -214,7 +214,6 @@ class Scene(object):
         return inds
 
 
-
 class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
     there are 7 parameters, only some of which may be relevant for changing the
