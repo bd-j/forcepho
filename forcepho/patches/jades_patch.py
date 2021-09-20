@@ -121,6 +121,8 @@ class JadesPatch(Patch):
             scene = self.set_scene(sourcecat)
             self.pack_meta(scene)
 
+        self._dirty_data = False
+
     def prepare_model(self, active=None, fixed=None, big=None,
                       bounds=None,
                       maxactive=15, shapes=None,
