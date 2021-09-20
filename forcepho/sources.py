@@ -13,7 +13,7 @@ try:
 except(ImportError):
     warnings.warn("h5py could not be imported")
 # For rendering
-from .gaussmodel import convert_to_gaussians, compute_gig
+from .slow.gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
            "Star",
