@@ -204,6 +204,8 @@ class JadesPatch(Patch):
             assert swap_on_cpu
             scenes.append(scenes[-1])
 
+        assert len(scenes) > 0, "No scenes to prepare!"
+
         # to communicate with the GPU
         proposer = Proposer()
 

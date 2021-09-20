@@ -829,7 +829,7 @@ def bounds_vectors(bounds_cat, filternames, shapes=Galaxy.SHAPE_COLS,
     return np.array(lower), np.array(upper)
 
 
-def flux_bounds(flux, unc1, snr_max=10):
+def flux_bounds(flux, unc1, snr_max=10, precisions=None):
     """Generate flux bounds based on initial guesses and a reference S/N.
 
     Parameters

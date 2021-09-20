@@ -645,7 +645,7 @@ def optimize_fluxes(patcher, active, return_all=False):
     """
     from numpy.linalg import LinAlgError
 
-    fluxes, precisions = [], [], []
+    fluxes, precisions = [], []
     Xes, ys = patcher.design_matrix(active)
     ws = patcher.split_band("ierr")
     for i, (w, X, y) in enumerate(zip(ws, Xes, ys)):
