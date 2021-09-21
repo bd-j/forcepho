@@ -834,27 +834,41 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
 
     Parameters
     ----------
-    flux : ndarray
-        Array of object fluxes
+    flux : ndarray of shape (n_source,)
+        Array of object fluxes in a given band
 
     unc1 : float
-        The half-width of the bound at flux=1  (i.e., Nsigma/SNR)
+        The number of sigmas to use for the half-width of the bound.
+        Or, if precisions not supplied, the half-width of the bound at flux=1  (i.e., Nsigma/SNR)
 
     snr_max : float
         Do not let bounds get narrower than 100/snr_max percent of the initial
         flux guess.
+
+    precisions : ndarray of shape (n_source, n_source)
+        The precision matrix (inverse covariance matrix) for this band
     """
-    snr = np.sqrt(np.abs(flux)) / unc1
-    #snr = np.minimum(snr, snr_max)
+    if precisions is not None:
+        Sigma = np.linalg.pinv(precisions)
+        sigma = np.maximum(np.sqrt(np.diag(Sigma)), flux / snr_max)
+        lo = flux - unc1 * sigma
+        hi = flux + unc1 * sigma
+        # make sure fluxes can be positive
+        hi = np.maximum(hi, unc1 * sigma)
 
-    fmin = (unc1 / 2.)**2
-    noise = np.abs(flux) / snr
-    lo = flux - noise
-    hi = flux + noise
+    else:
+        # this is wierd
+        snr = np.sqrt(np.abs(flux)) / unc1
+        #snr = np.minimum(snr, snr_max)
 
-    lo[flux <= fmin] = np.minimum(lo[flux <= fmin], -fmin)
-    #hi = np.hypot(hi, fmin)
-    hi = np.maximum(hi, fmin)
+        fmin = (unc1 / 2.)**2
+        noise = np.abs(flux) / snr
+        lo = flux - noise
+        hi = flux + noise
+
+        lo[flux <= fmin] = np.minimum(lo[flux <= fmin], -fmin)
+        #hi = np.hypot(hi, fmin)
+        hi = np.maximum(hi, fmin)
 
     return lo, hi
 
