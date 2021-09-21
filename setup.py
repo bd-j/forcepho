@@ -22,7 +22,8 @@ setup(
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",
               "forcepho.patches",
-              "forcepho.mixtures"],
+              "forcepho.mixtures",
+              "forcepho.slow"],
 
     license="LICENSE",
     description="Image Forward Modeling",

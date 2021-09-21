@@ -11,7 +11,6 @@ import sys, os, time
 from functools import partial as argfix
 import numpy as np
 
-from .likelihood import lnlike_multi, negative_lnlike_multi
 from .model import ConstrainedTransformedPosterior as Posterior
 from .utils import make_statscat, make_chaincat, extract_block_diag
 from .region import CircularRegion
