@@ -6,7 +6,7 @@ The python packages that |Codename| requires are listed in `requirements.txt`
 
 In addition, for GPU and multiproceessing capability the python packages will require CUDA and MPI installations (known to work with CUDA 10.1 and open-MPI).  You will also need an HDF5 installation.  These are often available on computing clusters as modules.
 
-## Installation
+## Conda install
 
 The easiest way to install is to create a conda environment, using the supplied `environment.yml` file.
 
@@ -18,9 +18,9 @@ conda activate fpho
 python -m pip install .
 ```
 
-### Clusters
+## Clusters
 
-#### cannon
+### cannon
 
 slurm script directives, also load these modules before installing
    ```bash
@@ -32,9 +32,11 @@ slurm script directives, also load these modules before installing
    source activate fpho
    ```
 
-#### lux
+### lux
 
-### GPU: MPS and Profiling
+### GPU details
+
+MPS and Profiling
 
 From the odyssey docs: While on GPU node, you can run `nvidia-smi` to get information about the assigned GPU
 

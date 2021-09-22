@@ -37,8 +37,6 @@ class JadesPatch(Patch):
     Attributes
     ----------
     bandlist : list of str
-
-    scene : forcepho.Scene()
     """
 
     def __init__(self,
@@ -247,7 +245,7 @@ class JadesPatch(Patch):
         return proposer, scenes[-1]
 
     def design_matrix(self, active=None, proposer=None, **scene_kwargs):
-        """Assumes subtract_fixed was already run!
+        """Assumes :py:meth:`subtract_fixed` was already run.
 
         Parameters
         ----------
