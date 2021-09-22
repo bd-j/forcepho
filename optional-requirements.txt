@@ -1,8 +1,4 @@
-pyyaml
-mpi4py >= 3.1.0
-astropy
-pycuda
-pymc3
-dynesty
 matplotlib
-littlemcmc=0.2.0
+pycuda
+mpi4py >= 3.1.0
+dynesty

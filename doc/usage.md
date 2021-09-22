@@ -1,5 +1,5 @@
-Forcepho usage
-==============
+Basic Usage
+===========
 
 How to use `fpho` with your images:
 
@@ -18,8 +18,9 @@ Then, the following steps will lead to output that can be post-processed.
 See ./output.md for detals on post-processing
 
 
-Steps (to be consolidated)
---------------------------
+Steps
+-----
+(to be consolidated)
 
 1. Create PSF mixtures for mosaic and/or individual exposures
 
@@ -34,17 +35,21 @@ Steps (to be consolidated)
 
    * Find and catalog bright sources in the mosaic (`bright.py`)
 
-   * Optimize/fit bright sources to the bright object pixel store using big sersics (x4 or x5 the normal rhalf grid)
+   * Optimize/fit bright sources to the bright object pixel store using big
+     sersics (x4 or x5 the normal rhalf grid)
 
    * [?] Identify the _very_ big and bright objects (based on rhalf_opt > rhalf_max_normal)
 
-   * [?] Generate and subtract the v-big object model from the original mosaic and exposure stores.
-         Or, have some way to subtract them in an initial setup of the patch (`JadesPatch.subtract_fixed`)
+   * [?] Generate and subtract the v-big object model from the original mosaic
+         and exposure stores. Or, have some way to subtract them in an initial
+         setup of the patch (`JadesPatch.subtract_fixed`)
 
-   * [?] Down-weight pixels in the centers of v-big and/or bright objects based on residual significance.
-         This means inflating errors within isophotes such that |chi| ~ 1 or 2)
+   * [?] Down-weight pixels in the centers of v-big and/or bright objects based
+         on residual significance. This means inflating errors within isophotes
+         such that |chi| ~ 1 or 2)
 
-   * Replace initialization sources _within_ bright object ROIs (i.e. isophotes) with bright objects themselves (part of 4.)
+   * Replace initialization sources _within_ bright object ROIs (i.e. isophotes)
+     with bright objects themselves (part of 4.)
 
 4. Create initial catalog (`smallcat.py`)
 
@@ -65,7 +70,11 @@ Steps (to be consolidated)
    * Look for objects missing in the initial catalog?
 
    * Re-optimize sources in the small catalog (`optimize.py`) based on mosaic.
-     Replace initialization catalog with the optimization results.
+    
+   * Replace initialization catalog with the optimization results.  This is done with
+     ```sh
+     postprocess.py --root output/<run_name> --catname postop_catalog.fits --mode postop
+     ```
 
 6. Sample posterior for source properties.
 
