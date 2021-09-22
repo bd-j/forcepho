@@ -33,7 +33,7 @@ directory structure that looks something like:
 
 The detailed structure of these output files is described below. Numerous
 utilities for working with the basic output are supplied in
-the `forcepho.postprocessing` module.
+the `forcepho.postprocess` module.
 
 ## High level products
 
@@ -50,7 +50,7 @@ After sampling, a catalog given MCMC chains of the posterior samples for every
 source parameter can be constructed from the patch-level chains.  This is
 accomplished with
 ```python
-from forcepho.postprocessing import postsample_catalog
+from forcepho.postprocess import postsample_catalog
 postsample_catalog("<path/to/output/run/directory>", "<path/to/chain_catalog.fits>")
 ```
 
@@ -63,7 +63,7 @@ If residuals were saved by the child processes each patch, they can be assembled
 into a combined residual (plus data and optionally model) image.
 
 ```python
-from forcepho.postprocessing import write_images
+from forcepho.postprocess import write_images
 write_images("<path/to/output/run/directory>", metafile="<path/to/metastore.json>", show_model=True)
 ```
 
@@ -77,7 +77,7 @@ DS9 region files can be useful for exploring any issues in the fitting.  They
 can be produced as follows:
 
 ```python
-from forcepho.postprocessing import write_patchreg, write_sourcereg
+from forcepho.postprocess import write_patchreg, write_sourcereg
 _ = write_patchreg("<path/to/output/run/directory>")
 _ = write_sourcereg("<path/to/output/run/directory>", showid=True)
 ```

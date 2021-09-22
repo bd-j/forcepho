@@ -17,7 +17,7 @@ except ImportError:
 setup(
     name="forcepho",
     url="https://github.com/bd-j/forcepho",
-    version="0.3",
+    version="0.4",
     author="Ben Johnson",
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",
