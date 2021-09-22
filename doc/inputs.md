@@ -1,7 +1,7 @@
 Inputs
 ======
 
-|Codename| requires several ingredients to be on hand.  These are
+Forcepho requires several ingredients to be on hand.  These are
 
 * Imaging data
 * Point Spread Functions (PSFs)
@@ -62,7 +62,7 @@ create the internal data storage.
 PSFs
 ----
 
-The PSFs used by |Codename| are approximations based on a Gaussian mixture model
+The PSFs used by Forcepho are approximations based on a Gaussian mixture model
 fit to the actual PSFs.  Tools exist within forcepho to fit user-supplied PSFs
 (appropriate for the supplied imaging data) with Gaussian mixture models.  The
 PSFs, and the mixtures used to approximate them, can depend on detector
@@ -78,13 +78,17 @@ This should have the following columns
 
 * `dec` (decimal degrees)
 
+* `roi` (arcsec) radius of influence, used to group sources.  This is usually
+  best defined via an approximate isophote at close to the 1- or 2-sigma surface
+  brightness
+
 * `q` (b/a, dimensionless) Use 0.8 if not known
 
 * `pa` (radians, E of N) use 0.0 if not known
 
 * `sersic` Sersic index (use 2 if not known)
 
-* `rhalf` (arcsec) half-light radius estimate
+* `rhalf` (arcsec) half-light radius estimate, use the middle of the allowable range if not known (e.g. 0.15 arsec)
 
 * `<band>` rough flux estimate in `<band>`, where `<band>` corresponds to the `"FILTER"` keywords
 
@@ -96,4 +100,4 @@ the band names.
 Sersic Profiles
 ---------------
 
-A standard lookup table of Gaussian parameters is provided.
+A standard lookup table of Gaussian parameters will be provided.
