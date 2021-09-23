@@ -1,5 +1,7 @@
 numpy >= 1.16
 scipy >= 1.1.0
+numba >= 0.43.0
+h5py >= 2.8.0
 astropy
 pyyaml
 sphinx>=1.7.5

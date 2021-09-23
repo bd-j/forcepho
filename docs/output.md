@@ -67,9 +67,9 @@ from forcepho.postprocess import write_images
 write_images("<path/to/output/run/directory>", metafile="<path/to/metastore.json>", show_model=True)
 ```
 
-where "path/to/metastore.json" is the path to the meta-data storeage for the
+where `path/to/metastore.json` is the path to the meta-data storage for the
 images used in the fitting. This will put images corresponding to those in the
-metastorein the "path/to/output/run/directory/images/" directory
+metastorein the `path/to/output/run/directory/images/` directory
 
 ### Region files
 
@@ -95,7 +95,7 @@ import json
 from astropy.io import fits
 
 root = "root_path"
-outname = "outscene_hlf2_xdf"
+outname = "outscene"
 
 with open(f"{root}/{outname}_log.json") as f:
     logs = json.load(f)
@@ -236,5 +236,5 @@ for expID, im in deltas.items():
     fits.writeto(f"{root}/{subdir}/{exp}_delta.fits", im)
 ```
 
-There is a handy method in `forcepho.postprocessing` that will do this for all
-the exposures in the data store.
+There is a handy method in `forcepho.postprocess.write_images` that will do this for all
+patches and all the relevant exposures in the data store.

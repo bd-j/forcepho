@@ -14,28 +14,25 @@ Switches are generally represented with 0 (False, off) and 1 (True, on)
 
 ```yaml
 bandlist:
- - F435W
- - F606W
- - F775W
- - F814W
- - F850LP
- - F105W
- - F125W
- - F140W
- - F160W
+ - F090W
+ - F115W
+ - F200W
+ - F277W
+ - F335M
+ - F444W
 ```
 
 This is a list of the bands for which images exist.  Fluxes will be measured for
 these bands, and pixel data will be grouped by bands.  Only images with a header
 keyword `FILTER` with value equal to one of these bands will be used in the
-fitting.
+fitting.  PSFs must be available for each of these bands.
 
 
 ## Input data locations
 
 ```yaml
 raw_catalog:
-  $PROJECT_DIR/data/catalogs/hlf_udf_v0.2.fits
+  $PROJECT_DIR/data/catalogs/initial_peak_catalog.fits
 big_catalog:
 
 store_directory:
@@ -43,15 +40,15 @@ store_directory:
 splinedatafile:
   $PROJECT_DIR/data/stores/sersic_mog_model.smooth=0.0150.h5
 pixelstorefile:
-  pixels_hlf2_udf_bright.h5
+  pixels_deepfield.h5
 metastorefile:
-  meta_hlf2_udf_bright.json
+  meta_deepfield.json
 psfstorefile:
-  psf_hlf_ng4.h5
+  psf_jwst_ng4.h5
 ```
 
 These are the locations of the initialization catalog (`raw_catalog`) as well as
-the data stores `store_directory`. Within the store directory, the pixel and
+the data stores (`store_directory`). Within the store directory, the pixel and
 met-data storage files are named, as well as the Gaussian mixture files.
 
 
