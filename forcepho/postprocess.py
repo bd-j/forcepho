@@ -185,7 +185,7 @@ def flux_unc_linear(root, snr_max=1000):
     """Get flux uncertainties from the precision matrix of linear fits, put them
     in a catalog matching the parameter catalog line-by-line
     """
-    config, plog, slog, final = fpost.run_metadata(root)
+    config, plog, slog, final = run_metadata(root)
     patches = plog
     unc = np.zeros(len(final), dtype=final.dtype)
     unc["id"][:] = final["id"]
@@ -194,7 +194,6 @@ def flux_unc_linear(root, snr_max=1000):
         s = Samples(f"{root}/patches/patch{p}_samples.h5")
         inds = s.chaincat["source_index"]
 
-        precisions = s.precisions
         for i, b in enumerate(s.bands):
             flux = s.final[b]
             Sigma = np.linalg.pinv(s.precisions[i])
