@@ -104,6 +104,8 @@ def run_metadata(root):
 
 def postop_catalog(root, bands=None, catname=None):
     """Make an input catalog from the post-optimization catalog.
+
+    Also attemps to make a catalog of flux uncertainties in the 2nd extension
     """
     samples = Samples(f"{root}/patches/patch0_samples.h5")
     if catname is None:
@@ -119,7 +121,16 @@ def postop_catalog(root, bands=None, catname=None):
     cat = hdus[1].data
     cat["n_iter"] = 0
     cat["n_patch"] = 0
+
+    try:
+        unc = flux_unc_linear(root)
+        hdus.append(fits.BinTableHDU(unc))
+        hdus[0].header["EXT2"] = "flux uncertainties"
+    except(AttributeError):
+        pass
+
     # oof
+    hdus[0].header["EXT1"] = "maximum-a-posteriori"
     hdus[0].header["POSTOP"] = True
     hdus[0].header["FILTERS"] = ",".join(bands)
     hdus.writeto(catname, overwrite=True)
@@ -169,6 +180,28 @@ def postsample_catalog(root, catname=None):
         full.writeto(catname, overwrite=True)
     return cat
 
+
+def flux_unc_linear(root, snr_max=1000):
+    """Get flux uncertainties from the precision matrix of linear fits, put them
+    in a catalog matching the parameter catalog line-by-line
+    """
+    config, plog, slog, final = fpost.run_metadata(root)
+    patches = plog
+    unc = np.zeros(len(final), dtype=final.dtype)
+    unc["id"][:] = final["id"]
+    unc["source_index"][:] = final["source_index"]
+    for p in patches:
+        s = Samples(f"{root}/patches/patch{p}_samples.h5")
+        inds = s.chaincat["source_index"]
+
+        precisions = s.precisions
+        for i, b in enumerate(s.bands):
+            flux = s.final[b]
+            Sigma = np.linalg.pinv(s.precisions[i])
+            sigma = np.maximum(np.sqrt(np.diag(Sigma)), flux / snr_max)
+            unc[b][inds] = sigma
+
+    return unc
 
 def find_multipatch(root):
     """Load all the sourceIDs, patchIDs, and chains for sources that appeared in
