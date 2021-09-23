@@ -31,13 +31,13 @@ def header_to_id(hdr, name):
 class PixelStore:
     """Organization of the pixel data store is
 
-    `bandID/expID/data`
+    ``bandID/expID/data``
 
-    where `data` is an array of shape (nsuper, nsuper, 2*super_pixel_size**2)
-    The first half of the trailing dimension is the pixel flux information,
-    while the second half is the ierr information. Each dataset has attributes
-    that describe the nominal flux calibration that was applied and some
-    information about the subtracted background, mask, etc.
+    where `data` is an array of shape ``(nsuper, nsuper,
+    2*super_pixel_size**2)`` The first half of the trailing dimension is the
+    pixel flux information, while the second half is the ierr information. Each
+    dataset has attributes that describe the nominal flux calibration that was
+    applied and some information about the subtracted background, mask, etc.
 
     Parameters
     ----------
@@ -53,7 +53,7 @@ class PixelStore:
 
     Attributes
     ----------
-    data : h5py.File() object
+    data : instance of h5py.File()
         The h5py file handle used to access data on disk
 
     xpix : ndarray of shape (nsuper, nsuper, super_pixel_size**2)
@@ -211,16 +211,16 @@ class PixelStore:
 
         Parameters
         ----------
-        im : ndarray of shape (nx, ny)
+        im : ndarray of shape ``(nx, ny)``
             Image pixel values
 
-        ierr : ndarray of shape (nx, ny)
+        ierr : ndarray of shape ``(nx, ny)``
             Image pixel inverse uncertainties
 
         Returns
         -------
-        superpixels : ndarray of shape (nsuper, nsuper, 2*super_pixel_size**2)
-            The image data and incverse uncdertainties in super-pixel order
+        superpixels : ndarray of shape ``(nsuper, nsuper, 2*super_pixel_size**2)``
+            The image data and inverse uncdertainties in super-pixel order
         """
         super_pixel_size = self.super_pixel_size
         s2 = super_pixel_size**2
@@ -356,14 +356,15 @@ class MetaStore:
 class PSFStore:
     """Assumes existence of a file with the following structure
 
-    band/detector_locations
-    band/psfs
+    * ``band/detector_locations``
+    * ``band/psfs``
 
-    where psfs is a dataset like
-      psfs = np.zeros(nloc, nradii, ngauss, dtype=pdt)
-      pdt = np.dtype([('gauss_params', np.float, 6),
-                      ('sersic_bin', np.int32)])
-    and the order of gauss_params is given in patch.cu; amp, x, y, Cxx, Cyy, Cxy
+    where `psfs` is a dataset like:
+    ``
+    >>> psfs = np.zeros(nloc, nradii, ngauss, dtype=pdt)
+    >>> pdt = np.dtype([('gauss_params', np.float, 6), ('sersic_bin', np.int32)])
+    ``
+    and the order of gauss_params is given in ``patch.cu``; amp, x, y, Cxx, Cyy, Cxy
 
     In principle ngauss can depend on i_radius
     """

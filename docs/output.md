@@ -1,5 +1,13 @@
-Working with Output
-===================
+# Working with Output
+
+## Units
+
+The units of the output catalogs are generally decimal degrees for `ra` and `dec`,
+radians *North of East* (I know...) for `pa`, arcseconds for `rhalf`, and nJy
+for `fluxes`.  Note that for `q` the default units are actually sqrt(b/a).
+
+
+## Basic output products
 
 For a given _run_ with a given starting configuration and input catalog,
 multiple _patches_ (regions on the sky and sub-catalogs) will have been fit
@@ -11,8 +19,10 @@ directory structure that looks something like:
   * `<config_file>.yml` - The input configuration file used for the run.
   * `config.json` - The full configuration dictionary used for the run as a json
     file; This includes any command line overrides of the config file parameters
-  * `<outname>.fits` - The full catalog with current parameter values.  Also
-    includes information like number of MCMC samples per object.
+  * `<outname>.fits` - The full catalog with 'current' parameter values.  Also
+    includes information like number of MCMC samples per object.  For
+    optimization the 'current' values are the optmized values, while for
+    sampling they are the values at the last iteration of the MCMC chain.
   * `<outname>_log.json` - A record of which sources (as indices) appeared in
     each patch, and the order in which the patches are run.
   * `patches/`
@@ -21,8 +31,64 @@ directory structure that looks something like:
      * `patch<i>_residuals.h5` - residuals (data - model) and other pixel data
        for the last iteration in the chain for the _i_ th patch
 
-Numerous utilities for working with the output are supplied in
-`forcepho.postprocessing`. For clarity, we can read in the meta information as:
+The detailed structure of these output files is described below. Numerous
+utilities for working with the basic output are supplied in
+the `forcepho.postprocess` module.
+
+## High level products
+
+High level output products are the result of post-processing the basic output
+patch-level products (see above).  These high-level products include final
+parameter catalogs. For sampling a combined chain catalog is also available,
+from which uncertainties can be estimated. DS9 region files showing the final
+sources and the patches can be generated.  Finally, residual and model images
+can be produced.
+
+### Final parameter catalog
+
+After sampling, a catalog given MCMC chains of the posterior samples for every
+source parameter can be constructed from the patch-level chains.  This is
+accomplished with
+```python
+from forcepho.postprocess import postsample_catalog
+postsample_catalog("<path/to/output/run/directory>", "<path/to/chain_catalog.fits>")
+```
+
+The output catalog will contain chains for each parameter of each source from
+which parameter uncertainties can be estimated.
+
+### Residual images
+
+If residuals were saved by the child processes each patch, they can be assembled
+into a combined residual (plus data and optionally model) image.
+
+```python
+from forcepho.postprocess import write_images
+write_images("<path/to/output/run/directory>", metafile="<path/to/metastore.json>", show_model=True)
+```
+
+where "path/to/metastore.json" is the path to the meta-data storeage for the
+images used in the fitting. This will put images corresponding to those in the
+metastorein the "path/to/output/run/directory/images/" directory
+
+### Region files
+
+DS9 region files can be useful for exploring any issues in the fitting.  They
+can be produced as follows:
+
+```python
+from forcepho.postprocess import write_patchreg, write_sourcereg
+_ = write_patchreg("<path/to/output/run/directory>")
+_ = write_sourcereg("<path/to/output/run/directory>", showid=True)
+```
+
+These region files will be placed in the "path/to/output/run/directory/images/"
+directory by default, but the output location can be specified as a keyword
+argument.
+
+### Run log
+
+For clarity, we can read in the overall run information as:
 
 ```python
 import json
@@ -41,23 +107,15 @@ with open(f"{root}/config.json") as f:
     config = json.load(f)
 ```
 
-Units
------
-
-The units of the catalogs are generally decimal degrees for `ra` and `dec`,
-radians *North of East* (I know...) for `pa`, arcseconds for `rhalf`, and nJy
-for `fluxes`.  Note that for `q` the default units are actually sqrt(b/a).
-
-Samples
--------
+### Samples
 
 The `patch<i>_samples.h5` output file contains info from the MCMC chain, as well
 as a great deal of info about the patch itself and the way the fitting happened.
-We can read it in to convenience class `forcepho.reconstruction.Samples` with
+We can read it in to convenience class `forcepho.postprocessing.Samples` with
 helpful methods as:
 
 ```python
-from forcepho.reconstruction import Samples
+from forcepho.postprocessing import Samples
 i = plog[0]
 samples = Samples(f"{root}/patches/patch{i}_samples.h5")
 ```
@@ -118,8 +176,7 @@ source_idx = 2
 samples.show_chain(source_idx, bands=bands, axes=axes)
 ```
 
-Residuals
----------
+### Residuals
 
 The residuals for each patch are stored in a basic HDF5 file.  The structure is
 

@@ -31,7 +31,7 @@ except ImportError:
     pass
 
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
-from .likelihood import lnlike_multi, make_image, WorkPlan
+from .slow.likelihood import lnlike_multi, make_image, WorkPlan
 
 
 __all__ = ["Posterior", "GPUPosterior", "CPUPosterior",

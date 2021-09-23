@@ -13,7 +13,7 @@ try:
 except(ImportError):
     warnings.warn("h5py could not be imported")
 # For rendering
-from .gaussmodel import convert_to_gaussians, compute_gig
+from .slow.gaussmodel import convert_to_gaussians, compute_gig
 
 __all__ = ["Scene", "Source",
            "Star",
@@ -135,8 +135,8 @@ class Scene(object):
         """Get a structured array of parameters corresponding to the sources
         in the scene. Convenience.
 
-        Returns:
-        --------
+        Returns
+        -------
         catalog : structured ndarray
             Each row of the structured array is a source, the columns have the
             names of the source parameters, with one column for each flux
@@ -218,12 +218,12 @@ class Source(object):
     """Parameters describing a source in the celestial plane. For each galaxy
     there are 7 parameters, only some of which may be relevant for changing the
     apparent flux:
-      * flux: total flux (possibly a vector)
-      * ra: right ascension (degrees)
-      * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle
-      * n: sersic index
-      * r: half-light radius (arcsec)
+    * flux: total flux (possibly a vector)
+    * ra: right ascension (degrees)
+    * dec: declination (degrees)
+    * q, pa: axis ratio squared and position angle
+    * n: sersic index
+    * r: half-light radius (arcsec)
 
     Methods are provided to return the amplitudes and covariance matrices of
     the constituent gaussians, as well as derivatives of the amplitudes with
@@ -415,11 +415,9 @@ class Source(object):
         Returns
         -------
         psf_params: list of tuples or ndarray
-            The PSF parameters, in the format:
-            `[((a, x, y, cxx, cyy, cxy), radius_index),
-              ((a, x, y, cxx, cyy, cxy), radius_index),
-              .....]
-            `
+            The PSF parameters, in the format
+            ```[((a, x, y, cxx, cyy, cxy), radius_index),
+            ((a, x, y, cxx, cyy, cxy), radius_index), .....] ```
         """
         psfs = self.stamp_psfs[e]
         assert len(psfs) == len(self.radii)
@@ -640,12 +638,12 @@ class SimpleGalaxy(Source):
 class Galaxy(Source):
     """Parameters describing a gaussian galaxy in the celestial plane (i.e. the
     Scene parameters) All 7 Source parameters are relevant:
-      * flux: total flux
-      * ra: right ascension (degrees)
-      * dec: declination (degrees)
-      * q, pa: axis ratio squared and position angle
-      * sersic: sersic index
-      * rhalf: half-light radius (arcsec)
+    * flux: total flux
+    * ra: right ascension (degrees)
+    * dec: declination (degrees)
+    * q, pa: axis ratio squared and position angle
+    * sersic: sersic index
+    * rhalf: half-light radius (arcsec)
 
     Methods are provided to return the amplitudes and covariance matrices of
     the constituent gaussians, as well as derivatives of the amplitudes with

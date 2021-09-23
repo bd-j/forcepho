@@ -1,4 +1,7 @@
 numpy >= 1.14
-numba >= 0.43.0
 scipy >= 1.10
+numba >= 0.43.0
 h5py >= 2.8.0
+astropy
+pyyaml
+littlemcmc=0.2.0

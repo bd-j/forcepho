@@ -8,19 +8,15 @@ dependencies:
   # Scientific computing
   - numpy>=1.14
   - scipy>=1.1.0
-  - matplotlib
+  - matplotlib  # optional
   - h5py
   - numba>=0.43.0
   # Astro
   - astropy
   # Inference
-  - dynesty # optional
   - pip:
     - pycuda
     - littlemcmc==0.2.*
   # Optional but recommended
   #- mpi4py>=3.1.0
   # get via pip install git+https://github.com/mpi4py/mpi4py
-
-# --- via setup.py ---
-# forcepho

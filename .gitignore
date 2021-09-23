@@ -9,6 +9,8 @@ slurm-*.out
 /output/
 /demo/data/
 /demo/stores/
-/doc/
+/docs/key
+/docs/tex
+/docs/_build
 /tests/
 /demo/display/
