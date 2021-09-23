@@ -13,7 +13,7 @@ Details about each aspect are given below.
 Imaging data
 ------------
 
-|Codename| expects imaging data with certain properties, which will be converted
+Forcepho expects imaging data with certain properties, which will be converted
 to an internal storage format generally during "pre-processing".  These
 properties are:
 

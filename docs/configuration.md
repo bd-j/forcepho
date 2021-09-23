@@ -1,7 +1,7 @@
 # Configuration File
 
 
-Many options and behavior of |Codename| are controlled by a configuration file,
+Many options and behavior of Forcepho are controlled by a configuration file,
 which is in yaml format.  Here we give an example configuration file with
 descriptions of each parameter.
 
@@ -166,9 +166,9 @@ uncertainties and their covariance.
 
 ```yaml
 original_images:  # search path
-  $PROJECT_DIR/data/images/v2.0/hlsp*fits
+  $PROJECT_DIR/data/images/original/*fits
 cutID:
-  udf
+  deepfield
 frames_directory:  # full path (optional, for preprocessing)
   $PROJECT_DIR/data/images/cutouts
 max_snr:
@@ -178,10 +178,12 @@ do_fluxcal:  # whether to flux calibrate the images using ABMAG keyword
 bitmask: # integer corresponding to the bits of the mask image that constitue "bad" pixels.
   1
 frame_search_pattern:
-  udf-??-??_*sci.fits
+  deepfield-??-??_*sci.fits
 detection_catalog: # full path to input catalog
   $PROJECT_DIR/data/catalogs/detection_table_v0.5.fits
 ```
+
+Pre-processing scripts can take many different forms, and are not strictly part of a given inference run, but it can be useful to have the preprocessing configuration stored with the other parameters.
 
 ## Data Types & Sizes
 
@@ -213,5 +215,6 @@ tweakbg:
   F160W: -0.0463
 ```
 
-The value of `tweak_background` specifies the dictionary to use for background level tweaks.
-Leave it empty if you don't want to do any background tweaks.
+The value of `tweak_background` specifies the name of the dictionary in the
+configuration file to use for background level tweaks. Leave it empty if you
+don't want to do any background tweaks.
