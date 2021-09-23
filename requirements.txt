@@ -4,4 +4,4 @@ numba >= 0.43.0
 h5py >= 2.8.0
 astropy
 pyyaml
-littlemcmc=0.2.0
+littlemcmc == 0.2.0
