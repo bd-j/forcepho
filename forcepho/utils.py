@@ -11,8 +11,6 @@ import h5py
 from astropy.io import fits
 
 from .sources import Galaxy
-# for backwards compat
-from .superscene import rectify_catalog, sourcecat_dtype
 
 
 __all__ = ["Logger", "NumpyEncoder",

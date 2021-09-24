@@ -782,7 +782,7 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
     return sourcecat, bands, header
 
 
-def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
+def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
                 n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
                 sqrtq_range=(0.4, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
                 rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
@@ -801,6 +801,9 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
 
     shapenames: list of strings (optional)
         The names of the columns corresponding to positional and shape parameters
+
+    unccat : structured ndarray of shape (n_source,)
+        A catalog with column names matching `active` but that gives uncertainties
 
     n_sig_flux : float (optional)
         The number of flux sigmas to set for the prior width
@@ -845,10 +848,12 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS,
     # fill the fluxes
     for b in filternames:
         try:
-            sigma_flux = active["{}_unc".format(b)]
-            lo, hi = (pm1[None, :] * n_sig_flux * sigma_flux[:, None]).T
-        except(ValueError, KeyError):
-            #sigma_flux = np.sqrt(np.abs(active[b]))
+            sigma_flux = unccat[b]
+            # HACK: minimum uncertainty is fixed to 5%
+            sigma_flux = np.maximum(sigma_flux, np.abs(0.05 * active[b]))
+            lo, hi = (active[b] + pm1[:, None] * n_sig_flux * sigma_flux[None, :])
+        except(TypeError):
+            # Crude guess at bounds
             lo, hi = flux_bounds(active[b], n_sig_flux)
         bcat[b][:, 0] = lo
         bcat[b][:, 1] = hi
