@@ -153,7 +153,7 @@ class JadesPatch(Patch):
             model = GPUPosterior(proposer, scene=scene, patch=self,
                                  transform=Transform(len(q)), **model_kwargs)
         else:
-            lo, hi = bounds_vectors(bounds, self.bandlist, shapes=shapes,
+            lo, hi = bounds_vectors(bounds, self.bandlist, shapenames=shapes,
                                     reference_coordinates=self.patch_reference_coordinates)
             model = GPUPosterior(proposer, scene=scene, patch=self,
                                  lower=lo, upper=hi, **model_kwargs)

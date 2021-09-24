@@ -14,7 +14,7 @@ from astropy.io import fits
 
 from .utils import read_config
 from .patches.storage import MetaStore
-from .superscene import isophotal_radius
+from .utils import isophotal_radius
 from .fitting import Result
 
 
@@ -304,7 +304,8 @@ def write_sourcereg(root, slist="sources.reg", showid=False,
     Parameters
     ----------
     isophote : tuple of string, float (optional)
-        If given, the band for which to compute the isophotal radius, and the isophote level in nJy/arcsec^2
+        If given, the band for which to compute the isophotal radius, and the
+        isophote level in nJy/arcsec^2
     """
     f = glob.glob(f"{root}/outscene*.fits")[0]
     os.makedirs(f"{root}/image", exist_ok=True)

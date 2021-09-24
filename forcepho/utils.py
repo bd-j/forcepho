@@ -2,21 +2,25 @@
 
 import os, time
 from argparse import Namespace
-import numpy as np
 
-from astropy.io import fits
-import h5py
+import numpy as np
+from scipy.special import gamma, gammainc, gammaincinv
+
 import json
+import h5py
+from astropy.io import fits
 
 from .sources import Galaxy
+# for backwards compat
+from .superscene import rectify_catalog, sourcecat_dtype
 
 
 __all__ = ["Logger", "NumpyEncoder",
            "read_config", "update_config",
-           "sourcecat_dtype", "rectify_catalog",
            "extract_block_diag",
-           "make_statscat", "make_chaincat", "make_imset",
-           "write_residuals", "sky_to_pix"]
+           "make_statscat", "make_chaincat",
+           "write_residuals", "make_imset", "sky_to_pix",
+           "isophotal_radius", "kron_radius"]
 
 
 class Logger:
@@ -103,51 +107,6 @@ def update_config(config, args):
             pass
 
     return config
-
-
-def sourcecat_dtype(source_type=np.float64, bands=[]):
-    """Get a numpy.dtype object that describes the structured array
-    that will hold the source parameters
-    """
-    nband = len(bands)
-    tags = ["id", "source_index", "is_active", "is_valid",
-            "n_iter", "n_patch"]
-
-    dt = [(t, np.int32) for t in tags]
-    dt += [("roi", np.float32)]
-    dt += [(c, source_type)
-           for c in Galaxy.SHAPE_COLS]
-    dt += [(c, source_type)
-           for c in bands]
-    return np.dtype(dt)
-
-
-def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 0.99),
-                    rotate=False, reverse=False):
-    cat = fits.getdata(sourcecatfile)
-    header = fits.getheader(sourcecatfile)
-    bands = [b.strip() for b in header["FILTERS"].split(",")]
-
-    n_sources = len(cat)
-    cat_dtype = sourcecat_dtype(bands=bands)
-    sourcecat = np.zeros(n_sources, dtype=cat_dtype)
-    sourcecat["source_index"][:] = np.arange(n_sources)
-    assert np.all([c in cat.dtype.names for c in Galaxy.SHAPE_COLS])
-    for f in cat.dtype.names:
-        if f in sourcecat.dtype.names:
-            sourcecat[f][:] = cat[f][:]
-
-    # --- Rectify shape columns ---
-    sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhalf_range)
-    sourcecat["q"][:] = np.clip(sourcecat["q"], *sqrtq_range)
-    # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
-    if rotate:
-        p = sourcecat["pa"] > 0
-        sourcecat["pa"] += np.pi / 2. - p * np.pi
-    if reverse:
-        sourcecat["pa"] *= -1.0
-
-    return sourcecat, bands, header
 
 
 def extract_block_diag(a, n, k=0):
@@ -294,4 +253,37 @@ def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
     pix = np.matmul(CW, sky[:, :, None])[..., 0] + crpix
 
     return pix
+
+
+def kron_radius(rhalf, sersic, rmax=None):
+    k = gammaincinv(2 * sersic, 0.5)
+    if rmax:
+        x = k*(rmax / rhalf)**(1./sersic)
+        c = gammainc(3 * sersic, x) / gammainc(2 * sersic, x)
+    else:
+        c = gamma(3 * sersic) / gamma(2 * sersic)
+    r_kron = rhalf / k**sersic * c
+    return r_kron
+
+
+def I_eff(lum, rhalf, flux_radius=None, sersic=1):
+    """gamma(2n, b_n) = 1/2; b_n = (re / r0)**(1/n)
+    """
+    two_n = 2 * sersic
+    k = gammaincinv(two_n, 0.5)
+    f =  gamma(two_n)
+    if flux_radius is not None:
+        x = k * (flux_radius / rhalf)**(1. / sersic)
+        f *= gammainc(two_n, x)
+    conv = k**(two_n) / (sersic * np.exp(k)) / f
+    Ie = lum * conv / (2 * np.pi * rhalf**2)
+    return Ie
+
+
+def isophotal_radius(iso, flux, r_half, flux_radius=None, sersic=1):
+    Ie = I_eff(flux, r_half, flux_radius=flux_radius, sersic=sersic)
+    k = gammaincinv(2 * sersic, 0.5)
+    r_iso = (1 - np.log(iso / Ie) / k)**(sersic)
+
+    return r_iso * r_half
 

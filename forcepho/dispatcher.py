@@ -17,8 +17,8 @@ import socket
 import numpy as np
 from astropy.io import fits
 
-from .superscene import SuperScene, LinkedSuperScene
-from .utils import rectify_catalog, read_config
+from .superscene import SuperScene, LinkedSuperScene, rectify_catalog
+from .utils import read_config
 #from .child import sampling_task, optimization_task
 
 
