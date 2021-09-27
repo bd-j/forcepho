@@ -21,4 +21,5 @@ Documentation of Forcepho
    api/sources_api
    api/models_api
    api/fitting_api
+   api/postprocess_api
 
