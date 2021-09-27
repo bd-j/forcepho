@@ -6,7 +6,6 @@ The units of the output catalogs are generally decimal degrees for `ra` and `dec
 radians *North of East* (I know...) for `pa`, arcseconds for `rhalf`, and nJy
 for `fluxes`.  Note that for `q` the default units are actually sqrt(b/a).
 
-
 ## Basic output products
 
 For a given _run_ with a given starting configuration and input catalog,
@@ -26,9 +25,9 @@ directory structure that looks something like:
   * `<outname>_log.json` - A record of which sources (as indices) appeared in
     each patch, and the order in which the patches are run.
   * `patches/`
-     * `patch<i>_samples.h5` - information about the _i_ th patch and resulting
+    * `patch<i>_samples.h5` - information about the _i_ th patch and resulting
        MCMC chain
-     * `patch<i>_residuals.h5` - residuals (data - model) and other pixel data
+    * `patch<i>_residuals.h5` - residuals (data - model) and other pixel data
        for the last iteration in the chain for the _i_ th patch
 
 The detailed structure of these output files is described below. Numerous
@@ -59,8 +58,9 @@ which parameter uncertainties can be estimated.
 
 ### Residual images
 
-If residuals were saved by the child processes each patch, they can be assembled
-into a combined residual (plus data and optionally model) image.
+If residuals were saved for each patch by the child processes, they can be
+assembled into combined residual (plus data and optionally model) images
+pixelwise matched to the input images.
 
 ```python
 from forcepho.postprocess import write_images
@@ -68,8 +68,9 @@ write_images("<path/to/output/run/directory>", metafile="<path/to/metastore.json
 ```
 
 where `path/to/metastore.json` is the path to the meta-data storage for the
-images used in the fitting. This will put images corresponding to those in the
-metastorein the `path/to/output/run/directory/images/` directory
+images used in the fitting. This will place residual images corresponding to the
+input images in the metastore into the `path/to/output/run/directory/images/`
+directory.
 
 ### Region files
 
@@ -82,13 +83,13 @@ _ = write_patchreg("<path/to/output/run/directory>")
 _ = write_sourcereg("<path/to/output/run/directory>", showid=True)
 ```
 
-These region files will be placed in the "path/to/output/run/directory/images/"
+These region files will be placed in `"path/to/output/run/directory/images/"`
 directory by default, but the output location can be specified as a keyword
 argument.
 
 ### Run log
 
-For clarity, we can read in the overall run information as:
+We can read in the overall run information as:
 
 ```python
 import json

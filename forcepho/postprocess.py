@@ -282,6 +282,7 @@ def check_multipatch(root, n_sample=256):
 
 def make_regions(cat, roi=None, ellipse=False):
     from astropy import units as u
+    from astropy.coordinates import SkyCoord
     from regions import EllipseSkyRegion, Regions
 
     if roi is None:

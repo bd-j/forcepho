@@ -6,7 +6,8 @@ which is in yaml format.  Here we give an example configuration file with
 descriptions of each parameter.
 
 Note that any parameter can generally be overridden at run time with a command
-line argument. Forcepho will try to automatially expand shell variables.
+line argument. Forcepho will try to automatially expand shell variables.  See
+`forcepho.utils.read_config` for details.
 
 Switches are generally represented with 0 (False, off) and 1 (True, on)
 
@@ -49,7 +50,7 @@ psfstorefile:
 
 These are the locations of the initialization catalog (`raw_catalog`) as well as
 the data stores (`store_directory`). Within the store directory, the pixel and
-met-data storage files are named, as well as the Gaussian mixture files.
+meta-data storage files are named, as well as the Gaussian mixture files.
 
 
 ## Output locations
@@ -59,7 +60,7 @@ outbase:
   ./output/test
 scene_catalog:
   outscene.fits
-write_residuals:  # whether to output residual images
+write_residuals:  # whether to output residual images, or just samples.
   1
 ```
 
@@ -99,7 +100,7 @@ edges, which is useful for the optimization methods that can otherwise get stuck
 at the edges of the allowed parameter values
 
 The entries under `bounds_kwargs` indicate allowed ranges for the parameters
-sqrt(q) and pa.  The position ranges are allowed to move by `n_pix * pixscale`
+sqrt(b/a) and pa.  The position ranges are allowed to move by `n_pix * pixscale`
 arcseconds in both RA and Dec.
 
 ## Patch Generation
@@ -156,7 +157,7 @@ These parameters control the optimization.  The most important one is
 `linear_optimize`, which determines whether a final round of linear least
 squares is used to optimize the fluxes, conditional on the best fit shapes and
 positions.  This can be useful to overcome the effect of the 'barriers'
-mentioned in the Bounds section, and also yields estimates for the flux
+mentioned in the Bounds section, and also yields estimates of the flux
 uncertainties and their covariance.
 
 ## Pre-processing
@@ -180,7 +181,9 @@ detection_catalog: # full path to input catalog
   $PROJECT_DIR/data/catalogs/detection_table_v0.5.fits
 ```
 
-Pre-processing scripts can take many different forms, and are not strictly part of a given inference run, but it can be useful to have the preprocessing configuration stored with the other parameters.
+Pre-processing scripts can take many different forms, and are not strictly part
+of a given inference run, but it can be useful to have the preprocessing
+configuration stored with the other parameters.
 
 ## Data Types & Sizes
 

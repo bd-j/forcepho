@@ -160,7 +160,8 @@ class Result(object):
                     sample[d] = self.chaincat[d]
         return sample
 
-    def dump_to_h5(self, filename):
+    def dump_to_h5(self, filename, verbose=False):
+        msgs = []
         import h5py
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with h5py.File(filename, "w") as out:
@@ -171,7 +172,13 @@ class Result(object):
                     try:
                         out.attrs[name] = value
                     except:
-                        print("could not save {} with value {} to {}".format(name, value, filename))
+                        msg = "could not save {} with value {} to {}".format(name, value, filename)
+                        if verbose:
+                            print(msg)
+                        else:
+                            msgs.append(msg)
+
+        return msgs
 
     def read_from_h5(self, filename):
         import h5py
