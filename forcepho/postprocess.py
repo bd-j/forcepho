@@ -318,12 +318,13 @@ def cat_to_reg(cat, slist="", showid=False, default_color="green",
 
     regions = make_regions(cat, roi=roi, ellipse=ellipse)
 
-    if valid is not None:
-        for i, r in enumerate(regions):
-            if valid[i]:
-                r.visual["color"] = "green"
-            else:
-                r.visual["color"] = "red"
+    if valid is None:
+        valid = np.ones(len(cat), dtype=bool)
+    for i, r in enumerate(regions):
+        if valid[i]:
+            r.visual["color"] = default_color
+        else:
+            r.visual["color"] = "red"
 
     if showid:
         for i, r in enumerate(regions):
