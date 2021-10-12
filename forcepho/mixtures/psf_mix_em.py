@@ -44,10 +44,10 @@ def easy_init(image_data):
 
 def random_init(image_data):
     mean_x, mean_y = mean_params(image_data)
-    return [np.random.uniform(low=0.0,high=1.0), mean_x + np.random.uniform(low=-5.0,high=5.0), 
+    return [np.random.uniform(low=0.0,high=1.0), mean_x + np.random.uniform(low=-5.0,high=5.0),
             mean_y + np.random.uniform(low=-5.0,high=5.0), np.random.uniform(low=0.0,high=50.0),
             np.random.uniform(low=0.0,high=50.0), np.random.uniform(low=-1.0,high=1.0)]
-    
+
 
 def mvn_pdf(pos_x, pos_y, params):
     amp, mu_x, mu_y, sigma_x, sigma_y, rho = params
@@ -96,7 +96,7 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
     def create_ans(params, original_dict):
         ans = original_dict
         recon_image = mvn_pdf_2d_mix_fn(num_mix, x_max, y_max)(params)
-        new_dict = {'fitted_params':params, 
+        new_dict = {'fitted_params':params,
                     'original_image':image_data,
                     'recon_image': recon_image,
                     'error_original': np.sqrt(np.sum(image_data**2)),
@@ -110,8 +110,8 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
         # --- Initialization ---
         if method_init == 'random':
             for i in range(num_mix):
-                all_init[(6*i):(6*i+6)] = random_init(image_data) 
-        elif method_init == 'greedy': 
+                all_init[(6*i):(6*i+6)] = random_init(image_data)
+        elif method_init == 'greedy':
             residual_image = np.copy(image_data)
             for i in range(num_mix):
                 all_init[(6*i):(6*i+6)] = easy_init(residual_image)
@@ -122,7 +122,7 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
             def chivec(params):
                 return (image_data.flatten() -
                         mvn_pdf_2d_mix_fn(num_mix,x_max,y_max)(params).flatten())
-            
+
             res = least_squares(chivec, all_init,
                                 bounds=([-np.inf, 0, 0, 0, 0, -1]*num_mix,
                                         [np.inf, x_max-1, y_max-1, np.inf, np.inf, 1]*num_mix)
@@ -135,7 +135,7 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
             curr_log_likelihood = log_likelihood(curr_params)
             # weights = 3-dim array x,y,k - weights[x,y,k] propto N(x,y|param_k) and sum over k = 1
             # param_k is param[6*k:(6*k+6)]
-            weights = np.empty([x_max, y_max, num_mix]) 
+            weights = np.empty([x_max, y_max, num_mix])
             loop_count = 0
 
             while loop_count < 20000:
@@ -197,9 +197,9 @@ def fit_mvn_mix(image_data, num_mix, method_opt, method_init,
                         print('total loop count', loop_count)
                         print('final log likelihood', new_log_likelihood)
                         print('final params', new_params.reshape([num_mix, 6]))
-                    break 
+                    break
                 curr_params = new_params
-                curr_log_likelihood = new_log_likelihood 
+                curr_log_likelihood = new_log_likelihood
                 loop_count += 1
     if returnfull:
         return ans_repeat
