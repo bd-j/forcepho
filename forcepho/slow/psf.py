@@ -37,11 +37,11 @@ class PointSpreadFunction(object):
         """Make psf from a structured array of parameters, of length `n_gauss`
         """
         self.n_gauss = len(parameters)
-        cov = [np.array([[p["vxx"], p["vxy"]], [p["vxy"], p["vyy"]]])
+        cov = [np.array([[p["Cxx"], p["Cxy"]], [p["Cxy"], p["Cyy"]]])
                for p in parameters]
-        self.covariances = np.array(cov)
-        self.means = np.array([parameters["x"], parameters["y"]]).T
-        self.amplitudes = parameters["amp"]
+        self.covariances = np.array(cov, dtype=np.float64)
+        self.means = np.array([parameters["xcr"], parameters["ycr"]], dtype=np.float64).T
+        self.amplitudes = parameters["amp"].astype(np.float64)
 
     def as_tuplelist(self):
         """The parameters of the gaussians in the PSF mixture as a list
