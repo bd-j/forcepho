@@ -18,7 +18,7 @@ from astropy.io import fits
 import h5py, json
 
 from .psf_mix_em import fit_mvn_mix
-from ..psf import params_to_gauss
+from ..slow.psf import params_to_gauss
 
 __all__ = ["psf_mixture"]
 
