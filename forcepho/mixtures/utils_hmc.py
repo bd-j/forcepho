@@ -3,12 +3,14 @@
 from collections import namedtuple
 
 import numpy as np
-from jax import random
 
-from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoLaplaceApproximation, AutoDelta
-import numpyro.optim as optim
-
+try:
+    from jax import random
+    from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoLaplaceApproximation, AutoDelta
+    import numpyro.optim as optim
+except(ImportError):
+    pass
 
 Image = namedtuple("Image", "xpix ypix data unc nx ny cx cy")
 
