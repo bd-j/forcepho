@@ -3,8 +3,6 @@
 from collections import namedtuple
 
 import numpy as np
-import matplotlib.pyplot as pl
-
 from jax import random
 
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO

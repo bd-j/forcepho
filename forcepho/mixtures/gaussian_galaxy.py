@@ -7,8 +7,12 @@ from scipy.special import factorial
 import numpy as np
 from functools import partial
 
-import matplotlib.pyplot as pl
-from matplotlib.backends.backend_pdf import PdfPages
+try:
+    import matplotlib.pyplot as pl
+    from matplotlib.backends.backend_pdf import PdfPages
+except(ImportError):
+    pass
+
 import h5py
 
 from scipy.special import gamma, gammainc, gammaincinv

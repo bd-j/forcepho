@@ -6,9 +6,12 @@ Script to fit a PSF image with a mixture of gaussians using EM
 """
 
 import numpy as np
-import matplotlib.pyplot as pl
-from matplotlib.cm import get_cmap
-from matplotlib.backends.backend_pdf import PdfPages
+try:
+    import matplotlib.pyplot as pl
+    from matplotlib.cm import get_cmap
+    from matplotlib.backends.backend_pdf import PdfPages
+except(ImportError):
+    pass
 
 try:
     import cPickle as pickle
@@ -19,6 +22,7 @@ import h5py, json
 
 from .psf_mix_em import fit_mvn_mix
 from ..slow.psf import params_to_gauss
+
 
 __all__ = ["psf_mixture"]
 
