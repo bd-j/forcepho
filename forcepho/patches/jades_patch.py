@@ -536,7 +536,7 @@ class JadesPatch(Patch):
         self.band_N_pix[:-1] = np.diff(self.exposure_start[self.band_start])
         self.band_N_pix[-1] = self.npix - self.band_N_pix[:-1].sum()
 
-        if gettatr(self, "max_snr", None):
+        if getattr(self, "max_snr", None):
             self._cap_snr(max_snr=self.max_snr)
 
     def _cap_snr(self, max_snr=None):
