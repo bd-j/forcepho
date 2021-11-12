@@ -64,6 +64,7 @@ class JadesPatch(Patch):
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
         self.background_offsets = None
+        self.max_snr = None
 
 
     def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS, tweak_background=False):
@@ -534,6 +535,15 @@ class JadesPatch(Patch):
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
         self.band_N_pix[:-1] = np.diff(self.exposure_start[self.band_start])
         self.band_N_pix[-1] = self.npix - self.band_N_pix[:-1].sum()
+
+        if gettatr(self, "max_snr", None):
+            self._cap_snr(max_snr=self.max_snr)
+
+    def _cap_snr(self, max_snr=None):
+        if max_snr:
+            to_cap = (self.ierr > 0) & (self.data * self.ierr > max_snr)
+            self.ierr[to_cap] = max_snr / self.data[to_cap]
+
 
     def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
