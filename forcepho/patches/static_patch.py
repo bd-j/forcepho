@@ -7,13 +7,13 @@ in patch.cu.
 """
 
 import numpy as np
-from .patch import Patch
+from .patch import PatchBase
 
 
 __all__ = ["StaticPatch", "patch_to_stamps"]
 
 
-class StaticPatch(Patch):
+class StaticPatch(PatchBase):
 
     """A patch where the data is built from area matched PostageStamp and
     Scene objects for which most of the required metadata has already been
