@@ -8,10 +8,7 @@ in patch.cu.
 
 import numpy as np
 
-from astropy.wcs import WCS
-
 from ..sources import Scene, Galaxy
-from ..proposal import Proposer
 from .storage import PSF_COLS, PSFStore
 
 

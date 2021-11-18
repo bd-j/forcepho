@@ -133,6 +133,27 @@ class PostageStamp(object):
                              **compute_keywords)
 
 
+    def to_fits(self, filename):
+        from astropy.io import fits
+        from astropy.wcs import WCS
+        cd = np.linalg.inv(self.scale)/3600.
+        image = fits.PrimaryHDU(self.pixel_values.T)
+        hdr = image.header
+        wcs = WCS(naxis=hdr["NAXIS"])
+        wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        wcs.wcs.radesys = "FK5"
+        wcs.wcs.crpix = self.crpix
+        wcs.wcs.crval = self.crval
+        wcs.wcs.latpole = self.crval[1]
+        wcs.wcs.pc = cd
+        wcs.wcs.cdelt = np.ones(2)
+        image.header.update(wcs.to_header())
+        uncertainty = fits.ImageHDU(1/self.ierr.reshape(self.nx, self.ny).T,
+                                    header=image.header)
+
+        return wcs, [image, uncertainty]
+
+
 def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
     """Get the local linear approximation of the scale and CW matrix at the
     celestial position given by `sky`.  This is a simple numerical calculation
