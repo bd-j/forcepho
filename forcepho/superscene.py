@@ -756,8 +756,12 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
 
 def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 0.99),
                     rotate=False, reverse=False, shapenames=Galaxy.SHAPE_COLS):
-    cat = fits.getdata(sourcecatfile)
-    header = fits.getheader(sourcecatfile)
+    if type(sourcecatfile) is str:
+        cat = fits.getdata(sourcecatfile)
+        header = fits.getheader(sourcecatfile)
+    else:
+        cat, header = sourcecatfile
+
     bands = [b.strip() for b in header["FILTERS"].split(",")]
 
     n_sources = len(cat)

@@ -372,5 +372,47 @@ class GPUPatchMixin(DevicePatchMixin):
         print("Kernel done.")
 
 
-class CPUPatchMixin:
-    pass
+class CPUPatchMixin(DevicePatchMixin):
+
+    """Mix-in class for communicating patch data with the CPU
+    """
+
+    def send_to_device(self):
+        self.device_ptrs = {}
+        self.buffer_sizes = {}
+        for arrname in self.patch_struct_dtype.names:
+            try:
+                arr = getattr(self, arrname)
+                arr_dt = self.patch_struct_dtype[arrname]
+                if arr_dt == self.ptr_dtype:
+                    ptr, rof = arr.__array_interface__['data']
+                    self.device_ptrs[arrname] = ptr
+                    #bf = memoryview(arr).tobytes()
+                    #self.buffer_sizes[arrname] = len(bf)
+            except AttributeError:
+                if arrname != 'residual':
+                    raise
+        self.device_patch = self.send_patchstruct_to_device()
+        return self.device_patch
+
+    def swap_on_device(self):
+        raise NotImplementedError
+
+    def send_patchstruct_to_device(self):
+        patch_struct = np.zeros(1, dtype=self.patch_struct_dtype)[0]
+        for arrname in self.patch_struct_dtype.names:
+            arr_dt = self.patch_struct_dtype[arrname]
+            if arr_dt == self.ptr_dtype:
+                patch_struct[arrname] = self.device_ptrs[arrname]
+            else:
+                patch_struct[arrname] = getattr(self, arrname)
+        self.patchstruct_ptr, rof = patch_struct.__array_interface__['data']
+        self.patch_struct = patch_struct
+        return self.ptr_dtype(self.patchstruct_ptr)
+
+    def replace_device_meta_ptrs(self):
+        raise NotImplementedError
+
+    def retrieve_array(self, arrname="residual"):
+        raise NotImplementedError
+

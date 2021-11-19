@@ -326,7 +326,7 @@ class FITSPatch(Patch):
         self.epaths = fitsfiles
         self.hdrs = [fits.getheader(f) for f in self.epaths]
         self.wcses = [WCS(h) for h in self.hdrs]
-        self.bands = [h["FILTERNAME"] for h in self.hdrs]
+        self.bands = [h["FILTER"] for h in self.hdrs]
 
         band_ids = [allbands.index(b) for b in self.bands]
         u, n = np.unique(band_ids, return_counts=True)
@@ -338,7 +338,7 @@ class FITSPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        self.pack_pix(self.epaths, **noise_kwargs)
+        self.pack_pix(**noise_kwargs)
         if sourcecat is not None:
             scene = self.set_scene(sourcecat)
             self.pack_meta(scene)
