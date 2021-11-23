@@ -312,7 +312,7 @@ class FITSPatch(Patch):
         Default: np.float32
     """
 
-    def build_patch(self, fitsfiles, sourcecat=None, allbands=JWST_BANDS,
+    def build_patch(self, fitsfiles, region=None, sourcecat=None, allbands=JWST_BANDS,
                     noise_kwargs={}):
         """
         Parameters
@@ -345,7 +345,7 @@ class FITSPatch(Patch):
 
         self._dirty_data = False
 
-    def pack_pix(self, snr=None, unc=None, dtype=None):
+    def pack_pix(self, region=None, snr=None, unc=None, dtype=None):
         """We have pixel data in individual exposures that we want to pack into
         concatenated 1D pixel arrays.
 
@@ -391,6 +391,15 @@ class FITSPatch(Patch):
             n_pix = nx * ny
             xp, yp = np.meshgrid(np.arange(nx), np.arange(ny))
 
+            # if region is given, restrict to valid pixels.
+            if region is not None:
+                sx, sy = self.find_pixels(xp, yp, self.wcses[e], region)
+                flux = flux[sx, sy]
+                ie = ie[sx, sy]
+                xp = xp[sx, sy]
+                yp = yp[sx, sy]
+                n_pix = len(flux)
+
             if e > 0 and self.bands[e] != self.bands[e - 1]:
                 b += 1
             self.band_N[b] += 1
@@ -412,3 +421,12 @@ class FITSPatch(Patch):
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
         self.band_N_pix[:-1] = np.diff(self.exposure_start[self.band_start])
         self.band_N_pix[-1] = self.npix - self.band_N_pix[:-1].sum()
+
+    def find_pixels(self, xp, yp, wcs, region):
+        offsets = np.array([(0, 0), (1, 0), (1, 1), (0, 1)])
+        lower_left = np.array([xp, yp])
+        corners = offsets[:, :, None, None] + lower_left[None, :, :, :]
+        corners = corners.transpose(2, 3, 0, 1)
+        sx, sy = region.contains(corners[..., 0], corners[..., 1],
+                                 wcs, origin=self.wcs_origin)
+        return sx, sy
