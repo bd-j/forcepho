@@ -334,7 +334,7 @@ class FITSPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        self.pack_pix(**noise_kwargs)
+        self.pack_pix(region=region, **noise_kwargs)
         if sourcecat is not None:
             scene = self.set_scene(sourcecat)
             self.pack_meta(scene)
