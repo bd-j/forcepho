@@ -22,6 +22,29 @@ __all__ = ["GPUPatchMixin", "CPUPatchMixin"]
 
 class DevicePatchMixin:
 
+    """Abstract Base Class for device communication of Patch data.
+    """
+
+    def send_to_device(self):
+        """Transfer all the patch data and pointers thereto to the device.
+        """
+        raise NotImplementedError
+
+    def swap_on_device(self):
+        """Replace metadata on device, swap pointers to residual and data,
+        resend all pointers to device.
+        """
+        raise NotImplementedError
+
+    def replace_device_meta_ptrs(self):
+        raise NotImplementedError
+
+    def send_patchstruct_to_device(self):
+        raise NotImplementedError
+
+    def retrieve_array(self, **kwargs):
+        raise NotImplementedError
+
     def subtract_fixed(self, fixed, active=None, big=None, maxactive=15,
                        swap_local=False, big_scene_kwargs={}, **scene_kwargs):
         """Subtract a set of big and/or fixed sources from the data on the GPU.
@@ -163,7 +186,7 @@ class DevicePatchMixin:
 
 class GPUPatchMixin(DevicePatchMixin):
 
-    """Mix-in class for communicating patch data with the GPU
+    """Mix-in class for communicating patch data with the GPU using PyCUDA.
     """
 
     def prepare_model(self, active=None, fixed=None, big=None,

@@ -9,7 +9,7 @@ from .storage import MetaStore, PixelStore
 from .patch import Patch
 
 
-__all__ = ["StoragePatch",
+__all__ = ["StorePatch", "FITSPatch",
            "JWST_BANDS"]
 
 
@@ -27,11 +27,14 @@ class StorePatch(Patch):
 
     Parameters
     ----------
+    pixelstore : string
+        Path to HDF5 file to be used for
+        :py:class:`forcepho.patches.storage.PixelStore`
 
-    Attributes
-    ----------
-    bandlist : list of str
-    """
+    metastore : string
+        Path to json file containing associated metadata for the pixel store.
+        Used to instantiate :py:class:`forcepho.patches.storage.MetaStore`.
+   """
 
     def __init__(self,
                  pixelstore="",
@@ -57,7 +60,8 @@ class StorePatch(Patch):
         self.background_offsets = None
         self.max_snr = None
 
-    def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS, tweak_background=False):
+    def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS,
+                    tweak_background=False):
         """Given a region this method finds and packs up all the relevant
         pixel-data in a format suitable for transfer to the GPU.  Optionally
         pack up metadata if a source catalog is provided.
@@ -296,24 +300,12 @@ class StorePatch(Patch):
 
 class FITSPatch(Patch):
 
-    """
-    Parameters
-    ----------
-    return_residual: bool, optional
-        Whether the residual image will be returned from the GPU.
-        Default: False.
-
-    pix_dtype: np.dtype, optional
-        The Numpy datatype of the pixel data, like fluxes and coordinates.
-        Default: np.float32
-
-    meta_dtype: np.dtype, optional
-        The Numpy datatype of the non-pixel data, like astrometry.
-        Default: np.float32
+    """This class converts pixel data and meta-data (WCS) information stored in
+    FITS files and headers to the data formats required by the device-side code.
     """
 
-    def build_patch(self, fitsfiles, region=None, sourcecat=None, allbands=JWST_BANDS,
-                    noise_kwargs={}):
+    def build_patch(self, fitsfiles, region=None, sourcecat=None,
+                    allbands=JWST_BANDS, noise_kwargs={}):
         """
         Parameters
         ----------
@@ -322,6 +314,10 @@ class FITSPatch(Patch):
             1st/0th extension, and the header contains both a valid WCS and the
             "FILTER" keyword.  Also assumes the stddev array is in the 2nd
             extension.
+
+        region : optional, instance of :py:class:`forcepho.regions.Region`
+            An object which inludes a `contains()` method used to restrict the
+            pixels that are included in the fit.
         """
         self.epaths = fitsfiles
         self.hdrs = [fits.getheader(f) for f in self.epaths]

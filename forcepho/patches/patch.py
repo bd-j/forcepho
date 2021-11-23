@@ -24,9 +24,6 @@ class PatchBase:
     structures in a manner suitable for sending to the GPU. This includes
     rearranging the data into (padded) super-pixel order.
 
-    The Patch object contains methods for sending the patch data to the GPU
-    with PyCUDA.
-
     Parameters
     ----------
     return_residual: bool, optional
@@ -204,7 +201,22 @@ class PatchBase:
 class Patch(PatchBase):
 
     """Subclass of PatchBase that includes logic for setting meta data arrays
-    given scenes and lists of FITS header dictionaries and WCS instances.
+    given :py:class:`forcepho.sources.Scene` instances and lists of FITS header
+    dictionaries and WCS instances.
+
+    Parameters
+    ----------
+    psfstore : string
+        Path to HDF5 file with PSF gaussian mixture parameters, stored as
+        datasets for each band.
+
+    splinedata : string
+        Path to HDF5 file with Gaussian mixture parameters for Sersic profile
+        approximations.
+
+    Attributes
+    ----------
+    bandlist : list of str
     """
 
     def __init__(self,
@@ -243,10 +255,8 @@ class Patch(PatchBase):
 
         Parameters
         ----------
-        sourcecat : ndarray of shape (n_sources,)
-            A structured array of source parameters.  Field names must correspond
-            to the forcepho native parameter names, with fluxes for each band in
-            their own column.
+        scene : instance of :py:class:`forcepho.sources.Scene`
+            The scene to use for generating metadata.
         """
         # Set a reference coordinate near center of scene;
         # Subtract this from source coordinates
@@ -273,7 +283,7 @@ class Patch(PatchBase):
 
         Parameters
         ---------
-        scene : A forcepho.sources.Scene() instance
+        scene : instance of :py:class:`forcepho.sources.Scene`
         """
         if not dtype:
             dtype = self.meta_dtype
