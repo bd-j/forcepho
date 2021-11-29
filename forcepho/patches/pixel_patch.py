@@ -313,11 +313,24 @@ class FITSPatch(Patch):
             Names of the exposure data.  Assumes calibrated flux is in the
             1st/0th extension, and the header contains both a valid WCS and the
             "FILTER" keyword.  Also assumes the stddev array is in the 2nd
-            extension.
+            extension. Exposures *must* be sorted by filter/band
 
         region : optional, instance of :py:class:`forcepho.regions.Region`
             An object which inludes a `contains()` method used to restrict the
             pixels that are included in the fit.
+
+        sourcecat : structured array
+            A structured array describning the parameters of the sources in
+            the scene.  The relevant columns are given by `storage.PAR_COLS`
+
+        allbands : list of strings (optional)
+            The names of the bands in the `flux` column of the source cat,
+            corresponding to keys of the pixel and meta stores.
+
+        Extra Parameters
+        ----------------
+        noise_kwargs : dicitonary
+            Noise parameters passed to `pack_pix`
         """
         self.epaths = fitsfiles
         self.hdrs = [fits.getheader(f) for f in self.epaths]

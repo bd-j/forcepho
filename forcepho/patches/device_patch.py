@@ -321,6 +321,7 @@ class GPUPatchMixin(DevicePatchMixin):
             pass  # no gpu_patch
 
         # Copy the new patch struct to the gpu
+        self.patch_struct = patch_struct
         self.device_patch = cuda.to_device(patch_struct)
         return self.device_patch
 
@@ -378,7 +379,7 @@ class GPUPatchMixin(DevicePatchMixin):
                 }}
                 printf("\\n");
 
-                int i = 100;
+                int i = 35;
                 PSFSourceGaussian p = patch->psfgauss[i];
                 printf("Kernel sees: patch->psfgauss[%d] = (%f,%f,%f,%f,%f,%f,%d)\\n", i,
                         p.amp, p.xcen, p.ycen,
@@ -389,7 +390,7 @@ class GPUPatchMixin(DevicePatchMixin):
             include_dirs=[source_dir, thisdir],
             cache_dir=cache_dir)
 
-        print(self.psfgauss[100])
+        print(self.psfgauss[35])
         kernel = mod.get_function('check_patch_struct')
         retcode = kernel(gpu_patch, block=(1, 1, 1), grid=(1, 1, 1))
         print("Kernel done.")
