@@ -191,7 +191,7 @@ class GPUPatchMixin(DevicePatchMixin):
 
     def prepare_model(self, active=None, fixed=None, big=None,
                       bounds=None,
-                      maxactive=15, shapes=None,
+                      maxactive=15, shapes=Galaxy.SHAPE_COLS,
                       big_scene_kwargs={}, model_kwargs={}):
         """Prepare the patch for sampling/evaluation.  This includes subtracting
         big and fixed sources, and wrapping the patch in a GPUPosterior including transforms.

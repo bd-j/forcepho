@@ -379,7 +379,7 @@ class FITSPatch(Patch):
             if snr is not None:
                 ie = snr / flux
             elif unc is not None:
-                ie = np.zeros_like(data) + 1.0 / unc
+                ie = np.zeros_like(flux) + 1.0 / unc
             else:
                 ie = 1.0 / fits.getdata(f, 1).T
 
