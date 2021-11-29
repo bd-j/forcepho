@@ -9,36 +9,25 @@ from .storage import MetaStore, PixelStore
 from .patch import Patch
 
 
-__all__ = ["StorePatch", "FITSPatch",
+__all__ = ["PixelPatch",
+           "StorePatch", "FITSPatch",
            "JWST_BANDS"]
 
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
 
+
 # FIXME: Better logic for background offsets
 
+class PixelPatch(Patch):
 
-class StorePatch(Patch):
-
-    """This class converts between JADES-like exposure level pixel data,
-    meta-data (WCS), and PSF information stored in HDF5 pixel and meta stores to
-    the data formats required by the device-side code.
-
-    Parameters
-    ----------
-    pixelstore : string
-        Path to HDF5 file to be used for
-        :py:class:`forcepho.patches.storage.PixelStore`
-
-    metastore : string
-        Path to json file containing associated metadata for the pixel store.
-        Used to instantiate :py:class:`forcepho.patches.storage.MetaStore`.
-   """
+    """This class provides a method for packing pixel data in the correct format
+    and keeping track of bookkeeping numbers, given lists of exposure locations,
+    wcses, and a region.  Subclasses must implement `build_patch` and `find_pixels`
+    """
 
     def __init__(self,
-                 pixelstore="",
-                 metastore="",
                  psfstore="",
                  splinedata="",
                  return_residual=False,
@@ -54,71 +43,23 @@ class StorePatch(Patch):
                          psfstore=psfstore,
                          splinedata=splinedata)
 
-        self.metastore = MetaStore(metastore)
-        self.pixelstore = PixelStore(pixelstore)
-
         self.background_offsets = None
         self.max_snr = None
 
-    def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS,
-                    tweak_background=False):
-        """Given a region this method finds and packs up all the relevant
-        pixel-data in a format suitable for transfer to the GPU.  Optionally
-        pack up metadata if a source catalog is provided.
 
-        Parameters
-        ---------
-        region : forcepho.region.Region()
-            An instance of a `Region` object used to find relevant exposures
-            and pixels for the desired patch
-
-        sourcecat : structured array
-            A structured array describning the parameters of the sources in
-            the scene.  The relevant columns are given by `storage.PAR_COLS`
-
-        allbands : list of strings (optional)
-            The names of the bands in the `flux` column of the source cat,
-            corresponding to keys of the pixel and meta stores.
-
-        tweak_background : str, optional (default, empty string)
-            If given, collect exposure dependent backgrounds stored in the
-            the metadata header key given by this string.  If this header key
-            is not present, uses a value of 0.0.  These backgrounds are
-            subtracted during pixel packing.
+    def build_patch(self, region):
+        """Abstract method; should be subclassed
         """
-        # --- Find relevant exposures ---
-        # The output lists are all of length n_exp and should all be in band
-        # order
-        meta = self.find_exposures(region, allbands)
-        self.hdrs, self.wcses, self.epaths, self.bands = meta
-        if len(self.epaths) == 0:
-            raise ValueError("No exposures overlap the region")
+        self.epaths = []
+        self.wcses = []
+        self.bands = []
 
-        if tweak_background:
-            self.background_offsets = [hdr.get(tweak_background, 0.0)
-                                       for hdr in self.hdrs]
-        else:
-            self.background_offsets = None
-
-        # --- Get BAND information for the exposures ---
-        # band_ids must be an int identifier (does not need to be contiguous)
-        band_ids = [allbands.index(b) for b in self.bands]
-        assert (np.diff(band_ids) >= 0).all(), 'Exposures must be sorted by band'
-        u, n = np.unique(band_ids, return_counts=True)
-        self.uniq_bands, self.n_exp_per_band = u, n
-        self.bandlist = [allbands[i] for i in self.uniq_bands]
-
-        # --- Cache some useful numbers ---
-        self.n_bands = len(self.uniq_bands)       # Number of bands/filters
-        self.n_exp = len(self.hdrs)               # Number of exposures
-
-        # --- Pack up all the data for the gpu ---
+        self.bandlist = []
+        self.n_bands = 0
+        self.n_exp = 0
         self.pack_pix(region)
-        if sourcecat is not None:
-            scene = self.set_scene(sourcecat)
-            self.pack_meta(scene)
 
-        self._dirty_data = False
+        raise NotImplementedError
 
     def pack_pix(self, region, dtype=None):
         """We have super-pixel data in individual exposures that we want to
@@ -204,6 +145,108 @@ class StorePatch(Patch):
         if max_snr:
             to_cap = (self.ierr > 0) & (self.data * self.ierr > max_snr)
             self.ierr[to_cap] = max_snr / self.data[to_cap]
+
+    def find_pixels(self, epath, wcs, region):
+        raise NotImplementedError
+
+
+class StorePatch(PixelPatch):
+
+    """This class converts between JADES-like exposure level pixel data,
+    meta-data (WCS), and PSF information stored in HDF5 pixel and meta stores to
+    the data formats required by the device-side code.
+
+    Parameters
+    ----------
+    pixelstore : string
+        Path to HDF5 file to be used for
+        :py:class:`forcepho.patches.storage.PixelStore`
+
+    metastore : string
+        Path to json file containing associated metadata for the pixel store.
+        Used to instantiate :py:class:`forcepho.patches.storage.MetaStore`.
+   """
+
+    def __init__(self,
+                 pixelstore="",
+                 metastore="",
+                 psfstore="",
+                 splinedata="",
+                 return_residual=False,
+                 meta_dtype=np.float32,
+                 pix_dtype=np.float32,
+                 debug=0,
+                 ):
+
+        super().__init__(return_residual=return_residual,
+                         meta_dtype=meta_dtype,
+                         pix_dtype=pix_dtype,
+                         debug=debug,
+                         psfstore=psfstore,
+                         splinedata=splinedata)
+
+        self.metastore = MetaStore(metastore)
+        self.pixelstore = PixelStore(pixelstore)
+
+    def build_patch(self, region, sourcecat=None, allbands=JWST_BANDS,
+                    tweak_background=False):
+        """Given a region this method finds and packs up all the relevant
+        pixel-data in a format suitable for transfer to the GPU.  Optionally
+        pack up metadata if a source catalog is provided.
+
+        Parameters
+        ---------
+        region : forcepho.region.Region()
+            An instance of a `Region` object used to find relevant exposures
+            and pixels for the desired patch
+
+        sourcecat : structured array
+            A structured array describning the parameters of the sources in
+            the scene.  The relevant columns are given by `storage.PAR_COLS`
+
+        allbands : list of strings (optional)
+            The names of the bands in the `flux` column of the source cat,
+            corresponding to keys of the pixel and meta stores.
+
+        tweak_background : str, optional (default, empty string)
+            If given, collect exposure dependent backgrounds stored in the
+            the metadata header key given by this string.  If this header key
+            is not present, uses a value of 0.0.  These backgrounds are
+            subtracted during pixel packing.
+        """
+        # --- Find relevant exposures ---
+        # The output lists are all of length n_exp and should all be in band
+        # order
+        meta = self.find_exposures(region, allbands)
+        self.hdrs, self.wcses, self.epaths, self.bands = meta
+        if len(self.epaths) == 0:
+            raise ValueError("No exposures overlap the region")
+
+        if tweak_background:
+            self.background_offsets = [hdr.get(tweak_background, 0.0)
+                                       for hdr in self.hdrs]
+        else:
+            self.background_offsets = None
+
+        # --- Get BAND information for the exposures ---
+        # band_ids must be an int identifier (does not need to be contiguous)
+        band_ids = [allbands.index(b) for b in self.bands]
+        assert (np.diff(band_ids) >= 0).all(), 'Exposures must be sorted by band'
+        u, n = np.unique(band_ids, return_counts=True)
+        self.uniq_bands, self.n_exp_per_band = u, n
+        self.bandlist = [allbands[i] for i in self.uniq_bands]
+
+        # --- Cache some useful numbers ---
+        self.n_bands = len(self.uniq_bands)       # Number of bands/filters
+        self.n_exp = len(self.hdrs)               # Number of exposures
+
+        # --- Pack up all the data for the gpu ---
+        self.pack_pix(region)
+        if sourcecat is not None:
+            scene = self.set_scene(sourcecat)
+            self.pack_meta(scene)
+
+        self._dirty_data = False
 
     def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
@@ -298,14 +341,34 @@ class StorePatch(Patch):
         return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
 
-class FITSPatch(Patch):
+class FITSPatch(PixelPatch):
 
     """This class converts pixel data and meta-data (WCS) information stored in
     FITS files and headers to the data formats required by the device-side code.
     """
 
+    def __init__(self,
+                 psfstore="",
+                 splinedata="",
+                 return_residual=False,
+                 meta_dtype=np.float32,
+                 pix_dtype=np.float32,
+                 debug=0,
+                 ):
+
+        super().__init__(return_residual=return_residual,
+                         meta_dtype=meta_dtype,
+                         pix_dtype=pix_dtype,
+                         debug=debug,
+                         psfstore=psfstore,
+                         splinedata=splinedata)
+
+
+        self.snr = None
+        self.unc = None
+
     def build_patch(self, fitsfiles, region=None, sourcecat=None,
-                    allbands=JWST_BANDS, noise_kwargs={}):
+                    allbands=JWST_BANDS, tweak_background=False):
         """
         Parameters
         ----------
@@ -337,6 +400,13 @@ class FITSPatch(Patch):
         self.wcses = [WCS(h) for h in self.hdrs]
         self.bands = [h["FILTER"] for h in self.hdrs]
 
+        if tweak_background:
+            self.background_offsets = [hdr.get(tweak_background, 0.0)
+                                       for hdr in self.hdrs]
+        else:
+            self.background_offsets = None
+
+
         band_ids = [allbands.index(b) for b in self.bands]
         u, n = np.unique(band_ids, return_counts=True)
         self.uniq_bands, self.n_exp_per_band = u, n
@@ -347,95 +417,41 @@ class FITSPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        self.pack_pix(region=region, **noise_kwargs)
+        self.pack_pix(region=region)
         if sourcecat is not None:
             scene = self.set_scene(sourcecat)
             self.pack_meta(scene)
 
         self._dirty_data = False
 
-    def pack_pix(self, region=None, snr=None, unc=None, dtype=None):
-        """We have pixel data in individual exposures that we want to pack into
-        concatenated 1D pixel arrays.
+    def find_pixels(self, epath, wcs, region):
 
-        As we go, we want to build up the index arrays that allow us to find
-        an exposure in the 1D arrays.
+        # get pixel data
+        flux = fits.getdata(epath, 0).T
+        if getattr(self, "snr", None) is not None:
+            ie = self.snr / flux
+        elif getattr(self, "unc", None) is not None:
+            ie = np.zeros_like(flux) + 1.0 / self.unc
+        else:
+            ie = 1.0 / fits.getdata(epath, 1).T
 
-        Fills the following arrays:
-        - self.xpix
-        - self.ypix
-        - self.data
-        - self.ierr
-        - self.band_start     [NBAND] exposure index corresponding to the start of each band
-        - self.band_N         [NBAND] number of exposures in each band
-        - self.exposure_start [NEXP]  pixel index corresponding to the start of each exposure
-        - self.exposure_N     [NEXP]  number of pixels (including warp padding) in each exposure
-        """
+        nx, ny = flux.shape
+        xp, yp = np.meshgrid(np.arange(nx), np.arange(ny))
 
-        if not dtype:
-            dtype = self.pix_dtype
+        # restrict pixels
+        if region is None:
+            sx, sy = slice(None), slice(None)
+        else:
+            offsets = np.array([(0, 0), (1, 0), (1, 1), (0, 1)])
+            lower_left = np.array([xp, yp])
+            corners = offsets[:, :, None, None] + lower_left[None, :, :, :]
+            corners = corners.transpose(2, 3, 0, 1)
+            sx, sy = region.contains(corners[..., 0], corners[..., 1],
+                                     wcs, origin=self.wcs_origin)
 
-        # These index the exposures
-        self.band_start = np.empty(self.n_bands, dtype=np.int16)
-        self.band_N = np.zeros(self.n_bands, dtype=np.int16)
+        flux = flux[sx, sy]
+        ie = ie[sx, sy]
+        xp = xp[sx, sy]
+        yp = yp[sx, sy]
 
-        # These index the pixel arrays (also sequential)
-        self.exposure_start = np.empty(self.n_exp, dtype=np.int32)
-        self.exposure_N = np.empty(self.n_exp, dtype=np.int32)
-        self.band_N_pix = np.empty(self.n_bands, dtype=np.int32)
-
-        # loop over files
-        data, ierr, xpix, ypix = [], [], [], []
-        b, i = 0, 0
-        for e, f in enumerate(self.epaths):
-            flux = fits.getdata(f, 0).T
-            if snr is not None:
-                ie = snr / flux
-            elif unc is not None:
-                ie = np.zeros_like(flux) + 1.0 / unc
-            else:
-                ie = 1.0 / fits.getdata(f, 1).T
-
-            nx, ny = flux.shape
-            n_pix = nx * ny
-            xp, yp = np.meshgrid(np.arange(nx), np.arange(ny))
-
-            # if region is given, restrict to valid pixels.
-            if region is not None:
-                sx, sy = self.find_pixels(xp, yp, self.wcses[e], region)
-                flux = flux[sx, sy]
-                ie = ie[sx, sy]
-                xp = xp[sx, sy]
-                yp = yp[sx, sy]
-                n_pix = len(flux)
-
-            if e > 0 and self.bands[e] != self.bands[e - 1]:
-                b += 1
-            self.band_N[b] += 1
-            self.exposure_start[e] = i
-            self.exposure_N[e] = n_pix
-            data.append(flux)
-            ierr.append(ie)
-            xpix.append(xp)
-            ypix.append(yp)
-            i += n_pix
-
-        # Flatten and set the dtype explicitly here
-        self.data = np.concatenate(data).reshape(-1).astype(dtype)
-        self.xpix = np.concatenate(xpix).reshape(-1).astype(dtype)
-        self.ypix = np.concatenate(ypix).reshape(-1).astype(dtype)
-        self.ierr = np.concatenate(ierr).reshape(-1).astype(dtype)
-
-        self.band_start[0] = 0
-        self.band_start[1:] = np.cumsum(self.band_N)[:-1]
-        self.band_N_pix[:-1] = np.diff(self.exposure_start[self.band_start])
-        self.band_N_pix[-1] = self.npix - self.band_N_pix[:-1].sum()
-
-    def find_pixels(self, xp, yp, wcs, region):
-        offsets = np.array([(0, 0), (1, 0), (1, 1), (0, 1)])
-        lower_left = np.array([xp, yp])
-        corners = offsets[:, :, None, None] + lower_left[None, :, :, :]
-        corners = corners.transpose(2, 3, 0, 1)
-        sx, sy = region.contains(corners[..., 0], corners[..., 1],
-                                 wcs, origin=self.wcs_origin)
-        return sx, sy
+        return flux.reshape(-1), ie.reshape(-1), xp.reshape(-1), yp.reshape(-1)
