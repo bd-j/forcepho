@@ -449,9 +449,23 @@ class FITSPatch(PixelPatch):
             sx, sy = region.contains(corners[..., 0], corners[..., 1],
                                      wcs, origin=self.wcs_origin)
 
-        flux = flux[sx, sy]
-        ie = ie[sx, sy]
-        xp = xp[sx, sy]
-        yp = yp[sx, sy]
+        flux = flux[sx, sy].reshape(-1)
+        ie = ie[sx, sy].reshape(-1)
+        xp = xp[sx, sy].reshape(-1)
+        yp = yp[sx, sy].reshape(-1)
 
-        return flux.reshape(-1), ie.reshape(-1), xp.reshape(-1), yp.reshape(-1)
+        # Pad to multiples of say 64
+        # in fact only every *band* needs to be padded
+        # but we are being dumb anyway.
+        warp = getattr(self, "warp_size", 64)
+        pad = warp - np.mod(len(flux), warp)
+        if pad:
+            # we give extra pixels ierr=0 (no weight)
+            ie = np.append(ie, np.zeros(pad, dtype=ie.dtype))
+            flux = np.append(flux, np.zeros(pad, dtype=flux.dtype))
+            # we give them x, y = -1, easy to find later.
+            xp = np.append(xp, np.zeros(pad, dtype=xp.dtype)-1)
+            yp = np.append(yp, np.zeros(pad, dtype=yp.dtype)-1)
+
+
+        return flux, ie, xp, yp
