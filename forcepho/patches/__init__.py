@@ -1,8 +1,9 @@
 from .patch import Patch
 from .device_patch import GPUPatchMixin
-from .pixel_patch import StorePatch, FITSPatch
+from .pixel_patch import PixelPatch, StorePatch, FITSPatch
 
 __all__ = ["Patch",
+           "PixelPatch",
            "StorePatch", "FITSPatch",
            "JadesPatch",
            "SimplePatch"]

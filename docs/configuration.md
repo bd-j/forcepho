@@ -40,17 +40,28 @@ store_directory:
   $PROJECT_DIR/data/stores
 splinedatafile:
   $PROJECT_DIR/data/stores/sersic_mog_model.smooth=0.0150.h5
+psfstorefile:
+  psf_jwst_ng4.h5
+# Use the following for the efficient StorePatch
 pixelstorefile:
   pixels_deepfield.h5
 metastorefile:
   meta_deepfield.json
-psfstorefile:
-  psf_jwst_ng4.h5
+# Use the following for the easy FITS file input with FITSPatch
+# They must be in order by band
+fitsfiles:
+ - band0_exp0.fits
+ - band0_exp1.fits
+ - band1_exp0.fits
+ - band2_exp0.fits
 ```
 
 These are the locations of the initialization catalog (`raw_catalog`) as well as
 the data stores (`store_directory`). Within the store directory, the pixel and
 meta-data storage files are named, as well as the Gaussian mixture files.
+
+If using a raw FITS format for the image input, the image names must be given in
+a list.
 
 
 ## Output locations

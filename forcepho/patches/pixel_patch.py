@@ -24,7 +24,8 @@ class PixelPatch(Patch):
 
     """This class provides a method for packing pixel data in the correct format
     and keeping track of bookkeeping numbers, given lists of exposure locations,
-    wcses, and a region.  Subclasses must implement `build_patch` and `find_pixels`
+    wcses, and a region.  Subclasses must implement :py:meth:`build_patch` and
+    :py:meth:`find_pixels`
     """
 
     def __init__(self,

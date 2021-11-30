@@ -16,10 +16,10 @@ Documentation of Forcepho
    :maxdepth: 2
    :caption: API Reference
 
-   api/storage_api
-   api/patches_api
    api/sources_api
    api/models_api
+   api/patches_api
+   api/storage_api
    api/fitting_api
    api/postprocess_api
 
