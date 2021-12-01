@@ -512,7 +512,7 @@ def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
     dpix : optional, float, default; 1.0
         The number of pixels to offset to compute the local linear approx
 
-    origin : optiona, default; 1
+    origin : optional, default; 1
         The astropy wcs `origin` keyword
 
     Returns

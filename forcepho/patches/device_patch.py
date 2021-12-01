@@ -351,7 +351,7 @@ class GPUPatchMixin(DevicePatchMixin):
         except(AttributeError):
             pass  # no gpu_patch
 
-    def test_struct_transfer(self, gpu_patch, cache_dir=False):
+    def test_struct_transfer(self, gpu_patch, cache_dir=False, psf_index=35):
         """Run a simple PyCUDA kernel that checks that the data sent was the
         data received.
         """
@@ -379,18 +379,19 @@ class GPUPatchMixin(DevicePatchMixin):
                 }}
                 printf("\\n");
 
-                int i = 35;
+                int i = {ip};
                 PSFSourceGaussian p = patch->psfgauss[i];
                 printf("Kernel sees: patch->psfgauss[%d] = (%f,%f,%f,%f,%f,%f,%d)\\n", i,
                         p.amp, p.xcen, p.ycen,
                         p.Cxx, p.Cyy, p.Cxy, p.sersic_radius_bin
                         );
             }}
-            """.format(sz=self.patch_struct_dtype.itemsize, nsource=self.n_sources),
+            """.format(sz=self.patch_struct_dtype.itemsize, nsource=self.n_sources,
+                       ip=psf_index),
             include_dirs=[source_dir, thisdir],
             cache_dir=cache_dir)
 
-        print(self.psfgauss[35])
+        print(self.psfgauss[psf_index])
         kernel = mod.get_function('check_patch_struct')
         retcode = kernel(gpu_patch, block=(1, 1, 1), grid=(1, 1, 1))
         print("Kernel done.")

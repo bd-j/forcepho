@@ -427,7 +427,7 @@ class FITSPatch(PixelPatch):
 
     def find_pixels(self, epath, wcs, region):
 
-        # get pixel data
+        # get pixel data, note the transpose
         flux = fits.getdata(epath, 0).T
         if getattr(self, "snr", None) is not None:
             ie = self.snr / flux
@@ -437,7 +437,8 @@ class FITSPatch(PixelPatch):
             ie = 1.0 / fits.getdata(epath, 1).T
 
         nx, ny = flux.shape
-        xp, yp = np.meshgrid(np.arange(nx), np.arange(ny))
+        # NOTE: the x,y order swap here is important
+        yp, xp = np.meshgrid(np.arange(ny), np.arange(nx))
 
         # restrict pixels
         if region is None:
@@ -460,7 +461,7 @@ class FITSPatch(PixelPatch):
         # but we are being dumb anyway.
         warp = getattr(self, "warp_size", 64)
         pad = warp - np.mod(len(flux), warp)
-        if pad:
+        if pad != warp:
             # we give extra pixels ierr=0 (no weight)
             ie = np.append(ie, np.zeros(pad, dtype=ie.dtype))
             flux = np.append(flux, np.zeros(pad, dtype=flux.dtype))
