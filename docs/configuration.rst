@@ -9,7 +9,7 @@ descriptions of each parameter.
 
 Note that any parameter can generally be overridden at run time with a command
 line argument. Forcepho will try to automatially expand shell variables.  See
-``forcepho.utils.read_config`` for details.
+:py:meth:`forcepho.utils.read_config` for details.
 
 Switches are generally represented with 0 (False, off) and 1 (True, on)
 

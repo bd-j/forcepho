@@ -5,4 +5,4 @@ meta data for small regions on the sky, and to communicate that data to the GPU
 when required.
 
 .. automodule:: forcepho.patches
-   :members: Patch, JadesPatch, storage
+   :members: Patch, FITSPatch, StorePatch
