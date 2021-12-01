@@ -33,10 +33,14 @@ release = '0.4'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
-    'myst_parser',
+    "sphinx.ext.intersphinx",
+    #'myst_parser',
+    "myst_nb",
     'sphinx.ext.napoleon',
     'numpydoc'
 ]
+
+myst_enable_extensions = ["dollarmath", "colon_fence"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -55,27 +59,24 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
-if not on_rtd:
-    import sphinx_rtd_theme
-html_theme = 'sphinx_rtd_theme'
-html_theme_options = {"logo_only": True}
+html_theme = 'sphinx_book_theme'
+html_title = "forcepho"
+html_copy_source = True
+html_show_sourcelink = True
+html_theme_options = {"path_to_docs": "docs",
+                      "repository_url": "https://github.com/bd-j/forcepho",
+                      "repository_branch": "main",
+                      "use_repository_button": True,
+                      "use_edit_page_button": True,
+                      "use_issues_button": True,
+                      "use_download_button": True}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
-
 #html_css_files = ['css/custom.css']
-
-# The name of an image file (relative to this directory) to place at the top
-# of the sidebar.
 #html_logo = "_static/logo_name.png"
-
-
-# The name of an image file (relative to this directory) to use as a favicon of
-# the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
-# pixels large.
 #html_favicon = "_static/favicon.png"
 
 # If not None, a 'Last updated on:' timestamp is inserted at every page

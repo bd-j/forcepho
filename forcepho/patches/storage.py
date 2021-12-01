@@ -12,6 +12,11 @@ import h5py
 from astropy.io import fits
 from astropy.wcs import WCS
 
+
+__all__ = ["PixelStore", "MetaStore", "PSFStore",
+           "ImageNameSet", "ImageSet",
+           "header_to_id"]
+
 ImageNameSet = namedtuple("ImageNames", ["im", "err", "mask", "bkg"])
 ImageSet = namedtuple("Images", ["im", "ierr", "mask", "bkg",
                                  "hdr", "band", "expID", "names"])

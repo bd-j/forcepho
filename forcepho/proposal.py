@@ -102,7 +102,7 @@ class Proposer:
             print(msg, file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
-        self.evaluate_proposal_kernel(patch.gpu_patch, cuda.In(proposal),     # inputs
+        self.evaluate_proposal_kernel(patch.device_patch, cuda.In(proposal),     # inputs
                                       cuda.Out(chi_out), cuda.Out(chi_derivs_out), # outputs
                                       grid=self.grid, block=self.block,            # launch config
                                       shared=self.shared_size)

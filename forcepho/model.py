@@ -401,7 +401,7 @@ class GPUPosterior(Posterior):
         self.scene.set_all_source_params(q)
         proposal = self.scene.get_proposal()
         ret = self.proposer.evaluate_proposal(proposal, patch=self.patch, unpack=unpack)
-        _, _, self._residuals = ret
+        chi2, chi2_derivs, self._residuals = ret
         self.patch.return_residual = orig
 
         return self._residuals

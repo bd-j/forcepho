@@ -133,6 +133,67 @@ class PostageStamp(object):
                              **compute_keywords)
 
 
+    @property
+    def wcs(self):
+        """Convert from Stamp meta information to a valid WCS object.
+
+        Returns
+        -------
+        wcs : the WCS for the stamp
+        """
+        from astropy.wcs import WCS
+        cd = np.linalg.inv(self.scale)/3600.
+        wcs = WCS(naxis=2)
+        wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        wcs.wcs.radesys = "FK5"
+        # FITS/wcs is 1-indexed
+        wcs.wcs.crpix = self.crpix + 1
+        wcs.wcs.crval = self.crval
+        wcs.wcs.latpole = self.crval[1]
+        wcs.wcs.pc = cd
+        wcs.wcs.cdelt = np.ones(2)
+
+        # Make sure dpix_dsky is reasonable
+        sky = wcs.all_pix2world(self.crpix[0], self.crpix[1], 1, ra_dec_order=0)
+        self.dpix_dsky, _ = scale_at_sky(sky, wcs)
+
+        return wcs
+
+
+    def to_fits(self, filename="", **kwargs):
+        """Create an HDUList with image and uncertainty, as well as a valid WCS.
+
+        Parameters
+        ----------
+        filename : string, optional
+            If supplied, the file to write the multi-extension FITS
+
+        kwargs: extra keyword arguments are passed to HDUList.writeto()
+
+        Returns
+        -------
+        hdul : HDUList instance
+            HDUList containing the data and uncertainty images.
+
+        wcs : WCS instance
+            Valid WCS corresponding to the metadat information in the stamp.
+        """
+        from astropy.io import fits
+        # NOTE transpose
+        image = fits.PrimaryHDU(self.pixel_values.T)
+        wcs = self.wcs
+        image.header.update(wcs.to_header())
+        uncertainty = fits.ImageHDU(1/self.ierr.reshape(self.nx, self.ny).T,
+                                    header=image.header)
+        uncertainty.header["BUNIT"] = "sigma"
+
+        hdul = fits.HDUList([image, uncertainty])
+        if filename:
+            hdul.writeto(filename, **kwargs)
+
+        return hdul, wcs
+
+
 def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
     """Get the local linear approximation of the scale and CW matrix at the
     celestial position given by `sky`.  This is a simple numerical calculation

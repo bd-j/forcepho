@@ -1,7 +1,16 @@
 from .patch import Patch
-from .jades_patch import JadesPatch
-from .static_patch import StaticPatch
+from .device_patch import GPUPatchMixin
+from .pixel_patch import PixelPatch, StorePatch, FITSPatch
 
 __all__ = ["Patch",
+           "PixelPatch",
+           "StorePatch", "FITSPatch",
            "JadesPatch",
-           "StaticPatch"]
+           "SimplePatch"]
+
+class JadesPatch(StorePatch, GPUPatchMixin):
+    pass
+
+
+class SimplePatch(FITSPatch, GPUPatchMixin):
+    pass
