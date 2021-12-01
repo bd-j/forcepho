@@ -1,5 +1,6 @@
 forcepho.postprocess
-================
+====================
+
 Classes and methods in the :py:mod:`forcepho.postprocess` module are used to
 manipulate and view the results of optimization and sampling.
 

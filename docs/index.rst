@@ -7,7 +7,7 @@ Documentation of Forcepho
 
    concepts.md
    install.md
-   inputs.md
+   inputs.rst
    configuration.md
    usage.md
    output.md

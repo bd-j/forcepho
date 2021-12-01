@@ -13,6 +13,7 @@ dependencies:
   - numba>=0.43.0
   # Astro
   - astropy
+  - regions
   # Inference
   - pip:
     - pycuda

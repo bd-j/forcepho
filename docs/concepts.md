@@ -1,21 +1,19 @@
 # Description
 
-## Overview
-
 Forcepho is a code to infer the fluxes and shapes of galaxies from astronomical
 images.  This is accomplished by modeling the appearance of multiple sources in
-multiple bands simultaneously, and comparisng to observed data via a likelihood
+multiple bands simultaneously, and comparing to observed data via a likelihood
 function.  Gradients of this likelihood allow for efficent maximization of the
 posterior probability or sampling of the posterior probability distribution via
 Hamiltonian Monte Carlo.
 
 The model instrinsic galaxy shapes and positions are shared across the different
-bands, but the fluxes are fit for each band simultaneously.
+bands, but the fluxes are fit separately for each band.
 
 Forcepho does *not* perform detection; initial locations and (very rough)
 parameter estimates must be supplied by the user.
 
-### Everything is made of Gaussians
+## Everything is made of Gaussians
 
 Because Forcepho requires many evaluations of the model and its gradients, it
 approximates both the point spread function in every band and the intrinsic
@@ -23,7 +21,7 @@ galaxy shape (Sersic profiles) as mixtures of Gaussians.  This allows for
 convolution to be accomplished via simple sums of Gaussian parameters.  Lookup
 tables defining these Gaussian approximations are a key input to the code.
 
-### Scenes and Patches
+## Scenes and Patches
 
 The parameters describing a collection of sources on the sky is called a
 **Scene**. Any collection of sources can define a scene; the set of all sources
@@ -42,7 +40,7 @@ associated Patch data.  Additonal sources near the edge of the patch may be
 collected into a *fixed* Scene; the parameters for these sources are held fixed
 in the model while the those of the active scene are inferred.
 
-### Optimization and Sampling
+## Optimization and Sampling
 
 Forcepho can either maximize the log-posterior probability or sample from the
 posterior probability density.  It is recommeded to perform an initial
@@ -61,7 +59,7 @@ This is particularly important when simultaneously inferring multi-band fluxes
 of multiple sources, where the number of parameters to infer can be in the
 hundreds.
 
-### Parents and children
+## Parents and children
 
 Since Forcepho operates on many different regions of the sky more or less
 independently, it is well suited to parallel processing approaches.  The
@@ -78,7 +76,7 @@ ensure that all sources are modeled, scenes will continue to be checked-out in
 an iterative manner until every source has had the requested number of samples
 produced.  This can lead to sources appearing in multiple overlapping patches.
 
-### Data Stores
+## CPU/GPU
 
 ## Code structure
 

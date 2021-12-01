@@ -2,13 +2,19 @@
 
 ## Requirements
 
-The python packages that |Codename| requires are listed in `requirements.txt`
+The python packages that Forcepho requires are listed in `requirements.txt`.
+Additonal packages that may be nec essary (especially for CUDA and MPI) are
+listed in `optional-requirements.txt`.
 
-In addition, for GPU and multiproceessing capability the python packages will require CUDA and MPI installations (known to work with CUDA 10.1 and open-MPI).  You will also need an HDF5 installation.  These are often available on computing clusters as modules.
+In addition, for GPU and multiproceessing capability the python packages will
+require CUDA and MPI installations (known to work with CUDA 10.1 and open-MPI).
+You will also need an HDF5 installation.  These are often available on computing
+clusters as modules.
 
 ## Conda install
 
-The easiest way to install is to create a conda environment, using the supplied `environment.yml` file.
+The easiest way to install is to create a conda environment, using the supplied
+`environment.yml` file.
 
 ```bash
 git clone git@github.com:bd-j/forcepho.git
@@ -23,16 +29,26 @@ python -m pip install .
 ### cannon
 
 slurm script directives, also load these modules before installing
-   ```bash
-   module purge
-   module load git/2.17.0-fasrc01
-   module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
-   module load cuda/10.1.243-fasrc01
-   module load Anaconda3/5.0.1-fasrc01
-   source activate fpho
-   ```
+```bash
+module purge
+module load git/2.17.0-fasrc01
+module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
+module load cuda/10.1.243-fasrc01
+module load Anaconda3/5.0.1-fasrc01
+source activate fpho
+```
 
 ### lux
+
+slurm script directives, also load these modules before installing
+```bash
+module load cuda10.1 python/3.6.7 hdf5
+module load numpy scipy h5py
+module load numba pycuda
+module load astropy
+module load littlemcmc
+module load openmpi mpi4py
+```
 
 ### GPU details
 

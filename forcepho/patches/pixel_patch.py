@@ -436,6 +436,10 @@ class FITSPatch(PixelPatch):
         else:
             ie = 1.0 / fits.getdata(epath, 1).T
 
+        bad = ~np.isfinite(flux) | ~np.isfinite(ie) | (ie < 0)
+        ie[bad] = 0
+        flux[bad] = 0
+
         nx, ny = flux.shape
         # NOTE: the x,y order swap here is important
         yp, xp = np.meshgrid(np.arange(ny), np.arange(nx))

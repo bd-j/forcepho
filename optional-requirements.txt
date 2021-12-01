@@ -1,3 +1,4 @@
+regions
 matplotlib
 pycuda
 mpi4py >= 3.1.0
