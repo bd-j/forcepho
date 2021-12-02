@@ -3,13 +3,15 @@
 ## Requirements
 
 The python packages that Forcepho requires are listed in `requirements.txt`.
-Additonal packages that may be nec essary (especially for CUDA and MPI) are
+Additonal packages that may be necessary (especially for CUDA and MPI) are
 listed in `optional-requirements.txt`.
 
 In addition, for GPU and multiproceessing capability the python packages will
 require CUDA and MPI installations (known to work with CUDA 10.1 and open-MPI).
 You will also need an HDF5 installation.  These are often available on computing
 clusters as modules.
+
+Currently Forcepho is tested to work only with V100 nvidia GPUs
 
 ## Conda install
 

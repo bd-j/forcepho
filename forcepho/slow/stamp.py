@@ -183,11 +183,14 @@ class PostageStamp(object):
         image = fits.PrimaryHDU(self.pixel_values.T)
         wcs = self.wcs
         image.header.update(wcs.to_header())
-        uncertainty = fits.ImageHDU(1/self.ierr.reshape(self.nx, self.ny).T,
-                                    header=image.header)
-        uncertainty.header["BUNIT"] = "sigma"
+        hdul = [image]
+        if np.any(self.ierr):
+            uncertainty = fits.ImageHDU(1/self.ierr.reshape(self.nx, self.ny).T,
+                                        header=image.header)
+            uncertainty.header["BUNIT"] = "sigma"
+            hdul += [uncertainty]
 
-        hdul = fits.HDUList([image, uncertainty])
+        hdul = fits.HDUList(hdul)
         if filename:
             hdul.writeto(filename, **kwargs)
 

@@ -14,10 +14,32 @@ except ImportError:
     setup
 
 
+VERSION = "0.5"
+
+
+def get_gitvers(version=VERSION):
+
+    try:
+        process = subprocess.Popen(
+            ['git', 'rev-parse', '--short', 'HEAD'], shell=False, stdout=subprocess.PIPE)
+        git_head_hash = process.communicate()[0].strip()
+        git_head_hash = git_head_hash.decode("utf-8")
+        version = f"{version}+{git_head_hash}"
+
+
+    except:
+        pass
+
+    with open("./forcepho/_version.py", "w") as f:
+        f.write(f"__version__ = '{version}'")
+
+    return version
+
+
 setup(
     name="forcepho",
     url="https://github.com/bd-j/forcepho",
-    version="0.5",
+    version=get_gitvers(),
     author="Ben Johnson",
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",

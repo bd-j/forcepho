@@ -16,10 +16,10 @@ Switches are generally represented with 0 (False, off) and 1 (True, on)
 Filters
 -------
 
-This is a list of the bands for which images exist.  Fluxes will be measured for
-these bands, and pixel data will be grouped by bands.  Only images with a header
-keyword ``"FILTER`` with value equal to one of these bands will be used in the
-fitting.  PSFs must be available for each of these bands.
+This is a list of the bands for which fluxes will be measured. Pixel data will
+be grouped by bands.  Only images with a header keyword ``"FILTER`` with value
+equal to one of these bands will be used in the fitting.  PSFs must be available
+for each of these bands.
 
 .. code-block:: yaml
 

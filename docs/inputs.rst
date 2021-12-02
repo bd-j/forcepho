@@ -23,13 +23,11 @@ Direct FITS input
 
 The simplest way to provide data to be fit, appropriate for smaller datasets, is
 to provide a list of FITS filenames (see :ref:`configuration`) and to
-use the :py:class:`forcepho.patches.FITSPatch` class.  Note that images must be
-ordered by *band*, and if using *regions* they must be covered at least
-partially by the region.
+use the :py:class:`forcepho.patches.FITSPatch` class.
 
 The supplied FITS images must provide background-subtracted, photometrically
 calibrated fluxes (i.e. in units of nJy/pixel) in the first extension and
-associated uncertainty (:math:`\sqrt{\rm variance}`) images in the second extension.
+associated uncertainty (:math:`=\sqrt{\rm variance}`) images in the second extension.
 Masked pixels can be given inifinte or negative uncertainty values.
 
 There must be a valid WCS in the header of each image, and each image must
