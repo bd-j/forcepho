@@ -393,36 +393,34 @@ class FITSPatch(PixelPatch):
         -------
         hdrs, wcses, epaths, bands
         """
-        hdrlist = [fits.getheader(f) for f in self.fitsfiles]
-        imbands = np.array([h["FILTER"] for h in hdrlist])
-        wcslist = [WCS(h) for h in hdrlist]
+        fitsfiles = np.array(self.fitsfiles)
+        imbands = np.array([fits.getheader(f)["FILTER"] for f in fitsfiles])
 
         epaths, bands, hdrs, wcses = [], [], [], []
         for band in bandlist:
             sel = imbands == band
             if sel.sum() == 0:
                 continue
-            # TODO: Add check for region coverage
-            if region is not None:
-                bra, bdec = region.bounding_box
-                # Check region bounding box has a corner in the exposure.
+            for i, s in enumerate(sel):
+                if not s:
+                    continue
+                hdr = fits.getheader(fitsfiles[i])
+                wcs = WCS(hdr)
+                # rough check for region coverage
                 # NOTE: If bounding box entirely contains image this might fail
-                # Also this is a rough check.
-                for i, s in enumerate(sel):
-                    if not s:
-                        continue
-                    wcs = wcslist[i]
-                    imsize = wcs["NAXIS1"], wcs["NAXIS2"]
+                if region is not None:
+                    bra, bdec = region.bounding_box
+                    imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                     bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
                     inim = np.any((bx > 0) & (bx < imsize[0]) &
-                                  (by > 0) & (by < imsize[1]))
+                                    (by > 0) & (by < imsize[1]))
                     if not inim:
-                        sel[i] = False
+                        continue
 
-            epaths.append(self.fitsfiles[sel])
-            wcses.append(wcslist[sel])
-            bands.append(imbands[sel])
-            hdrs.append(hdrlist[sel])
+                epaths.append(fitsfiles[i])
+                wcses.append(wcs)
+                bands.append(imbands[i])
+                hdrs.append(hdr)
 
         return hdrs, wcses, epaths, bands
 

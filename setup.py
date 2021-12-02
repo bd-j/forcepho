@@ -21,11 +21,11 @@ def get_gitvers(version=VERSION):
 
     try:
         process = subprocess.Popen(
-            ['git', 'rev-parse', '--short', 'HEAD'], shell=False, stdout=subprocess.PIPE)
+            ['git', 'rev-parse', '--short', 'HEAD'], shell=False, stdout=subprocess.PIPE,
+            universal_newlines=True, encoding="utf-8")
         git_head_hash = process.communicate()[0].strip()
-        git_head_hash = git_head_hash.decode("utf-8")
+        #git_head_hash = git_head_hash.decode("utf-8")
         version = f"{version}+{git_head_hash}"
-
 
     except:
         pass
