@@ -376,7 +376,7 @@ class FITSPatch(PixelPatch):
         self.snr = None
         self.unc = None
 
-    def find_exposures(self, region, bandlist):
+    def find_exposures(self, region, bandlist, do_check=True):
         """Return a list of headers (dict-like objects of wcs, filter, and
         exposure id) and exposureIDs for all exposures that overlap the region.
         These should then be sorted by integer band_id.
@@ -408,12 +408,14 @@ class FITSPatch(PixelPatch):
                 wcs = WCS(hdr)
                 # rough check for region coverage
                 # NOTE: If bounding box entirely contains image this might fail
-                if region is not None:
+                if (region is not None) & do_check:
                     bra, bdec = region.bounding_box
                     imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                     bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
                     inim = np.any((bx > 0) & (bx < imsize[0]) &
                                     (by > 0) & (by < imsize[1]))
+                    around_im = (imsize[0] < bx.max()) & (bx.min() < 0) & (imsize[1] < by.max()) & (by.min() < 0)
+                    inim = inim | around_im
                     if not inim:
                         continue
 
