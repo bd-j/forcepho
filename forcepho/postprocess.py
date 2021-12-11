@@ -157,7 +157,7 @@ def postop_catalog(root, bands=None, catname=None):
     print("Remember units of q are now sqrt(b/a)")
 
 
-def postsample_catalog(root, catname=None):
+def postsample_catalog(root, catname=None, patches=None):
     """Make a catalog of posterior samples for each parameter, combining all
     patches in a given run.
 
@@ -165,6 +165,8 @@ def postsample_catalog(root, catname=None):
     ----------
     root : string
         Name of the directory containing the optimization results
+
+    patches : list of ints
 
     Returns
     -------
@@ -174,11 +176,14 @@ def postsample_catalog(root, catname=None):
         parameters of that source each with shape (n_sample,)
     """
     # get summary info
-    config, plog, slog, final = run_metadata(root)
-    patches = plog
+    if patches is None:
+        config, plog, slog, final = run_metadata(root)
+        patches = plog
+    else:
+        final = patches
 
     # Get catalog data type
-    s0 = Samples(f"{root}/patches/patch{plog[0]}_samples.h5")
+    s0 = Samples(f"{root}/patches/patch{patches[0]}_samples.h5")
     desc = s0.chaincat.dtype.descr
     bands = s0.bands
     new = [("id", "<i4"), ("source_index", "<i4"), ("patch_id", "<i4")]
