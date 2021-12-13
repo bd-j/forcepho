@@ -39,6 +39,28 @@ class Residuals:
         self.exposures = self.handle["epaths"][:]
         self.reference_coordinates = self.handle["reference_coordinates"][:]
 
+    def make_exp(self, e=0, exp=None, value="data"):
+        if not exp:
+            exp = self.exposures[e]
+        xpix, ypix = self.handle[exp]["xpix"][:], self.handle[exp]["ypix"][:]
+        data = self.handle[exp][value][:]
+
+        g = (xpix >= 0) & (ypix >= 0)
+        xpix = xpix[g]
+        ypix = ypix[g]
+        data = data[g]
+
+        lo = np.array((xpix.min(), ypix.min())) - 0.5
+        hi = np.array((xpix.max(), ypix.max())) + 0.5
+        size = hi - lo
+        im = np.zeros(size.astype(int)) + np.nan
+
+        x = (xpix-lo[0]).astype(int)
+        y = (ypix-lo[1]).astype(int)
+        # This is the correct ordering of xpix, ypix subscripts
+        im[x, y] = data
+        return im
+
     def show(self, e=0, exp="", axes=[], **plot_kwargs):
         if not exp:
             exp = self.exposures[e]
