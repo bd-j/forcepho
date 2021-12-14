@@ -12,5 +12,4 @@ slurm-*.out
 /docs/key
 /docs/tex
 /docs/_build
-/tests/
 /demo/display/
