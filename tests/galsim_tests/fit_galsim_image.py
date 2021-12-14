@@ -82,7 +82,7 @@ def fit_test_image(target_image, config, taskID=0, logger=None):
     config.raw_catalog = fits.getdata(n, 2), fits.getheader(n, 2)
 
     # --- Get patch dispatcher and maker ---
-    sceneDB, bands = get_superscene(config, logger, sqrtq_range=(0.35, 0.99))
+    sceneDB, bands = get_superscene(config, logger, sqrtq_range=(0.36, 0.99))
     patcher = SimplePatch(psfstore=config.psfstorefile,
                           splinedata=config.splinedatafile,
                           fitsfiles=config.fitsfiles,
