@@ -204,7 +204,7 @@ def make_galsim_image(band="", rhalf=0.1, sersic=2.0, snr=10, q=1.0,
     config.scale = 0.03 * (1 + int(config.band.lower() in lwbands))
     if not config.outname:
         config.outname = (f"./data/images/galsim-{config.band}-{config.psf_type}-snr={config.snr:.0f}-"
-                          f"sersic={config.sersic:.1f}-rhalf={config.rhalf:.2f}-q={config.q:.1f}.fits")
+                          f"sersic={config.sersic:.1f}-rhalf={config.rhalf:.2f}-q={config.q:.2f}.fits")
 
     stamp = make_stamp(config, nx=config.nx, ny=config.ny, scale=config.scale)
     cat, hdr, wcs = config_to_cat(config, stamp)
