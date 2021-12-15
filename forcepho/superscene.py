@@ -755,6 +755,7 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
 
 
 def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 0.99),
+                    sersic_range=(1.01, 4.99), pa_range=(-2.0, 2.0),
                     rotate=False, reverse=False, shapenames=Galaxy.SHAPE_COLS):
     if type(sourcecatfile) is str:
         cat = fits.getdata(sourcecatfile)
@@ -776,6 +777,8 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
     # --- Rectify shape columns ---
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhalf_range)
     sourcecat["q"][:] = np.clip(sourcecat["q"], *sqrtq_range)
+    sourcecat["sersic"][:] = np.clip(sourcecat["sersic"], *sersic_range)
+    sourcecat["pa"][:] = np.clip(sourcecat["pa"], *pa_range)
     # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
     if rotate:
         p = sourcecat["pa"] > 0
