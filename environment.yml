@@ -1,8 +1,9 @@
-name: fpho
+name: force
 channels:
   - conda-forge
 dependencies:
   # Infrastructure
+  - pip
   - ipython  # optional
   - pyyaml
   # Scientific computing

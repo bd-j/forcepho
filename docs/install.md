@@ -22,7 +22,7 @@ The easiest way to install is to create a conda environment, using the supplied
 git clone git@github.com:bd-j/forcepho.git
 cd forcepho
 conda env create -f environment.yml
-conda activate fpho
+conda activate force
 python -m pip install .
 ```
 
@@ -37,7 +37,7 @@ module load git/2.17.0-fasrc01
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
 module load cuda/10.1.243-fasrc01
 module load Anaconda3/5.0.1-fasrc01
-source activate fpho
+source activate force
 ```
 
 ### lux

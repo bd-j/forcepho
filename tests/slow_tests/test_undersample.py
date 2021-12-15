@@ -4,15 +4,15 @@ import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
 
 from forcepho.sources import Star, Scene
-from forcepho.stamp import PostageStamp
-from forcepho.psf import PointSpreadFunction
-from forcepho.likelihood import make_image, plan_sources, WorkPlan
+from forcepho.slow.stamp import PostageStamp
+from forcepho.slow.psf import PointSpreadFunction
+from forcepho.slow.likelihood import make_image, plan_sources, WorkPlan
 
 
-def get_stamp(n, dx=1):
+def get_stamp(n, dx=1, filtername="band"):
     stamp = PostageStamp()
+    stamp.filtername = filtername
     stamp.nx, stamp.ny = n, n
-    stamp.npix = stamp.nx * stamp.ny
     # note the inversion of x and y order in the meshgrid call here
     stamp.ypix, stamp.xpix = np.meshgrid(np.arange(stamp.ny), np.arange(stamp.nx))
     stamp.scale = np.eye(2) / dx
@@ -33,14 +33,13 @@ def get_image(x, y, scene, stamp, **extras):
 def rebin(a, new_shape):
     M, N = a.shape
     m, n = new_shape
-    if m<M:
-        return a.reshape((m,M/m,n,N/n)).mean(3).mean(1)
+    if m < M:
+        return a.reshape((m, int(M/m), n, int(N/n))).mean(3).mean(1)
     else:
         return np.repeat(np.repeat(a, m/M, axis=0), n/N, axis=1)
 
 
 def compare(x, y, source, native, oversampled):
-    
     image = get_image(x, y, source, native)
     oimage = get_image(x, y, source, oversampled)
     rimage = rebin(oimage, image.shape) * oversample**2
@@ -49,16 +48,15 @@ def compare(x, y, source, native, oversampled):
 if __name__ == "__main__":
 
     source = Star()
+    source.flux = 1.0
     scene = Scene([source])
-     
     # FWHM in native pixels
     fwhm = 2.0
     sigma = fwhm/2.355
-    ck = {"second_order": False}
 
     # native resolution
     native = get_stamp(10)
-    native.psf.covariances = np.array([np.eye(2) * sigma**2])
+    native.psf.covariances *= sigma**2
     native.crpix = np.array([5, 5])
 
     # oversampled image
@@ -71,10 +69,12 @@ if __name__ == "__main__":
     pdf = PdfPages('undersample_1storder.pdf')
     xs = [0.0, 0.3, 0.5]
     coordlist = list(product(xs, xs))
-    
+
     for x, y in coordlist:
-        image = get_image(x, y, scene, native, compute_keywords=ck)
-        oimage = get_image(x, y, scene, oversampled)
+        image, _ = source.render(native, compute_deriv=False, second_order=True)
+        oimage, _ = source.render(oversampled, compute_deriv=False)
+        image = image.reshape(native.nx, native.ny)
+        oimage = oimage.reshape(oversampled.nx, oversampled.ny)
         rimage = rebin(oimage, image.shape) * oversample**2
         ims = [oimage, rimage, image, image/rimage]
         label = ['oversampled (by {})'.format(oversample), 'rebinned',
