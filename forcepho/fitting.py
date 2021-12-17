@@ -167,12 +167,12 @@ class Result(object):
         -------
         ymap : ndarray of shape (1, n_dim) by default or structured ndararry of length (1,)
         """
-        lnp = s.stats["model_logp"]
+        lnp = self.stats["model_logp"]
         ind_ml = np.argmax(lnp)
         if structured:
-            ymap = s.get_sample_cat(ind_ml)
+            ymap = self.get_sample_cat(ind_ml)
         else:
-            ymap = np.atleast_2d(s.chain[ind_ml, :])
+            ymap = np.atleast_2d(self.chain[ind_ml, :])
 
         return ymap
 
