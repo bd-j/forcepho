@@ -17,10 +17,12 @@ from .utils import read_config, sky_to_pix
 from .patches.storage import MetaStore
 from .utils import isophotal_radius
 from .fitting import Result
+from .superscene import flux_bounds
 
 
 __all__ = ["Residuals", "Samples",
            "postop_catalog", "postsample_catalog",
+           "flux_unc_linear", "make_errorbars",
            "cat_to_reg", "write_sourcereg", "write_patchreg",
            "write_images",
            "residual_pdf", "chain_pdf"]
@@ -312,9 +314,19 @@ def flux_unc_linear(root, snr_max=1000):
     unc = np.zeros(len(final), dtype=final.dtype)
     unc["id"][:] = final["id"]
     unc["source_index"][:] = final["source_index"]
+
+    # fill with default
+    for b in config["bandlist"]:
+        u = np.array(flux_bounds(final[b], 1)) - final[b]
+        unc[b][:] = np.max(np.abs(u), axis=0)
+
+    # now fill with precision matrix based results.
     for p in patches:
         s = Samples(f"{root}/patches/patch{p}_samples.h5")
         inds = s.chaincat["source_index"]
+
+        if not hasattr(s, "precisions"):
+            continue
 
         for i, b in enumerate(s.bands):
             flux = s.final[b]

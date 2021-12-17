@@ -59,6 +59,11 @@ def plot_corner(patchname, smooth=0.05, hkwargs=dict(alpha=0.65),
             axes[i, 0].yaxis.set_major_formatter(FormatStrFormatter('%.2g'))
             axes[-1, i].xaxis.set_major_formatter(FormatStrFormatter('%.2g'))
 
+    ymap = get_map(samples)
+    scatter(ymap.T, axes, zorder=20, color="k", marker=".")
+    for ax, val in zip(np.diag(axes), ymap[0]):
+        ax.axvline(val, linestyle=":", color="k")
+
     # this doesn't do anything
     #[ax.set_xlabel(ax.get_xlabel(), labelpad=200) for ax in axes[-1,:]]
     #[ax.set_ylabel(ax.get_ylabel(), labelpad=30) for ax in axes[:, 0]]
@@ -77,6 +82,16 @@ def plot_residual(patchname):
 
     val = s.get_sample_cat(-1)
     return rfig, rax, val
+
+
+def get_map(s):
+    lnp = s.stats["model_logp"]
+    ind_ml = np.argmax(lnp)
+    #row_map = s.get_sample_cat(ind_ml)[0]
+    #ymap = np.atleast_2d([row_map[c] for c in s.bands + s.shape_cols])
+    ymap = np.atleast_2d(s.chain[ind_ml, :])
+
+    return ymap
 
 
 def make_catalog(root, n_sample=2058, n_full=0, bands=["F090W", "F200W", "F277W", "F356W"]):
@@ -204,31 +219,35 @@ if __name__ == "__main__":
     truths = fits.getdata(f"{args.root}/test_grid.fits")
 
     if args.patch_index > 0:
-        title_fmt = "band={band}, SNR={snr},\nnsersic={sersic:.1f}, rhalf={rhalf:.2f}, q={q:.2f}"
-        patchname = f"{args.root}/patches/patch{args.patch_index}_samples.h5"
-        truth_dict = {c: truths[args.patch_index][c] for c in truths.dtype.names}
-        title = title_fmt.format(**truth_dict)
-        tag = title.replace(",", "_").lower().replace(" ", "").replace("\n", "")
-        print(tag)
 
-        tfig, ax = plot_trace(patchname)
-        tfig.suptitle(title)
-        tfig.tight_layout()
-        tfig.savefig(f"figures/trace/{tag}_trace.png", dpi=200)
-        pl.close(tfig)
+        pids = np.arange(0, args.patch_index)
+        #pids = [args.patch_index]
+        for pid in pids:
+            title_fmt = "band={band}, SNR={snr},\nnsersic={sersic:.1f}, rhalf={rhalf:.2f}, q={q:.2f}"
+            patchname = f"{args.root}/patches/patch{pid}_samples.h5"
+            truth_dict = {c: truths[pid][c] for c in truths.dtype.names}
+            title = title_fmt.format(**truth_dict)
+            tag = title.replace(",", "_").lower().replace(" ", "").replace("\n", "")
+            print(tag)
 
-        cfig, caxes = plot_corner(patchname)
-        cfig.text(0.4, 0.8, title, transform=cfig.transFigure)
-        cfig.savefig(f"figures/corner/{tag}_corner.png", dpi=200)
-        pl.close(cfig)
+            tfig, ax = plot_trace(patchname)
+            tfig.suptitle(title)
+            tfig.tight_layout()
+            tfig.savefig(f"figures/trace/{tag}_trace.png", dpi=200)
+            pl.close(tfig)
 
-        rfig, raxes, val = plot_residual(patchname)
-        vdict = deepcopy(truth_dict)
-        vdict.update({c: val[c][0] for c in val.dtype.names})
-        vtitle = "Last iteration:" + title_fmt.format(**vdict)
-        rfig.suptitle(vtitle)
-        rfig.savefig(f"figures/residuals/{tag}_residual.png", dpi=200)
-        pl.close(rfig)
+            cfig, caxes = plot_corner(patchname)
+            cfig.text(0.4, 0.8, title, transform=cfig.transFigure)
+            cfig.savefig(f"figures/corner/{tag}_corner.png", dpi=200)
+            pl.close(cfig)
+
+            rfig, raxes, val = plot_residual(patchname)
+            vdict = deepcopy(truth_dict)
+            vdict.update({c: val[c][0] for c in val.dtype.names})
+            vtitle = "Last iteration:" + title_fmt.format(**vdict)
+            rfig.suptitle(vtitle)
+            rfig.savefig(f"figures/residuals/{tag}_residual.png", dpi=200)
+            pl.close(rfig)
 
         sys.exit()
 

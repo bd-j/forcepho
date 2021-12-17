@@ -160,6 +160,22 @@ class Result(object):
                     sample[d] = self.chaincat[d]
         return sample
 
+    def get_map(self, structured=False):
+        """Get the highest probability sample
+
+        Returns
+        -------
+        ymap : ndarray of shape (1, n_dim) by default or structured ndararry of length (1,)
+        """
+        lnp = s.stats["model_logp"]
+        ind_ml = np.argmax(lnp)
+        if structured:
+            ymap = s.get_sample_cat(ind_ml)
+        else:
+            ymap = np.atleast_2d(s.chain[ind_ml, :])
+
+        return ymap
+
     def dump_to_h5(self, filename, verbose=False):
         msgs = []
         import h5py
