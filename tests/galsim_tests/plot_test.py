@@ -189,14 +189,15 @@ def compare_parameters(scat, truths, parname, point_type="median",
     return dfig, daxes
 
 
-def aperture_flux(rcat, truths):
+def aperture_flux(scat, truths):
+    from forcepho.utils import frac_sersic
     band = truths["band"]
     rhalf = truths["rhalf"]
-    for i, row in enumerate(rcat):
-        total_flux = row[band[i]]
-        # compute fraction of flux within true Re
-        fr = frac_sersic(rhalf[i], sersic=row["serisc"], rhalf=row["rhalf"])
-        apflux = total_flux * fr
+    fr = frac_sersic(rhalf[:, None], sersic=scat["sersic"], rhalf=scat["rhalf"])
+    total_flux = np.array([scat[i][b] for i, b in enumerate(band)])
+    aperture_flux = total_flux * fr
+
+    return aperture_flux, total_flux
 
 
 if __name__ == "__main__":
@@ -260,8 +261,20 @@ if __name__ == "__main__":
         dfig, daxes = compare_parameters(scat, truths, args.parname,
                                          point_type=args.point_type)
         daxes[-1].legend(loc="upper left")
-        dfig.savefig(f"figures/compare_{args.parname}.png", dpi=300)
+        dfig.savefig(f"figures/compare_{args.parname}_{args.point_type}.png", dpi=300)
 
     else:
-        sfig, sax = snr_plot(scat, truths)
+        #sfig, sax = snr_plot(scat, truths)
+        #sax.legend()
+        aflux, tflux = aperture_flux(scat, truths)
+        sfig, sax = pl.subplots()
+        for b in bands:
+            sel = band == b
+            sax.plot(unc[sel], ap_unc[sel], marker="o", alpha=0.5, label=b, linestyle="")
+
+        xx = np.linspace(0.00, 0.1 * 5, 50)
+        sax.plot(xx, xx/5, ":k", label="y=x/5")
         sax.legend()
+        sax.set_xlabel(r"$\sigma_{\rm samples}$ [Total Flux]")
+        sax.set_ylabel(r"$\sigma_{\rm samples}$ [Flux within true half-light radius]")
+        sfig.savefig("figures/apflux_snr.png", dpi=200)

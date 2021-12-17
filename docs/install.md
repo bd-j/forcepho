@@ -42,15 +42,22 @@ source activate force
 
 ### lux
 
-slurm script directives, also load these modules before installing
+install, requires a miniconda download
+
 ```bash
-module load cuda10.1 python/3.6.7 hdf5
-module load numpy scipy h5py
-module load numba pycuda
-module load astropy
-module load littlemcmc
-module load openmpi mpi4py
+module load cuda10.2 hdf5/1.10.6 gcc openmpi git slurm
+conda env create -f environment.yml
+source activate force
+python -m pip install .
 ```
+
+For slurm scripts just do
+```bash
+module purge
+module load cuda10.2 hdf5/1.10.6 openmpi
+source activate force
+```
+
 
 ### GPU details
 

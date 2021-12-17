@@ -17,7 +17,7 @@ from .region import CircularRegion
 
 
 __all__ = ["Result", "run_lmc", "run_opt",
-           "run_pymc3", "run_dynesty", "run_hmc",
+           "run_pymc3", "run_dynesty",
            "optimize_fluxes", "optimize_one_band"]
 
 
@@ -715,7 +715,6 @@ def deprecated_design_matrix(patcher, active, fixed=None, shape_cols=[]):
         patcher._dirty_data = False # reset since we don't care about the GPU side data array anymore
 
     return Xes, fixedX
-
 
 
 if __name__ == "__main__":

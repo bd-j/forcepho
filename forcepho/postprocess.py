@@ -21,6 +21,7 @@ from .superscene import flux_bounds
 
 
 __all__ = ["Residuals", "Samples",
+           "run_metadata",
            "postop_catalog", "postsample_catalog",
            "flux_unc_linear", "make_errorbars",
            "cat_to_reg", "write_sourcereg", "write_patchreg",
@@ -61,7 +62,7 @@ class Residuals:
         y = (ypix-lo[1]).astype(int)
         # This is the correct ordering of xpix, ypix subscripts
         im[x, y] = data
-        return im
+        return im  # lo, hi
 
     def show(self, e=0, exp="", axes=[], **plot_kwargs):
         if not exp:
@@ -75,6 +76,7 @@ class Residuals:
         kwargs = dict(vmin=min(data.min(), model.min(), resid.min()),
                       vmax=max(data.max(), model.max(), resid.max()))
         kwargs.update(**plot_kwargs)
+        # could replace this with calls to make_exp and imshow
         _ = show_exp(xpix, ypix, data, ax=axes.flat[0], **kwargs)
         _ = show_exp(xpix, ypix, resid, ax=axes.flat[1], **kwargs)
         _ = show_exp(xpix, ypix, model, ax=axes.flat[2], **kwargs)
@@ -139,6 +141,7 @@ def postop_catalog(root, bands=None, catname=None):
     will be suitable for use as the inital catalog for a sampling run
 
     Also attemps to make a catalog of flux uncertainties in the 2nd extension.
+    These are based on precision matrices if available.
 
     Parameters
     ----------
@@ -245,6 +248,38 @@ def postsample_catalog(root, catname=None, patches=None):
     return cat
 
 
+def flux_unc_linear(root, snr_max=1000):
+    """Get flux uncertainties from the precision matrix of linear fits, put them
+    in a catalog matching the parameter catalog line-by-line
+    """
+    config, plog, slog, final = run_metadata(root)
+    patches = plog
+    unc = np.zeros(len(final), dtype=final.dtype)
+    unc["id"][:] = final["id"]
+    unc["source_index"][:] = final["source_index"]
+
+    # fill with default
+    for b in config["bandlist"]:
+        u = np.array(flux_bounds(final[b], 1)) - final[b]
+        unc[b][:] = np.max(np.abs(u), axis=0)
+
+    # now fill with precision matrix based results.
+    for p in patches:
+        s = Samples(f"{root}/patches/patch{p}_samples.h5")
+        inds = s.chaincat["source_index"]
+
+        if not hasattr(s, "precisions"):
+            continue
+
+        for i, b in enumerate(s.bands):
+            flux = s.final[b]
+            Sigma = np.linalg.pinv(s.precisions[i])
+            sigma = np.maximum(np.sqrt(np.diag(Sigma)), flux / snr_max)
+            unc[b][inds] = sigma
+
+    return unc
+
+
 def make_errorbars(samplecat, percentiles=[16, 50, 84]):
     """Make percentile based assymetric errorbars.
 
@@ -303,38 +338,6 @@ def make_errorbars(samplecat, percentiles=[16, 50, 84]):
     hdr["SMPLCOLS"] = ",".join(scol)
 
     return ecat, hdr
-
-
-def flux_unc_linear(root, snr_max=1000):
-    """Get flux uncertainties from the precision matrix of linear fits, put them
-    in a catalog matching the parameter catalog line-by-line
-    """
-    config, plog, slog, final = run_metadata(root)
-    patches = plog
-    unc = np.zeros(len(final), dtype=final.dtype)
-    unc["id"][:] = final["id"]
-    unc["source_index"][:] = final["source_index"]
-
-    # fill with default
-    for b in config["bandlist"]:
-        u = np.array(flux_bounds(final[b], 1)) - final[b]
-        unc[b][:] = np.max(np.abs(u), axis=0)
-
-    # now fill with precision matrix based results.
-    for p in patches:
-        s = Samples(f"{root}/patches/patch{p}_samples.h5")
-        inds = s.chaincat["source_index"]
-
-        if not hasattr(s, "precisions"):
-            continue
-
-        for i, b in enumerate(s.bands):
-            flux = s.final[b]
-            Sigma = np.linalg.pinv(s.precisions[i])
-            sigma = np.maximum(np.sqrt(np.diag(Sigma)), flux / snr_max)
-            unc[b][inds] = sigma
-
-    return unc
 
 
 def find_multipatch(root):
@@ -662,7 +665,6 @@ if __name__ == "__main__":
     elif args.mode == "catalog":
         print(f"writing to {args.catname}")
         cat = postsample_catalog(args.root, catname=args.catname)
-
 
     else:
         print(f"{args.mode} not a valid mode.  choose one of {modes}")

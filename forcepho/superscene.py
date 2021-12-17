@@ -33,7 +33,6 @@ REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
                     "n_iter", "n_patch")
 
 
-
 class SuperScene:
     """An object that describes *all* sources in a scene.
     It contains methods for checking out regions, and checking

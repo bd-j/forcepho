@@ -253,6 +253,17 @@ def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
     return pix
 
 
+def frac_sersic(radius, rhalf=None, sersic=2.0):
+    """For a given `rhalf` and `sersic` index, compute the fraction of flux
+    falling within radius
+    """
+    from scipy.special import gamma, gammainc, gammaincinv
+    g2n = gamma(2 * sersic)
+    bn = gammaincinv(2*sersic, 0.5)  # note gammainc(a, x) is normalized by gamma(a)
+    x = bn * (radius / rhalf)**(1/sersic)
+    return gammainc(2*sersic, x)
+
+
 def kron_radius(rhalf, sersic, rmax=None):
     k = gammaincinv(2 * sersic, 0.5)
     if rmax:
