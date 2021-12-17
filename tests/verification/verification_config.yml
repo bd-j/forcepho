@@ -1,0 +1,104 @@
+# fPho Configuration file
+
+# ----------------
+# --- Overall ----
+logging:
+  True
+
+# -----------------------
+# --- Filters being run ---
+bandlist:
+ - F200W
+
+# ------------------------------
+# --- photometric zeropoints ---
+# Only required if images do not have the ABMAG keyword and are not already in nJy/pix
+#zeropoints:
+#  F090W: 24.04.....
+
+# ----------------------------
+# --- exposure backgrounds ---
+# name of dictionary and keyword to add to header
+tweak_background:
+
+# in nJy/pix, to be subtracted from individual exposures
+tweakbg:
+
+
+# ----------------------------
+# --- Input data locations ---
+store_directory:
+  $PROJECT_DIR/data/
+splinedatafile:
+  $PROJECT_DIR/data/sersic_mog_model.smooth=0.0150.h5
+psfstorefile:
+  psf_jwst_oct21_ng4m0.h5
+frames_directory:
+  $PROJECT_DIR/data/
+frame_search_pattern:
+  galsim*fits
+max_snr:
+  0
+
+# ------------------------
+# --- Output locations
+outbase:
+  ../output
+scene_catalog:
+  outscene.fits
+
+# -----------------------
+# --- Bounds & Priors ---
+minflux:
+
+bounds_kwargs:
+  n_sig_flux: 10.0  # Nsigma/snr at flux = 1/nJy
+  sqrtq_range: # range of sqrt(b/a)
+    - 0.35
+    - 1.0
+  pa_range:  # range of pa, radians
+    - -2.0
+    - 2.0
+  n_pix: # number of pixels for dRA, dDec
+    2
+  pixscale: # pixelscale for dRA, dDdec
+    0.03
+
+# ------------------------
+# --- Data Types/Sizes ---
+pix_dtype:
+  float32
+meta_dtype:
+  float32
+
+# -----------------------
+# --- Patch Generation ---
+seed_index:
+  -1
+max_active_fraction:
+  0.1
+maxactive_per_patch:
+  15
+patch_maxradius:  # in arcsec
+  20
+patch_minradius:  # in arcsec
+  1.5
+target_niter:
+  256
+ntry_checkout:
+  1000
+strict:
+  0
+buffer_size:
+  5e7
+
+# -----------------------
+# --- HMC parameters ---
+max_treedepth:
+  9
+sampling_draws:
+  256
+warmup:
+ - 128
+full_cov:
+  True
