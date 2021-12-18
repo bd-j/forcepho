@@ -45,66 +45,108 @@ def compare(x, y, source, native, oversampled):
     rimage = rebin(oimage, image.shape) * oversample**2
 
 
+def display(ims, labels, radius=None):
+    """
+    ims : list of ndarrays
+        oversampled, rebinned oversampled, direct, residual
+    """
+    #nix = int(np.ceil(np.sqrt(len(ims) + 1)))
+    #niy = int(np.ceil(len(ims) / nix))
+    nix, niy = 3, 2
+    fig, axes = pl.subplots(nix, niy, figsize=(8.5, 8.5))
+    for i, im in enumerate(ims):
+        ax = axes.flat[i]
+        c = ax.imshow(im.T, origin='lower')
+        fig.colorbar(c, ax=ax)
+        ax.text(0.1, 0.9, labels[i], color="magenta", transform=ax.transAxes)
+
+    y, ylabel = ims[-1].flatten(), labels[-1]
+    if radius is None:
+        x, xlabel = ims[1].flatten(), labels[1]
+    else:
+        x, xlabel = radius.flatten(), "radius (pixels)"
+
+    ax = axes.flat[-1]
+    ax.plot(x, y, 'o')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.yaxis.set_label_position("right")
+    ax.yaxis.tick_right()
+    cbar = fig.colorbar(c, ax=ax)
+    cbar.ax.set_visible(False)
+
+    if radius is None:
+        ax.set_xscale("log")
+        ax.set_xlim(ims[1].max()*1e-4, ims[1].max()*1.1)
+
+    return fig, axes
+
+
 if __name__ == "__main__":
 
     source = Star()
     source.flux = 1.0
     scene = Scene([source])
-    # FWHM in native pixels
-    fwhm = 2.0
-    sigma = fwhm/2.355
+    width = 10
 
     # native resolution
-    native = get_stamp(10)
-    native.psf.covariances *= sigma**2
-    native.crpix = np.array([5, 5])
+    native = get_stamp(width)
+    native.crpix = np.array([width/2., width/2.])
 
     # oversampled image
     oversample = 8
-    dx = 1./oversample
-    oversampled = get_stamp(int(10 / dx), dx)
-    oversampled.psf.covariances = np.array([np.eye(2) * (sigma / dx)**2])
+    dx = 1.0 / oversample
+    oversampled = get_stamp(int(width / dx), dx)
     oversampled.crpix = np.array([oversampled.nx/2, oversampled.ny/2]) + oversample/2. - 0.5
 
     pdf = PdfPages('undersample_1storder.pdf')
     xs = [0.0, 0.3, 0.5]
     coordlist = list(product(xs, xs))
 
-    for x, y in coordlist:
-        image, _ = source.render(native, compute_deriv=False, second_order=True)
-        oimage, _ = source.render(oversampled, compute_deriv=False)
-        image = image.reshape(native.nx, native.ny)
-        oimage = oimage.reshape(oversampled.nx, oversampled.ny)
-        rimage = rebin(oimage, image.shape) * oversample**2
-        ims = [oimage, rimage, image, image/rimage]
-        label = ['oversampled (by {})'.format(oversample), 'rebinned',
-                 'direct (2nd order)', 'direct/rebinned']
-        fig, axes = pl.subplots(3, 2, figsize=(8.5, 8.5))
-        for i, im in enumerate(ims):
-            ax = axes.flat[i+1]
-            c = ax.imshow(im.T, origin='lower')
-            fig.colorbar(c, ax=ax)
-            ax.text(0.1, 0.9, label[i], transform=ax.transAxes)
+    pars = []
+    rmax = []
 
-        ax = axes.flat[-1]
-        ax.plot(rimage.flatten(), (image/rimage).flatten(), 'o')
-        ax.set_xlim(1e-3, 0.6)
-        ax.set_ylim(0, 1.2)
-        ax.axhline(1.0, linestyle=':', color='k')
-        ax.set_xscale('log')
-        ax.set_xlabel('counts (rebinned)')
-        ax.set_ylabel('direct/rebinned')
-        ax.yaxis.set_label_position("right")
-        ax.yaxis.tick_right()
-        cbar = fig.colorbar(c, ax=ax)
-        cbar.ax.set_visible(False)
-        axes[0,0].set_visible(False)
-        title_string = 'FWHM={} pixels,\n$\\Delta x={{{}}}, \\Delta y={{{}}}$\nsums={:3.2},{:3.2},{:3.2}'
-        title = title_string.format(fwhm, x, y, oimage.sum(), rimage.sum(), image.sum())
-        fig.text(0.14, 0.8, title,
-                 transform=fig.transFigure)
-        pdf.savefig(fig)
-        pl.close(fig)
+    for fwhm in 1.0, 1.2, 1.4, 1.6, 1.8, 2.0:
+        sigma = fwhm / 2.355
+        native.psf.covariances = np.array([np.eye(2) * sigma**2])
+        oversampled.psf.covariances = np.array([np.eye(2) * (sigma / dx)**2])
+
+        for x, y in coordlist:
+            source.ra = x
+            source.dec = y
+            radius = np.hypot(native.xpix - (native.crpix[0] + source.ra),
+                              native.ypix - (native.crpix[1] + source.dec),)
+
+            nimage, _ = source.render(native, compute_deriv=False, second_order=True)
+            oimage, _ = source.render(oversampled, compute_deriv=False)
+            nimage = nimage.reshape(native.nx, native.ny)
+            oimage = oimage.reshape(oversampled.nx, oversampled.ny)
+            rimage = rebin(oimage, nimage.shape) * oversample**2
+            residual = 100 * (nimage - rimage) / rimage.max()
+            ims = [oimage, rimage, nimage, residual]
+            labels = ['oversampled (by {})'.format(oversample), 'rebinned',
+                      'direct (2nd order)', 'residual as % of max']
+
+            fig, axes = display(ims, labels, radius=radius)
+            axes[-1, 0].set_visible(False)
+            axes[-1, 1].axhline(0.0, linestyle=":", color="k")
+            title_string = 'FWHM={} pixels,\n$\\Delta x={{{}}}, \\Delta y={{{}}}$\nsums={:.3},{:.3},{:.3}'
+            title = title_string.format(fwhm, x, y, oimage.sum(), rimage.sum(), nimage.sum())
+            #fig.text(0.14, 0.8, title, transform=fig.transFigure)
+            fig.suptitle(title)
+            fig.tight_layout()
+            pdf.savefig(fig)
+            pl.close(fig)
+
+            pars.append((fwhm, x, y))
+            rmax.append(residual.flat[np.argmax(np.abs(residual))])
 
     pdf.close()
 
+    pl.ion()
+    fig, ax = pl.subplots()
+    ax.plot(np.array(pars)[:, 0], np.array(rmax), "o")
+    ax.set_xlabel("Gaussian FWHM (pixels)")
+    ax.set_ylabel("maximum residual deviation, as % of brightest pixel")
+    ax.axhline(0.0, linestyle=":", color="k")
+    fig.savefig("oversample_1storder_summary.png", dpi=200)

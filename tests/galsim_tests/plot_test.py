@@ -126,27 +126,31 @@ def make_catalog(root, n_sample=2058, n_full=0, bands=["F090W", "F200W", "F277W"
     return cat
 
 
-def snr_plot(scat, truths, dx=0.05):
+def snr_plot(aflux, tflux, truths, dx=0.05):
 
-    sel = scat["id"] >= 0
-    jitter = np.random.uniform(1 - dx, 1 + dx, len(truths))
-
-    sfig, sax = pl.subplots(figsize=fsize)
+    aunc = aflux.std(axis=-1)
+    tunc = tflux.std(axis=-1)
+    x = 1 / truths["snr"]
+    dx = np.diff([x.min(), x.max()])
+    jitter = np.random.uniform(-dx*0.02, dx*0.02, len(x))
+    sfig, saxes = pl.subplots(1, 2, figsize=(8, 3), sharey=True)
     for b in bands:
-        flux = scat[sel][b]
-        sax.plot(truths[sel]["snr"] * jitter[sel],
-                 flux.mean(axis=-1) / flux.std(axis=-1),
-                 alpha=0.6, marker="o", linestyle="", label=b)
-    sax.set_xlabel("Input image S/N within rhalf")
-    sax.set_ylabel(r"$\langle f \rangle / \sigma_f$  from samples")
-    xx = np.linspace(0, truths["snr"].max(), 100)
-    sax.plot(xx, xx, linestyle=":", color="k")
-    sax.plot(xx, xx / 4, linestyle=":", color="k", label="SNR/4")
+        sel = band == b
+        saxes[0].plot(tunc[sel], aunc[sel], marker="o", alpha=0.5, label=b, linestyle="")
+        saxes[1].plot((x + jitter)[sel], aunc[sel], marker="o", alpha=0.5, label=b, linestyle="")
 
-    sax.set_xlim(truths["snr"].min()/2, truths["snr"].max()*1.5)
-    sax.set_ylim(truths["snr"].min()/5, truths["snr"].max()*1.5)
-    sax.set_xscale("log")
-    sax.set_yscale("log")
+    xx = np.linspace(0.00, 0.1 * 5, 50)
+    saxes[0].plot(xx, xx/5, ":k", label="y=x/5")
+    saxes[0].legend()
+    saxes[0].set_xlabel(r"$\sigma_{\rm samples}$ [Total Flux]")
+    saxes[0].set_ylabel(r"$\sigma_{\rm samples}$ [Flux within true half-light radius]")
+
+    saxes[1].plot(xx, xx, ":k", label="y=x")
+    saxes[1].set_xlabel(r"1/SNR")
+    saxes[1].legend()
+    saxes[1].set_xlim(-0.02, 0.15)
+    saxes[0].set_ylim(-0.02, 0.15)
+    sfig.tight_layout()
 
     return sfig, sax
 
@@ -190,7 +194,7 @@ def compare_parameters(scat, truths, parname, point_type="median",
 
 
 def aperture_flux(scat, truths):
-    from forcepho.utils import frac_sersic
+    #from forcepho.utils import frac_sersic
     band = truths["band"]
     rhalf = truths["rhalf"]
     fr = frac_sersic(rhalf[:, None], sersic=scat["sersic"], rhalf=scat["rhalf"])
@@ -264,17 +268,19 @@ if __name__ == "__main__":
         dfig.savefig(f"figures/compare_{args.parname}_{args.point_type}.png", dpi=300)
 
     else:
-        #sfig, sax = snr_plot(scat, truths)
-        #sax.legend()
         aflux, tflux = aperture_flux(scat, truths)
-        sfig, sax = pl.subplots()
-        for b in bands:
-            sel = band == b
-            sax.plot(unc[sel], ap_unc[sel], marker="o", alpha=0.5, label=b, linestyle="")
-
-        xx = np.linspace(0.00, 0.1 * 5, 50)
-        sax.plot(xx, xx/5, ":k", label="y=x/5")
-        sax.legend()
-        sax.set_xlabel(r"$\sigma_{\rm samples}$ [Total Flux]")
-        sax.set_ylabel(r"$\sigma_{\rm samples}$ [Flux within true half-light radius]")
+        sfig, saxes = snr_plot(aflux, tflux, truths)
         sfig.savefig("figures/apflux_snr.png", dpi=200)
+
+        ffig, faxes = pl.subplots()
+        for b in bands:
+            sel = truths["band"] == b
+            faxes.plot(truths[sel]["snr"] * np.random.uniform(0.9, 1.1, sel.sum()),
+                       aflux[sel].mean(axis=-1) * 2.0,
+                       label=b, marker="o", linestyle="", alpha=0.5)
+        faxes.axhline(1.0, color="k", linestyle=":")
+        faxes.set_xlabel("SNR")
+        faxes.set_ylabel("forcepho aperture flux (50th pctile) / true aperture flux")
+        faxes.legend()
+        faxes.set_xscale("log")
+        ffig.savefig("figures/flux_comparison.png", dpi=200)
