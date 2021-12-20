@@ -62,7 +62,7 @@ class Residuals:
         y = (ypix-lo[1]).astype(int)
         # This is the correct ordering of xpix, ypix subscripts
         im[x, y] = data
-        return im  # lo, hi
+        return im, lo, hi
 
     def show(self, e=0, exp="", axes=[], **plot_kwargs):
         if not exp:
@@ -123,6 +123,22 @@ class Samples(Result):
 
 
 def run_metadata(root):
+    """
+    Returns
+    -------
+    config : dict
+        Configureation for the run as a dictionary
+
+    plog : list of int
+        The order of the patches
+
+    slog : dict
+        The sources in each patch.  Keyed by patch integer, values are a list of
+        source indices
+
+    final : structured ndarray
+        The final state catalog for the superscene
+    """
     with open(f"{root}/config.json") as f:
         config = json.load(f)
     scenestr = config["scene_catalog"].replace(".fits", "")
@@ -210,17 +226,12 @@ def postsample_catalog(root, catname=None, patches=None):
         final = patches
 
     # Get catalog data type
-    s0 = Samples(f"{root}/patches/patch{patches[0]}_samples.h5")
-    desc = s0.chaincat.dtype.descr
-    bands = s0.bands
-    new = [("id", "<i4"), ("source_index", "<i4"), ("patch_id", "<i4")]
-    vcol = []
-    for d in desc:
-        if len(d) == 3:
-            # Only keep real samples
-            col = (d[0], d[1], (s0.n_sample,))
-            vcol.append(d[0])
-            new.append(col)
+    s = Samples(f"{root}/patches/patch{patches[0]}_samples.h5")
+    bands, shapes, n_sample = s.bands, s.shape_cols, s.n_sample
+    icols = [("id", "<i4"), ("source_index", "<i4"), ("patch_id", "<i4"),
+             ("wall", "<f4"), ("lnp", "<f8", n_sample)]
+    new = np.dtype(icols + [(c, float, n_sample)
+                            for c in bands + shapes])
 
     # Make and fill the catalog
     cat = np.zeros(len(final), np.dtype(new))
@@ -231,10 +242,12 @@ def postsample_catalog(root, catname=None, patches=None):
         cat["id"][inds] = s.active["id"]
         cat["patch_id"][inds] = p
         cat["source_index"][inds] = inds
-        for col in vcol:
-            cat[col][inds] = s.chaincat[col][:, -s0.n_sample:]
+        cat["wall"][inds] = s.wall_time
+        cat["lnp"][inds] = s.stats["model_logp"][-n_sample:]
+        for col in bands + shapes:
+            cat[col][inds] = s.chaincat[col][:, -n_sample:]
 
-    cat = cat[cat["id"] >= 0]
+    #cat = cat[cat["id"] >= 0]
 
     # write catalog
     if catname is not None:

@@ -119,7 +119,7 @@ def make_catalog(root, n_sample=2058, n_full=0, bands=["F090W", "F200W", "F277W"
             continue
         cat["id"][p] = p
         cat["wall"][p] = s.wall_time
-        cat["lnp"][p] = s.stats["model_logp"]
+        cat["lnp"][p] = s.stats["model_logp"][-n_sample:]
         for col in shapes + s.bands:
             cat[col][p] = s.chaincat[col][:, -n_sample:]
 
@@ -194,7 +194,7 @@ def compare_parameters(scat, truths, parname, point_type="median",
 
 
 def aperture_flux(scat, truths):
-    #from forcepho.utils import frac_sersic
+    from forcepho.utils import frac_sersic
     band = truths["band"]
     rhalf = truths["rhalf"]
     fr = frac_sersic(rhalf[:, None], sersic=scat["sersic"], rhalf=scat["rhalf"])
