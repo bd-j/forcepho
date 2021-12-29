@@ -25,7 +25,8 @@ from .utils import read_config
 __all__ = ["REQUIRED_COLUMNS",
            "SuperScene", "LinkedSuperScene",
            "sourcecat_dtype", "rectify_catalog",
-           "make_bounds", "bounds_vectors", "flux_bounds"]
+           "make_bounds", "bounds_vectors",
+           "flux_bounds", "adjust_bounds"]
 
 
 REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
@@ -928,6 +929,21 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
         hi = np.maximum(hi, fmin)
 
     return lo, hi
+
+
+def adjust_bounds(sceneDB, bands, config):
+    # --- Adjust initial bounds ---
+    if config.minflux is not None:
+        # set lower bound for the flux that is <= minflux
+        for b in bands:
+            lower = sceneDB.bounds_catalog[b][:, 0]
+            sceneDB.bounds_catalog[b][:, 0] = np.minimum(lower, config.minflux)
+    if config.maxfluxfactor > 0:
+        for b in bands:
+            upper = sceneDB.bounds_catalog[b][:, 1]
+            new_upper = np.maximum(upper, sceneDB.sourcecat[b] * config.maxfluxfactor)
+            sceneDB.bounds_catalog[b][:, 1] = new_upper
+    return sceneDB
 
 
 if __name__ == "__main__":

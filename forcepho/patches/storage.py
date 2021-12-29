@@ -25,6 +25,7 @@ EXP_FMT = "{}/{}"
 
 # should match order in patch.cu
 PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
+PSF_DTYPE = np.dtype([(c, np.float32) for c in PSF_COLS] + [("sersic_bin", np.int32)])
 
 
 def header_to_id(hdr, name):
@@ -396,7 +397,7 @@ class PSFStore:
         """
         Returns
         --------
-        A structured array of psf parameters for a given source in a give band.
+        A structured array of psf parameters for a given source in a given band.
         The structure of the array is something like
         (amp, xcen, ycen, Cxx, Cyy Cxy, sersic_radius_index)
         There are npsf_per_source rows in this array.

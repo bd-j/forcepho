@@ -118,14 +118,17 @@ if __name__ == "__main__":
                               native.ypix - (native.crpix[1] + source.dec),)
 
             nimage, _ = source.render(native, compute_deriv=False, second_order=True)
+            dimage, _ = source.render(native, compute_deriv=False, second_order=False)
             oimage, _ = source.render(oversampled, compute_deriv=False)
             nimage = nimage.reshape(native.nx, native.ny)
+            dimage = dimage.reshape(native.nx, native.ny)
             oimage = oimage.reshape(oversampled.nx, oversampled.ny)
             rimage = rebin(oimage, nimage.shape) * oversample**2
             residual = 100 * (nimage - rimage) / rimage.max()
+            r2 = 100 * (dimage - rimage) / rimage.max()
             ims = [oimage, rimage, nimage, residual]
             labels = ['oversampled (by {})'.format(oversample), 'rebinned',
-                      'direct (2nd order)', 'residual as % of max']
+                      'direct (1st order)', 'residual as % of max']
 
             fig, axes = display(ims, labels, radius=radius)
             axes[-1, 0].set_visible(False)
@@ -139,14 +142,17 @@ if __name__ == "__main__":
             pl.close(fig)
 
             pars.append((fwhm, x, y))
-            rmax.append(residual.flat[np.argmax(np.abs(residual))])
+            delt = residual.flat[np.argmax(np.abs(residual))], r2.flat[np.argmax(np.abs(r2))]
+            rmax.append(delt)
 
     pdf.close()
 
     pl.ion()
     fig, ax = pl.subplots()
-    ax.plot(np.array(pars)[:, 0], np.array(rmax), "o")
+    ax.plot(np.array(pars)[:, 0], np.array(rmax)[:, 0], "o", label="2nd order")
+    ax.plot(np.array(pars)[:, 0], np.array(rmax)[:, 1], "o", label="0th order")
     ax.set_xlabel("Gaussian FWHM (pixels)")
     ax.set_ylabel("maximum residual deviation, as % of brightest pixel")
     ax.axhline(0.0, linestyle=":", color="k")
+    ax.legend()
     fig.savefig("oversample_1storder_summary.png", dpi=200)
