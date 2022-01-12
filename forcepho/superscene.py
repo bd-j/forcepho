@@ -121,8 +121,8 @@ class SuperScene:
 
         # make initial covariance matrices (identities)
         n_param = len(self.parameter_columns)
-        self.covariance_matrices =  np.reshape(np.tile(np.eye(n_param).flatten(), self.n_sources),
-                                                (self.n_sources, n_param, n_param))
+        self.covariance_matrices = np.reshape(np.tile(np.eye(n_param).flatten(), self.n_sources),
+                                              (self.n_sources, n_param, n_param))
         # Logs
         self.sourcelog = {}
         self.patchlog = []
@@ -796,7 +796,7 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
     """Make a catalog of upper and lower bounds for the parameters of each
     source. This catalog is a structured array with fields for each of the
     source parameters, each containing a 2-element array of the form (lower,
-    upper).  Each row is a different source
+    upper).  Each row is a different source.
 
     Parameters
     ----------
@@ -810,7 +810,9 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
         The names of the columns corresponding to positional and shape parameters
 
     unccat : structured ndarray of shape (n_source,)
-        A catalog with column names matching `active` but that gives uncertainties
+        A catalog with column names matching `active` but that gives flux
+        uncertainties.  This is optional, if not given a simple hueristic will
+        be used (see `flux_bounds`)
 
     n_sig_flux : float (optional)
         The number of flux sigmas to set for the prior width
@@ -948,7 +950,7 @@ def adjust_bounds(sceneDB, bands, config):
 
 if __name__ == "__main__":
 
-    catname = "../data/catalogs/hlf_xdf_v0.2.fits"
+    catname = "../data/catalogs/initial_catalog.fits"
     raw = fits.getdata(catname)
     cat, bands, hdr = rectify_catalog(catname)
 

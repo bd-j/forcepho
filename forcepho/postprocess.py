@@ -263,7 +263,23 @@ def postsample_catalog(root, catname=None, patches=None):
 
 def flux_unc_linear(root, snr_max=1000):
     """Get flux uncertainties from the precision matrix of linear fits, put them
-    in a catalog matching the parameter catalog line-by-line
+    in a catalog matching the parameter catalog line-by-line.  If precision matrix does not exist, use a simple default
+
+    Parameters
+    ----------
+    root : string
+        Directory location.  Must contain a set of files matching the pattern
+        `<root>/patches/patch[1-9999]_samples.h5`
+
+    snr_max : float, optional (default: 1000)
+        Make sure the reprted uncertainties are large enough that this S/N is not exceeded
+
+    Returns
+    -------
+    unc : structured ndarray
+        A structured array of shape (n_active,) with the flux encertainties for
+        each source as fields.  The dtype is the same as the 'active' structured
+        array
     """
     config, plog, slog, final = run_metadata(root)
     patches = plog
@@ -278,11 +294,12 @@ def flux_unc_linear(root, snr_max=1000):
 
     # now fill with precision matrix based results.
     for p in patches:
-        s = Samples(f"{root}/patches/patch{p}_samples.h5")
+        patchfile = f"{root}/patches/patch{p}_samples.h5"
+        s = Samples(patchfile)
         inds = s.chaincat["source_index"]
 
         if not hasattr(s, "precisions"):
-            continue
+            print(f"flux_unc_linear: No precisons for {patchfile}")
 
         for i, b in enumerate(s.bands):
             flux = s.final[b]
@@ -490,6 +507,8 @@ def write_patchreg(root, plist="patches.reg"):
 
 
 def write_images(root, subdir="image", metafile=None, show_model=False, show_chi=False):
+    """Make data, residual, and optionally model images for the 
+    """
 
     files = glob.glob(f"{root}/patches/*residuals.h5")
     assert len(files) > 0

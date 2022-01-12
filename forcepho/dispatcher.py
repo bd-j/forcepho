@@ -25,10 +25,6 @@ from .utils import read_config
 __all__ = ["MPIQueue",
            "do_child", "do_parent"]
 
-# TODO: does setting up logging here conflict with other modules' use of logger?
-#logging.basicConfig(level=logging.DEBUG)
-#logger = logging.getLogger('dispatcher')
-
 
 class MPIQueue:
     """Simple implementation of an MPI queue.  Work can be submitted to the queue

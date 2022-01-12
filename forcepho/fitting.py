@@ -149,6 +149,20 @@ class Result(object):
         return qcat, block_covs
 
     def get_sample_cat(self, iteration):
+        """Get a sample of the scene parameters from the chain, as a structured
+        arrays with one row for each source.
+
+        Parameters
+        ----------
+        iteration : int
+            The iteration of the chain for which to produce a catalog.
+
+        Returns
+        -------
+        sample : structured ndarray of shape (n_active,)
+            The parameters of each source at the specified iteration of the
+            chain, as a structured array.
+        """
         #dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
         #sample = np.zeros(self.n_active, dtype=dtype_sample)
         sample = self.active.copy()
@@ -177,6 +191,9 @@ class Result(object):
         return ymap
 
     def dump_to_h5(self, filename, verbose=False):
+        """Try to save attributes of the Result() as satasets or attributes in
+        the given HDF5 file.
+        """
         msgs = []
         import h5py
         os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -197,6 +214,8 @@ class Result(object):
         return msgs
 
     def read_from_h5(self, filename):
+        """Read attributes of the Results() object form an HDF5 file.
+        """
         import h5py
         out = self
         with h5py.File(filename, "r") as f:
@@ -206,6 +225,9 @@ class Result(object):
                 setattr(out, k, v)
 
     def _reconstruct(self):
+        """Convert some string types to utf-8, and make a structured array
+        chaincat attribute from the raw parameter chain.
+        """
         self.bands = [b.decode("utf") for b in self.bandlist]
         self.shape_cols = [s.decode("utf") for s in self.shapenames]
         self.region = CircularRegion(self.ra, self.dec, self.radius)
@@ -684,7 +706,8 @@ def optimize_fluxes(patcher, active, return_all=False):
 
 
 def deprecated_design_matrix(patcher, active, fixed=None, shape_cols=[]):
-    """Create the design matrices for linear least squares.
+    """Create the design matrices for linear least squares.  Superceded by
+    :py:meth:`DevicePatchMixin.design_matrix()`.
 
     Returns
     -------
@@ -735,7 +758,6 @@ if __name__ == "__main__":
         lnp_grad = -theta
         return lnp, lnp_grad
 
-
     if a is not None:
         lower = np.zeros(ndim) - a
         upper = np.zeros(ndim) + a
@@ -750,7 +772,6 @@ if __name__ == "__main__":
     # --- Run the sampler ---
     chain, step, stats = run_lmc(model, q, n_draws=1000,
                                  warmup=[256, 512, 1024, 1024, 1024, 2048])
-
 
     if a is not None:
         from scipy.special import erf

@@ -22,7 +22,6 @@ __all__ = ["Logger", "NumpyEncoder",
 
 
 class Logger:
-
     """A simple class that stores log information with similar API to logging.Logger
     """
 
@@ -51,7 +50,24 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 def read_config(config_file, args=None):
-    """Read a yaml formatted config file.
+    """Read a yaml formatted config file into a Namespace.  This also expands
+    shell variables in any configuration parameters, and prepends the value of
+    `store_directory` to the `psfstorefile`, `pixelstorefile` and
+    `metastorefile`
+
+    Parameters
+    ----------
+    config_file : string
+        Path to yaml formatted file with configuration parameters
+
+    args : Namespace, optional
+        Namespace of additional arguments that will override settings in the
+        yaml file.
+
+    Returns
+    -------
+    config : `argparse.Namespace()` instance.
+        The configuration parameters as attributes of a Namespace.
     """
     import yaml
     if type(config_file) is str:
@@ -74,8 +90,9 @@ def read_config(config_file, args=None):
 
 
 def update_config(config, args):
-    """Update a configuration namespace with parsed command line arguments.
-    Also prepends config.store_directory to *storefile names
+    """Update a configuration namespace with parsed command line arguments. Also
+    prepends config.store_directory to *storefile names, and expands shell
+    variables.
     """
     if args is not None:
         d = vars(args)
@@ -128,7 +145,7 @@ def extract_block_diag(a, n, k=0):
     if not (n > 0):
         raise ValueError("Must have n >= 0")
     if k > 0:
-        a = a[:,n*k:]
+        a = a[:, n*k:]
     else:
         a = a[-n*k:]
 
@@ -141,6 +158,9 @@ def extract_block_diag(a, n, k=0):
 
 
 def make_statscat(stats, step):
+    """Convert the `stats` dictionary returned by littlemcmc to a structured
+    array.
+    """
     # Reshape `stats` to an array
     dtype = np.dtype(list(step.stats_dtypes[0].items()))
     stats_arr = np.zeros(len(stats), dtype=dtype)
@@ -150,6 +170,8 @@ def make_statscat(stats, step):
 
 
 def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
+    """
+    """
     # --- Get sizes of things ----
     n_iter, n_param = chain.shape
     n_band = len(bands)
@@ -180,7 +202,7 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
 
 
 def write_residuals(patcher, filename, residuals=None):
-    # TODO: Should this be a method on Patch or Posterior
+    # TODO: Should this be a method on Patch or Posterior ?
     pixattrs = ["data", "xpix", "ypix", "ierr"]
     metas = ["D", "CW", "crpix", "crval"]
     epaths = patcher.epaths
@@ -280,7 +302,7 @@ def I_eff(lum, rhalf, flux_radius=None, sersic=1):
     """
     two_n = 2 * sersic
     k = gammaincinv(two_n, 0.5)
-    f =  gamma(two_n)
+    f = gamma(two_n)
     if flux_radius is not None:
         x = k * (flux_radius / rhalf)**(1. / sersic)
         f *= gammainc(two_n, x)
@@ -295,4 +317,3 @@ def isophotal_radius(iso, flux, r_half, flux_radius=None, sersic=1):
     r_iso = (1 - np.log(iso / Ie) / k)**(sersic)
 
     return r_iso * r_half
-

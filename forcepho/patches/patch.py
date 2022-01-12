@@ -239,7 +239,6 @@ class Patch(PatchBase):
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
 
-
     def pack_meta(self, scene):
         """This method packs all the exposure and source metadata.  Most of
         this data is scene/source dependent, so in this way we can change the

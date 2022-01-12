@@ -8,6 +8,7 @@ __all__ = ["Patch",
            "JadesPatch",
            "SimplePatch"]
 
+
 class JadesPatch(StorePatch, GPUPatchMixin):
     pass
 

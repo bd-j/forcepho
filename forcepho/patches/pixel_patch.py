@@ -118,7 +118,6 @@ class PixelPatch(Patch):
 
         self._dirty_data = False
 
-
     def pack_pix(self, region, dtype=None):
         """We have super-pixel data in individual exposures that we want to
         pack into concatenated 1D pixel arrays.
@@ -249,7 +248,6 @@ class StorePatch(PixelPatch):
         self.metastore = MetaStore(metastore)
         self.pixelstore = PixelStore(pixelstore)
 
-
     def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
         exposure id) and exposureIDs for all exposures that overlap the region.
@@ -371,7 +369,6 @@ class FITSPatch(PixelPatch):
                          psfstore=psfstore,
                          splinedata=splinedata)
 
-
         self.fitsfiles = fitsfiles
         self.snr = None
         self.unc = None
@@ -413,7 +410,7 @@ class FITSPatch(PixelPatch):
                     imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                     bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
                     inim = np.any((bx > 0) & (bx < imsize[0]) &
-                                    (by > 0) & (by < imsize[1]))
+                                  (by > 0) & (by < imsize[1]))
                     around_im = (imsize[0] < bx.max()) & (bx.min() < 0) & (imsize[1] < by.max()) & (by.min() < 0)
                     inim = inim | around_im
                     if not inim:
@@ -463,7 +460,7 @@ class FITSPatch(PixelPatch):
 
         # Pad to multiples of say 64
         # in fact only every *band* needs to be padded
-        # but we are being dumb anyway.
+        # but we are being dumb in this class anyway.
         warp = getattr(self, "warp_size", 64)
         pad = warp - np.mod(len(flux), warp)
         if pad != warp:
@@ -473,6 +470,5 @@ class FITSPatch(PixelPatch):
             # we give them x, y = -1, easy to find later.
             xp = np.append(xp, np.zeros(pad, dtype=xp.dtype)-1)
             yp = np.append(yp, np.zeros(pad, dtype=yp.dtype)-1)
-
 
         return flux, ie, xp, yp
