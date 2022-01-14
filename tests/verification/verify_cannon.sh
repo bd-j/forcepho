@@ -26,7 +26,7 @@ source activate fpho
 
 
 band=F200W
-reference=./data/images/reference/reference-2021Nov30_f200w_sersic\=2.2_rhalf\=0.10.fits
+reference=./data/reference-2021Nov30_f200w_sersic\=2.2_rhalf\=0.10.fits
 
 # model the reference scene, and check the image residuals
 python verify_reference.py --reference_image $reference --bandlist $band

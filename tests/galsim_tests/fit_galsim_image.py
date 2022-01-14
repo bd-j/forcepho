@@ -9,8 +9,8 @@ import json, yaml
 from astropy.io import fits
 
 from forcepho.patches import SimplePatch
-from forcepho.superscene import LinkedSuperScene, rectify_catalog
-from forcepho.utils import NumpyEncoder, read_config, adjust_bounds
+from forcepho.superscene import LinkedSuperScene, rectify_catalog, adjust_bounds
+from forcepho.utils import NumpyEncoder, read_config
 from child import accomplish_task, optimization, sampling
 
 from make_galsim_image import make_galsim_image, get_grid_params
