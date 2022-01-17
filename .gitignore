@@ -13,3 +13,4 @@ demo/
 docs/key
 docs/tex
 docs/_build
+*.fits

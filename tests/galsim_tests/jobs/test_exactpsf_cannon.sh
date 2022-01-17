@@ -26,18 +26,19 @@ task=${SLURM_ARRAY_TASK_ID}
 n_grid=100
 
 # all the output will be stored here
-outbase=./output/test_sampling_v1
+outbase=./output/test_exactpsf_sampling_v1
 # could add optimization flags here
 extra_flags=""
 #extra_flags="--optimize 1 --add_barriers 1 --linear_optimize 1"
 
 # -- make and fit the galsim image ---
-python fit_test.py --config_file ./test_config.yml \
-                   --test_grid ./grids/galsim_grid.fits \
-                   --grid_index_start $task --n_grid $n_grid \
-                   --sampling_draws 2048 --warmup 512 \
-                   --maxfluxfactor 2 \
-                   --outbase $outbase $extra_flags
+python fit_galsim_image.py --config_file ./test_config.yml \
+                           --test_grid ./grids/galsim_exactpsf_grid.fits \
+                           --psfstorefile psf_gaussian_dec21.h5 --psf_type simple \
+                           --grid_index_start $task --n_grid $n_grid \
+                           --sampling_draws 2048 --warmup 512 \
+                           --maxfluxfactor 2 \
+                           --outbase $outbase $extra_flags
 
 echo "sample results at $outbase"
 

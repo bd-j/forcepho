@@ -68,6 +68,14 @@ def get_superscene(config, logger, **rectify_kwargs):
 
 def fit_test_image(target_image, config, taskID=0, logger=None):
     """Fit a test image with forcepho
+
+    Parameters
+    ----------
+    target_image : string
+        Full path to the test image.
+
+    config : Namespace
+        Namespace with configuration atttributes
     """
 
     if config.optimize:
@@ -131,7 +139,8 @@ if __name__ == "__main__":
     # input
     parser.add_argument("--config_file", type=str, default="./test_config.yml")
     parser.add_argument("--psfstorefile", type=str, default=None)
-    parser.add_argument("--test_grid", type=str, default="./galsim_grid.fits")
+    parser.add_argument("--psf_type", type=str, default="webbpsf", choices=["webbpsf", "simple"])
+    parser.add_argument("--test_grid", type=str, default="./grids/galsim_grid.fits")
     parser.add_argument("--grid_index_start", type=int, default=0)
     parser.add_argument("--n_grid", type=int, default=10)
     parser.add_argument("--target_image", type=str, default="")
@@ -140,7 +149,7 @@ if __name__ == "__main__":
     parser.add_argument("--maxfluxfactor", type=float, default=0)
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
-    parser.add_argument("--outbase", type=str, default="../output/test")
+    parser.add_argument("--outbase", type=str, default="./output/")
     # optimization
     parser.add_argument("--optimize", type=int, default=0,
                         help="switch to optimize instead of sampling")
@@ -178,7 +187,7 @@ if __name__ == "__main__":
     # --- Decide what the tasks are ---
     if not config.target_image:
         start = config.grid_index_start
-        tasklist = list(range(s, s + config.n_grid))
+        tasklist = list(range(start, start + config.n_grid))
     else:
         tasklist = [config.target_image]
 
@@ -194,12 +203,16 @@ if __name__ == "__main__":
             params = get_grid_params(config, taskID=taskID)
             parstring = "band={band}, rhalf={rhalf}, sersic={sersic}, q={q}, snr={snr}".format(**params)
             logger.info(f"parameters are {parstring}")
+            if config.psf_type == "simple":
+                fwhm_psf = float(params["band"][-3:])  # HACK
+            else:
+                fwhm_psf = None
 
-            test_image_name = make_test(params["band"], params["rhalf"],
-                                        params["sersic"], params["snr"], params["q"],
-                                        flux=1, nx=196, ny=196,  # note size to ensure region within image
-                                        psf_type="webbpsf", psffile=config.psfstorefile,
-                                        outname=None)
+            test_image_name = make_galsim_image(params["band"], params["rhalf"],
+                                                params["sersic"], params["snr"], params["q"],
+                                                flux=1, nx=196, ny=196,  # note size to ensure region within image
+                                                psf_type=config.psf_type, psffile=config.psfstorefile, fwhm_psf=fwhm_psf,
+                                                outname=None)
             logger.info(f"wrote galsim image to {test_image_name}")
             targets.append(test_image_name)
             config.bandlist = [params["band"]]
@@ -211,6 +224,6 @@ if __name__ == "__main__":
         # --- fit the test image ---
         config.target_image = test_image_name
         if os.path.exists(config.target_image):
-            patcher = fit_test_image(config, logger=logger, taskID=taskID)
+            patcher = fit_test_image(test_image_name, config, logger=logger, taskID=taskID)
         else:
             logger.error(f"{config.target_image} does not exist.")

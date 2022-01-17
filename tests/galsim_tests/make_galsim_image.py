@@ -185,7 +185,7 @@ def get_galsim_psf(sigma_psf, config, det_samp=4):
 
 
 def make_galsim_image(band="", rhalf=0.1, sersic=2.0, snr=10, q=1.0,
-                      nx=64, ny=64, flux=1,
+                      nx=64, ny=64, flux=1, fwhm_psf=None,
                       psf_type="", psffile="", outname=""):
 
     config = argparse.Namespace()
@@ -209,8 +209,11 @@ def make_galsim_image(band="", rhalf=0.1, sersic=2.0, snr=10, q=1.0,
     stamp = make_stamp(config, nx=config.nx, ny=config.ny, scale=config.scale)
     cat, hdr, wcs = config_to_cat(config, stamp)
 
-    sigma_psf = config.scale
-    fwhm_psf = 2.35 * sigma_psf
+    if (config.psf_type == "simple") and fwhm_psf:
+        sigma_psf = fwhm_psf / 2.355
+    else:
+        sigma_psf = config.scale
+        fwhm_psf = 2.355 * sigma_psf
 
     gpsf = get_galsim_psf(sigma_psf, config)
     gim, ggal = galsim_model(cat[0], stamp, config.band, psf=gpsf)

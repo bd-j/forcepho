@@ -8,17 +8,17 @@ fit is to be conducted.
 
 ## Make the parameter grid
 
-The parameter grid that we will try to fit is specified by `galsim_grid.yml`.
+The parameter grid that we will try to fit is specified by `grids/galsim_grid.yml`.
 We convert this into a FITS table of parameters as follows:
 
 ```python
 from argparse import Namespace
 from make_galsim_image import get_grid_params
-config = Namespace(test_grid="./galsim_grid.yaml")
+config = Namespace(test_grid="./grids/galsim_grid.yaml")
 params = get_grid_params(config, 1)
 ```
 
-This will make a file called `galsim_grid.fits` continaing the input truth
+This will make a file called `./grids/galsim_grid.fits` continaing the input truth
 table.
 
 ## Make GalSim images for a set of parameters
