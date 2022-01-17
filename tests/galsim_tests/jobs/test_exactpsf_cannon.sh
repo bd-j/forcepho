@@ -8,8 +8,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem-per-cpu=1000
 #SBATCH --time=3:00:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/ftest_%A_%a.log    # Standard output and error log
-#SBATCH --error=logs/ftest_%A_%a.log    # Standard output and error log
+#SBATCH --output=logs/ftestexact_%A_%a.log    # Standard output and error log
+#SBATCH --error=logs/ftestexact_%A_%a.log    # Standard output and error log
 pwd -P; hostname; date
 
 module purge
