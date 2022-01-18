@@ -16,5 +16,5 @@ Requires Nvidia GPU (developed for V100), CUDA compiler, MPI & HDF5 libraries, a
    cd forcepho
    conda env create -f environment.yml
    conda activate force
-   python setup.py install
+   python -m pip install .
    ```

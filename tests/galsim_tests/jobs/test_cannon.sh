@@ -20,7 +20,7 @@ module load Anaconda3/5.0.1-fasrc01 # HeLmod w/o hdf5, matplotlib
 
 export PROJECT_DIR=$SCRATCH/eisenstein_lab/$USER/force-test
 cd $PROJECT_DIR
-source activate fpho
+source activate force
 
 task=${SLURM_ARRAY_TASK_ID}
 n_grid=100
