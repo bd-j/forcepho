@@ -6,6 +6,18 @@ with forcepho, and plot results and comparisons from the fits.
 The `test_config.yml` file contains information about file locations and how the
 fit is to be conducted.
 
+## Installation
+
+Follow the forcepho installation instructions to install forcepho to a conda
+environment named `force`.
+
+You will also need to install galsim to this environment:
+
+```sh
+source activate force
+conda install -c conda-forge galsim
+```
+
 ## Make the parameter grid
 
 The parameter grid that we will try to fit is specified by `grids/galsim_grid.yml`.
@@ -53,11 +65,14 @@ export PROJECT_DIR=$PWD
 In practice this code will be called from slurm job submission script.  E.g.
 
 ```sh
+cd $PROJECT_DIR/jobs
 slurm --array=0-900:100 test_cannon.sh
 ```
 
 will submit 10 jobs, each of which will generate 100 images from the parameter
-grid and fit them.
+grid and fit them.  Note that the jobarray step (here 100) should match the
+`--n_grid` command line argument to `fit_galsim_image.py` specified in the slurm
+script.
 
 ## Plot results
 

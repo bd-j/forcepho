@@ -30,7 +30,8 @@ python -m pip install .
 
 ### cannon
 
-slurm script directives, also load these modules before installing
+slurm script directives, also load these modules before installing:
+
 ```bash
 module purge
 module load git/2.17.0-fasrc01
@@ -42,7 +43,7 @@ source activate force
 
 ### lux
 
-install, requires a miniconda download
+install requires a miniconda download
 
 ```bash
 module load cuda10.2 hdf5/1.10.6 gcc openmpi git slurm

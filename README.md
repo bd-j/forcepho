@@ -15,6 +15,6 @@ Requires Nvidia GPU (developed for V100), CUDA compiler, MPI & HDF5 libraries, a
    git clone http://github.com/bd-j/forcepho
    cd forcepho
    conda env create -f environment.yml
-   conda activate fpho
+   conda activate force
    python setup.py install
    ```

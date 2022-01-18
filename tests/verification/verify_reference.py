@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""Generate a forcepho galaxy model using fast code and compare to the given
+reference image.
+"""
+
+
 import os, sys, glob, shutil, time
 import argparse, logging, json
 import numpy as np

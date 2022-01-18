@@ -1,16 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Make a comparison between the forcepho model and the galsim model for
-different sersic parameters and different psfs.
-
-Produces a comparison of sersic profiles using both a narrow simple gaussian
-PSF, and comparisons between use of true PSF and the gaussian approximation.
+"""Make a reference forcepho galaxy model using the slow, pythonic code and a
+particular JWST PSF approximation.
 """
 
 import argparse, time
 import numpy as np
 
+import h5py
 from astropy.io import fits
 from astropy.wcs import WCS
 
@@ -105,7 +103,7 @@ if __name__ == "__main__":
     lw = ["F277W", "F335M", "F356W", "F410M", "F444W"]
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--psffile", type=str, default="./data/psf_jwst_oct21_ng4m0_{band}.fits")
+    parser.add_argument("--psffile", type=str, default="./data/psf_jwst_oct21_ng4m0.h5")
     parser.add_argument("--splinedata", type=str, default="./data/sersic_mog_model.smooth=0.0150.h5")
     parser.add_argument("--sersic", type=float, default=2.2, help="value of n, between 1 and 5")
     parser.add_argument("--rhalf", type=float, default=0.1, help="in arcsec")
@@ -114,7 +112,6 @@ if __name__ == "__main__":
     parser.add_argument("--ny", type=int, default=64, help="If even, source is centered at pixel y edge")
     parser.add_argument("--band", type=str, default="F200W", choices=sw + lw)
     args = parser.parse_args()
-    args.psffile = args.psffile.format(band=args.band.lower())
 
     ts = time.strftime("%Y%b%d", time.localtime())
     args.outname = (f"./data/reference-{ts}_{args.band.lower()}_"
@@ -126,8 +123,11 @@ if __name__ == "__main__":
         scale = 0.06
 
     # --- build the reference image ---
-    psfcat = fits.getdata(args.psffile, -1)
+    with h5py.File(args.psffile, "r") as pdat:
+        psfcat = pdat[band.upper()]["parameters"][:]
+        psfcat = psfcat[0, psfcat["sersic_bin"][0, :] == 0]
     fpsf = PointSpreadFunction(parameters=psfcat)
+    assert fpsf.n_gauss == len(psfcat)
     stamp = make_stamp(args.band.upper(), scale=scale, nx=args.nx, ny=args.ny)
     cat, hdr, wcs = config_to_cat(args, stamp, origin=0)
     im, grad, gal = forcepho_slow_model(cat[0], stamp, args.band, psf=fpsf)

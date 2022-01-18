@@ -9,10 +9,15 @@ module.
 The `verify_config.yml` file contains information about file locations and how the
 image is to be generated.
 
+## Installation
+
+Follow the forcepho installation instructions to install forcepho to a conda
+environment named `force`.
+
 ## Make the reference image
 
 Normally you won't need to do this; you'll simply compare a generated image *to*
-the refernce image and throw it away.  However, it might be useful to make more
+the reference image and throw it away.  However, it might be useful to make more
 reference images, or to test the parts of the code used for *generating* the
 reference image.  The existing reference image was generated with:
 
@@ -20,8 +25,8 @@ reference image.  The existing reference image was generated with:
 python make_reference.py --sersic 2.2 --rhalf 0.1 --nx 63 --ny 32 --band F200W
 ```
 
-Note that making a reference image requires a FITS file with the Gaussian
-mixture parameters as the last extension.
+Note that making a reference image requires an HDF5 file with PSF gaussian
+mixture approximations.
 
 ## Generate new image and compare to the reference image
 

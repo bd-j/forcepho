@@ -20,10 +20,9 @@ module load cuda/11.4.2-fasrc01     # HeLmod latest
 module load Anaconda3/5.0.1-fasrc01 # HeLmod w/o hdf5, matplotlib
 #module load Anaconda3/5.0.1-fasrc02 # HeLmod w/ hdf5, matplotlib
 
-export PROJECT_DIR=$SCRATCH/eisenstein_lab/$USER/force-test
+export PROJECT_DIR=$PWD
 cd $PROJECT_DIR
-source activate fpho
-
+source activate force
 
 band=F200W
 reference=./data/reference-2021Nov30_f200w_sersic\=2.2_rhalf\=0.10.fits
