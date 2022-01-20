@@ -85,12 +85,11 @@ if __name__ == "__main__":
 
     # check valid pixels
     valid = patcher.xpix >= 0
-    if not np.allclose(residuals[0, valid], 0, atol=5e-7):
-        diff = np.nanmax(np.abs(residuals[0, valid]))
+    if not np.allclose(residuals[0][valid], 0, atol=5e-7):
+        diff = np.nanmax(np.abs(residuals[0][valid]))
         raise ValueError(f"Model did not match reference image: max abs diff = {diff}")
     else:
         logger.info("Model matches reference, yay!")
-
 
     # --- lnp, lnp_grad values ---
     #z = model.transform.inverse_transform(q).copy()
