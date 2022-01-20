@@ -73,7 +73,7 @@ For the simpler direct FITS file interface, use the following for the list of fi
      - band1_exp0.fits
      - band2_exp0.fits
 
-They must be in order by band.
+They must be in order by band, but otherwise the filenames are arbitrary.
 
 
 Output locations

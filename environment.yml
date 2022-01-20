@@ -7,7 +7,7 @@ dependencies:
   - ipython  # optional
   - pyyaml
   # Scientific computing
-  - numpy>=1.14
+  - numpy>=1.14,<1.22
   - scipy>=1.1.0
   - matplotlib  # optional
   - h5py
@@ -17,7 +17,7 @@ dependencies:
   - regions
   # Inference
   - pip:
-    - pycuda
+    - pycuda==2020.1
     - littlemcmc==0.2.*
   # Optional but recommended
   #- mpi4py>=3.1.0

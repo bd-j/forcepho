@@ -36,8 +36,8 @@ slurm script directives, also load these modules before installing:
 module purge
 module load git/2.17.0-fasrc01
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
-module load cuda/10.1.243-fasrc01
-module load Anaconda3/5.0.1-fasrc01
+module load cuda/11.4.2-fasrc01     # HeLmod latest
+module load Anaconda3/5.0.1-fasrc01 # HeLmod w/o hdf5, matplotlib
 source activate force
 ```
 
