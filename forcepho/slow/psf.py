@@ -40,7 +40,10 @@ class PointSpreadFunction(object):
         cov = [np.array([[p["Cxx"], p["Cxy"]], [p["Cxy"], p["Cyy"]]])
                for p in parameters]
         self.covariances = np.array(cov, dtype=np.float64)
-        self.means = np.array([parameters["xcr"], parameters["ycr"]], dtype=np.float64).T
+        try:
+            self.means = np.array([parameters["xcr"], parameters["ycr"]], dtype=np.float64).T
+        except(ValueError):
+            self.means = np.array([parameters["xcen"], parameters["ycen"]], dtype=np.float64).T
         self.amplitudes = parameters["amp"].astype(np.float64)
 
     def as_tuplelist(self):

@@ -94,11 +94,12 @@ def get_map(s):
     return ymap
 
 
-def make_catalog(root, n_sample=2058, n_full=0, bands=["F090W", "F200W", "F277W", "F356W"]):
+def make_catalog(root, n_full=0, bands=["F090W", "F200W", "F277W", "F356W"]):
     avail = glob.glob(f"{root}/patches/*samples.h5")
     pids = np.sort([int(os.path.basename(a).split("_")[0][5:]) for a in avail])
 
     # Get catalog data type
+    n_sample = Samples(f"{root}/patches/patch{pids[0]}_samples.h5").n_sample
     shapes = Samples(f"{root}/patches/patch{pids[0]}_samples.h5").shape_cols
     scols = bands + shapes
     icols = [("id", "<i4"), ("wall", "<f4"), ("lnp", "<f8", n_sample)]
@@ -221,7 +222,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     pl.ion()
-    truths = fits.getdata(f"{args.root}/test_grid.fits")
+    gridfile = glob.glob(f"{args.root}/*grid.fits")[0]
+    truths = fits.getdata(gridfile)
 
     if args.patch_index > 0:
 
