@@ -74,8 +74,8 @@ def plot_corner(patchname, smooth=0.05, hkwargs=dict(alpha=0.65),
 def plot_residual(patchname):
     s = Samples(patchname)
     r = Residuals(patchname.replace("samples", "residuals"))
-    delta = r.make_exp(value="residual")
-    ierr = r.make_exp(value="ierr")
+    delta, _, _ = r.make_exp(value="residual")
+    ierr, _, _ = r.make_exp(value="ierr")
     rfig, rax = pl.subplots()
     cb = rax.imshow((delta * ierr).T, origin="lower")
     rfig.colorbar(cb, label=r"$\chi=$ (Data - Model) / Unc")
@@ -127,16 +127,16 @@ def make_catalog(root, n_full=0, bands=["F090W", "F200W", "F277W", "F356W"]):
     return cat
 
 
-def snr_plot(aflux, tflux, truths, dx=0.05):
+def snr_plot(aflux, tflux, truths, bands=[], dx=0.05):
 
     aunc = aflux.std(axis=-1)
     tunc = tflux.std(axis=-1)
     x = 1 / truths["snr"]
     dx = np.diff([x.min(), x.max()])
     jitter = np.random.uniform(-dx*0.02, dx*0.02, len(x))
-    sfig, saxes = pl.subplots(1, 2, figsize=(8, 3), sharey=True)
+    sfig, saxes = pl.subplots(1, 2, figsize=(8, 4), sharey=True)
     for b in bands:
-        sel = band == b
+        sel = truths["band"] == b
         saxes[0].plot(tunc[sel], aunc[sel], marker="o", alpha=0.5, label=b, linestyle="")
         saxes[1].plot((x + jitter)[sel], aunc[sel], marker="o", alpha=0.5, label=b, linestyle="")
 
@@ -153,7 +153,7 @@ def snr_plot(aflux, tflux, truths, dx=0.05):
     saxes[0].set_ylim(-0.02, 0.15)
     sfig.tight_layout()
 
-    return sfig, sax
+    return sfig, saxes
 
 
 def compare_parameters(scat, truths, parname, point_type="median",
@@ -227,8 +227,8 @@ if __name__ == "__main__":
 
     if args.patch_index > 0:
 
-        pids = np.arange(0, args.patch_index)
-        #pids = [args.patch_index]
+        #pids = np.arange(0, args.patch_index)
+        pids = [args.patch_index]
         for pid in pids:
             title_fmt = "band={band}, SNR={snr},\nnsersic={sersic:.1f}, rhalf={rhalf:.2f}, q={q:.2f}"
             patchname = f"{args.root}/patches/patch{pid}_samples.h5"
@@ -271,10 +271,10 @@ if __name__ == "__main__":
 
     else:
         aflux, tflux = aperture_flux(scat, truths)
-        sfig, saxes = snr_plot(aflux, tflux, truths)
+        sfig, saxes = snr_plot(aflux, tflux, truths, bands)
         sfig.savefig("figures/apflux_snr.png", dpi=200)
 
-        ffig, faxes = pl.subplots()
+        ffig, faxes = pl.subplots(figsize=(8, 4))
         for b in bands:
             sel = truths["band"] == b
             faxes.plot(truths[sel]["snr"] * np.random.uniform(0.9, 1.1, sel.sum()),
@@ -285,4 +285,5 @@ if __name__ == "__main__":
         faxes.set_ylabel("forcepho aperture flux (50th pctile) / true aperture flux")
         faxes.legend()
         faxes.set_xscale("log")
+        ffig.tight_layout()
         ffig.savefig("figures/flux_comparison.png", dpi=200)
