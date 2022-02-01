@@ -32,7 +32,7 @@ When done with all exposures, copy the accumulators to the output buffer.
 
 
 #include "header.hh"
-#include "patch.cu"
+#include "patch.cc"
 #include "proposal.cu"
 #include "common_kernel.cc"
 
