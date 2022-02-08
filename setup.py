@@ -61,7 +61,7 @@ setup(
               "forcepho.patches",
               "forcepho.mixtures",
               "forcepho.slow"],
-    ext_modules=ext_modules,
+    #ext_modules=ext_modules,
     #license="LICENSE",
     description="Image Forward Modeling",
     long_description=open("README.md").read(),

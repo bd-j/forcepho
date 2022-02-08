@@ -140,6 +140,25 @@ class Proposer:
         return residuals
 
 
+class CPUProposer:
+
+    def __init__(self, patch=None, thread_block=1024, shared_size=48000,
+                 max_registers=64, show_ptxas=False, debug=False,
+                 kernel_name='EvaluateProposal', chi_dtype=np.float64,
+                 kernel_fn='compute_gaussians_kernel.cc'):
+        import compute_gaussians_kernel
+
+    def send_to_device(self, proposal):
+
+        self.proposal = proposal
+        self.device_ptr, rof = self.proposal.__array_interface__['data']
+        return self.ptr_dtype(self.device_ptr)
+
+    def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
+        self.device_proposal = self.send_to_device(proposal)
+        ret = compute_gaussians_kernel.EvaluateProposal(patch.device_patch, self.device_proposal)
+
+
 source_float_dt = np.float32
 source_struct_dtype = np.dtype([('ra', source_float_dt),
                                 ('dec', source_float_dt),
