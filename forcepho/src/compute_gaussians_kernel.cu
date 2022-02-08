@@ -77,11 +77,20 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p;
         PixGaussian    sersicgauss;    // This is where we'll queue up the source info
 
+        // Source dependent coordinate reference values
+        float crpix[2], crval[2];
+        int cr_start = 2 * (patch->n_sources * exposure + g);
+        crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
+        crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
+        int d_cw_start = 4 * (patch->n_sources * exposure + g);
+        float smean[2];
+        smean[0] = galaxy->ra  - crval[0];
+        smean[1] = galaxy->dec - crval[1];
+
         // Do the setup of the transformations
         //Get the transformation matrix and other conversions
         matrix22 D, R, S;
 
-        int d_cw_start = 4 * (patch->n_sources * exposure + g);
         D = matrix22(patch->D+d_cw_start);
         R.rot(galaxy->pa);
         S.scale(galaxy->q);
@@ -91,26 +100,7 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         dS_dq.scale_matrix_deriv(galaxy->q);
         dR_dpa.rotation_matrix_deriv(galaxy->pa);
 
-        // Source dependent coordinate reference values
-        float crpix[2], crval[2];
-        int cr_start = 2 * (patch->n_sources * exposure + g);
-        crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
-        crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
-
-        float smean[2];
-        smean[0] = galaxy->ra  - crval[0];
-        smean[1] = galaxy->dec - crval[1];
-        sersicgauss.CW = matrix22(patch->CW+d_cw_start);
-        Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean.
-
-        int s = psfgauss->sersic_radius_bin;
-        sersicgauss.xcen = smean[0] + crpix[0];
-        sersicgauss.ycen = smean[1] + crpix[1];
-        sersicgauss.covar = patch->rad2[s];
-        sersicgauss.amp   = galaxy->mixture_amplitudes[s];
-        sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
-        sersicgauss.da_dr = galaxy->damplitude_drh[s] ;
-        sersicgauss.flux = galaxy->fluxes[band];         //pull the correct flux from the multiband array
+        // Start filling sersicgauss
         // G is the conversion of flux units to image counts
         sersicgauss.G = G;
         // T is a unit circle, stretched by q, rotated by PA, and then distorted to the pixel scale
@@ -118,6 +108,18 @@ __device__ void CreateImageGaussians(Patch * patch, Source * sources, int exposu
         // And now we have the derivatives of T wrt q and PA.
         sersicgauss.dT_dq  = D * R * dS_dq;
         sersicgauss.dT_dpa = D * dR_dpa * S;
+        // And here is the dpix/dsky matrix and the source center in pixels
+        sersicgauss.CW = matrix22(patch->CW+d_cw_start);
+        Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean.
+        sersicgauss.xcen = smean[0] + crpix[0];
+        sersicgauss.ycen = smean[1] + crpix[1];
+
+        int s = psfgauss->sersic_radius_bin;
+        sersicgauss.covar = patch->rad2[s];
+        sersicgauss.amp   = galaxy->mixture_amplitudes[s];
+        sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
+        sersicgauss.da_dr = galaxy->damplitude_drh[s] ;
+        sersicgauss.flux = galaxy->fluxes[band];         //pull the correct flux from the multiband array
 
         GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[tid]);
             // g * n_psf_per_source + p]);

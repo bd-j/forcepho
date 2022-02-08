@@ -7,9 +7,6 @@ import re
 import glob
 import subprocess
 
-from pybind11 import get_cmake_dir
-from pybind11.setup_helpers import Pybind11Extension, build_ext
-
 try:
     from setuptools import setup
     setup
@@ -20,14 +17,19 @@ except ImportError:
 
 VERSION = "0.5"
 
+# from pybind11 import get_cmake_dir
+# from pybind11.setup_helpers import Pybind11Extension, build_ext
 
-ext_modules = [
-    Pybind11Extension("compute_gaussians_kernel",
-        ["forcepho/src/*cc", "forcepho/src/*h"],
-        # Example: passing in the version to the compiled code
-        define_macros = [('VERSION_INFO', get_gitvers())],
-        ),
-]
+# srcs =  glob.glob("forcepho/src/*cc") #+ glob.glob("forcepho/src/*h")
+# srcs.sort()
+
+# ext_modules = [
+#     Pybind11Extension("compute_gaussians_kernel",
+#                      srcs,
+#                       # Example: passing in the version to the compiled code
+#                       # define_macros = [('VERSION_INFO', get_gitvers())],
+#                      ),
+# ]
 
 
 def get_gitvers(version=VERSION):

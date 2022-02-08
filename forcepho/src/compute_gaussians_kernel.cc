@@ -5,28 +5,29 @@ Top-level code view:
 
 Create chi^2 and d(chi2/dparam) accumulators in shared memory and zero them.
 
-For each exposure:
+For each band:
 
-    Create on-image Gaussians from on-sky parameters, put in shared memory
-        ImageGaussian[NGalaxy*ImageGaussiansPerGalaxy]
+    For each exposure:
 
-    For one pixel per thread (taking BlockSize steps):
+        Create on-image Gaussians from on-sky parameters, put in shared memory
+            ImageGaussian[NGalaxy*ImageGaussiansPerGalaxy]
 
-        Load Image Data
-        Loop over all ImageGaussians:
-            Evaluate Gaussians to create Residual image, save it
+        For each pixel:
 
-        Compute local_chi2 from residual image for this pixel
-        Reduce local_chi2 over warp; atomic_add result to shared mem
+            Load Image Data
+            Loop over all ImageGaussians:
+                Evaluate Gaussians to create Residual image, save it
 
-        Loop over Active Galaxy:
-            Loop over Gaussian in this Galaxy:
-                Compute local_dchi_dp and accumulate
-            Reduce local_dchi_dp over warp and atomic_add to shared dchi_dp for galaxy
+            Compute local_chi2 from residual image for this pixel
+                Save it somewhere
+
+            Loop over Active Galaxy:
+                Loop over Gaussian in this Galaxy:
+                    Compute local_dchi_dp and accumulate
+                Reduce local_dchi_dp over warp and atomic_add to shared dchi_dp for galaxy
 
 When done with all exposures, copy the accumulators to the output buffer.
 */
-// Shared memory is arranged in 32 banks of 4 byte stagger
 
 //===============================================================================
 
@@ -39,47 +40,30 @@ When done with all exposures, copy the accumulators to the output buffer.
 #include <pybind11/numpy.h>
 
 
-void Convolve(int band, Patch * patch, Source * sources,
-              int d_cw_start, int cr_start) {
+void ConvolveOneSource(int band, int exposure, int g, int n_psf_per_source,
+                       Patch * patch,  Source * sources, ImageGaussian * imageGauss) {
 
-    int n_psf_per_source = patch->n_psf_per_source[band]; //constant per band.
-    int n_gal_gauss = patch->n_sources * n_psf_per_source;
+    // g: Source number
+    // Unpack the source
+    Source *galaxy = sources+g;
 
-    // Here we loop over every ImageGaussian, which is the nradii * npsf * nsourtce list
-    // BUT we probably want to loop over 
-    for (int tid = 0; tid < n_gal_gauss; tid++){
-        // Unpack the source and gaussian.
-        int g = tid / n_psf_per_source;       // Source number
-        int p = tid - g * n_psf_per_source;   // Gaussian number
+    // There are n_psf_per_source ~ ngauss_source * ngauss_psf PSF components per exposure
+    // We need to find where they start for this exposure
+    int psfgauss_start = patch->psfgauss_start[exposure];
 
-        Source *galaxy = sources+g;
-        PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p;
-        PixGaussian    sersicgauss;    // This is where we'll queue up the source info
+    // photometric calibration for this exposure
+    float G = patch->G[exposure];
 
-        int d_cw_start = 4 * (patch->n_sources * exposure + g);
-
-        ConvolveOne()
-
-    }
-}
-
-
-// This function sets up the gaussians for a single source and a single 
-//
-
-
-void ConvolveOne(int band, Patch * patch, Source *galaxy, PSFSourceGaussian *psfgauss,
-              int d_cw_start, int cr_start) {
-
-
-    // These are the inputs (plus the patch)
-    //Source *galaxy = sources+g;
-    //PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p;
-    //int d_cw_start = 4 * (patch->n_sources * exposure + g);
-    //int cr_start = 2 * (patch->n_sources * exposure + g);
+    // Source dependent coordinate reference values
+    int d_cw_start = 4 * (patch->n_sources * exposure + g);
+    int cr_start = 2 * (patch->n_sources * exposure + g);
+    float crpix[2], crval[2];
+    crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
+    crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
+    float smean[2];
+    smean[0] = galaxy->ra  - crval[0];
+    smean[1] = galaxy->dec - crval[1];
     //------------------------
-
-    PixGaussian    sersicgauss;    // This is where we'll queue up the source info
 
     // Do the setup of the transformations
     // Get the transformation matrix
@@ -93,25 +77,7 @@ void ConvolveOne(int band, Patch * patch, Source *galaxy, PSFSourceGaussian *psf
     dS_dq.scale_matrix_deriv(galaxy->q);
     dR_dpa.rotation_matrix_deriv(galaxy->pa);
 
-    // Source dependent coordinate reference values
-    float crpix[2], crval[2];
-    crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
-    crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
-
-    float smean[2];
-    smean[0] = galaxy->ra  - crval[0];
-    smean[1] = galaxy->dec - crval[1];
-    sersicgauss.CW = matrix22(patch->CW+d_cw_start);
-    Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean.
-
-    int s = psfgauss->sersic_radius_bin;
-    sersicgauss.xcen = smean[0] + crpix[0];
-    sersicgauss.ycen = smean[1] + crpix[1];
-    sersicgauss.covar = patch->rad2[s];
-    sersicgauss.amp   = galaxy->mixture_amplitudes[s];
-    sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
-    sersicgauss.da_dr = galaxy->damplitude_drh[s] ;
-    sersicgauss.flux = galaxy->fluxes[band];         //pull the correct flux from the multiband array
+    PixGaussian sersicgauss;    // This is where we'll queue up the source info
     // G is the conversion of flux units to image counts
     sersicgauss.G = G;
     // T is a unit circle, stretched by q, rotated by PA, and then distorted to the pixel scale
@@ -119,11 +85,134 @@ void ConvolveOne(int band, Patch * patch, Source *galaxy, PSFSourceGaussian *psf
     // And now we have the derivatives of T wrt q and PA.
     sersicgauss.dT_dq  = D * R * dS_dq;
     sersicgauss.dT_dpa = D * dR_dpa * S;
+    // This is the dsky/dpix matrix
+    sersicgauss.CW = matrix22(patch->CW+d_cw_start);
+    Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean.
+    // and here is the galaxy center in pixel coorinates
+    sersicgauss.xcen = smean[0] + crpix[0];
+    sersicgauss.ycen = smean[1] + crpix[1];
+
+    // loop over source * psf gaussians
+    for (int p = 0; p < n_psf_per_source; p++){
+
+        PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p;
+        int tid =  g * n_psf_per_source + p;   // Thread number
+
+        // now this stuff is source and psf component dependent
+        int s = psfgauss->sersic_radius_bin;
+        sersicgauss.covar = patch->rad2[s];
+        sersicgauss.amp   = galaxy->mixture_amplitudes[s];
+        sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
+        sersicgauss.da_dr = galaxy->damplitude_drh[s] ;
+        sersicgauss.flux = galaxy->fluxes[band];         //pull the correct flux from the multiband array
+
+        // Do the convolution, including gradients
+        GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[tid]);
+    }
+}
+
+
+// This function sets up the gaussians for a single source and a single PSF
+// But it's very inefficient if not being done in parallel
+//
+
+void ConvolveOne(int band, int exposure, int tid, int n_psf_per_source,
+                 Patch * patch, Source * sources,  ImageGaussian * imageGauss) {
+
+    // where are we?
+    int g = tid / n_psf_per_source;       // Source number
+    int p = tid - g * n_psf_per_source;   // Gaussian number
+
+    // There are n_psf_per_source ~ ngauss_source * ngauss_psf PSF components per exposure
+    // We need to find where they start for this exposure
+    int psfgauss_start = patch->psfgauss_start[exposure];
+
+    // photometric calibration for this exposure
+    float G = patch->G[exposure];
+
+    // -----------------------
+    // Source specific stuff
+    // ----------------------
+    // Unpack the source.
+    Source *galaxy = sources+g;
+
+    // Source dependent coordinate reference values
+    int d_cw_start = 4 * (patch->n_sources * exposure + g);
+    int cr_start = 2 * (patch->n_sources * exposure + g);
+    float crpix[2], crval[2];
+    crpix[0] = patch->crpix[cr_start]; crpix[1] = patch->crpix[cr_start+1];
+    crval[0] = patch->crval[cr_start]; crval[1] = patch->crval[cr_start+1];
+    float smean[2];
+    smean[0] = galaxy->ra  - crval[0];
+    smean[1] = galaxy->dec - crval[1];
+
+    // Do the setup of the transformations
+    // Get the transformation matrix
+    matrix22 D, R, S;
+    D = matrix22(patch->D+d_cw_start);
+    R.rot(galaxy->pa);
+    S.scale(galaxy->q);
+
+    //And its derivatives with respect to scene parameters
+    matrix22 dS_dq, dR_dpa;
+    dS_dq.scale_matrix_deriv(galaxy->q);
+    dR_dpa.rotation_matrix_deriv(galaxy->pa);
+
+    // --------------------------
+    PixGaussian sersicgauss;    // This is where we'll queue up the source info
+
+    // G is the conversion of flux units to image counts
+    sersicgauss.G = G;
+    // T is a unit circle, stretched by q, rotated by PA, and then distorted to the pixel scale
+    sersicgauss.T = D * R * S;
+    // And now we have the derivatives of T wrt q and PA.
+    sersicgauss.dT_dq  = D * R * dS_dq;
+    sersicgauss.dT_dpa = D * dR_dpa * S;
+    // This is the dsky/dpix matrix
+    sersicgauss.CW = matrix22(patch->CW+d_cw_start);
+    Av(sersicgauss.CW, smean); //multiplies CW (2x2) by smean (2x1) and stores result in smean.
+    // and here is the galaxy center in pixel coorinates
+    sersicgauss.xcen = smean[0] + crpix[0];
+    sersicgauss.ycen = smean[1] + crpix[1];
+
+    // --------------------------------------
+    // specific to the source and psf components
+    // --------------------------------------
+    // unpack the PSF
+    PSFSourceGaussian *psfgauss = patch->psfgauss+psfgauss_start + p;
+
+    int s = psfgauss->sersic_radius_bin;
+    sersicgauss.covar = patch->rad2[s];
+    sersicgauss.amp   = galaxy->mixture_amplitudes[s];
+    sersicgauss.da_dn = galaxy->damplitude_dnsersic[s];
+    sersicgauss.da_dr = galaxy->damplitude_drh[s] ;
+    sersicgauss.flux = galaxy->fluxes[band];         //pull the correct flux from the multiband array
 
     GetGaussianAndJacobian(sersicgauss, *psfgauss, imageGauss[tid]);
         // g * n_psf_per_source + p]);
 }
 
+
+void CreateImageGaussians(int band, int exposure, Patch * patch, Source * sources,
+                 ImageGaussian * imageGauss) {
+
+    int n_psf_per_source = patch->n_psf_per_source[band]; //constant per band.
+
+    // Here we loop over every ImageGaussian, which is the nradii * npsf * nsource list
+    // This is inefficient, but in principle allows for more code to be shared with cuda kernel.
+    //int n_gal_gauss = patch->n_sources * n_psf_per_source;
+    //for (int tid = 0; tid < n_gal_gauss; tid++){
+    //    ConvolveOne(band, exposure, tid, n_psf_per_source, patch, sources, imageGauss);
+    //}
+
+    // BUT we probably want to loop over sources, and then loop over npsf within ConvolveOne
+    // but that would break re-usability between cuda and cpu as currently coded in cuda
+    int n_gal = patch->n_sources;
+    for (int sid = 0; sid < n_gal; sid++){
+        ConvolveOneSource(band, exposure, sid, n_psf_per_source, patch, sources, imageGauss);
+    }
+
+}
 
 
 void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) {
@@ -136,6 +225,9 @@ void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) 
 
     // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
+
+    // FIXME: where is this stored?
+    int N_bands = 12;
 
     int n_gal_gauss;
     int band_N;
@@ -157,13 +249,15 @@ void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) 
         band_start = patch->band_start[THISBAND];
         n_gauss_total = n_sources*n_gal_gauss;
         // imageGauss = (ImageGaussian *) (shared);
+        ImageGaussian *imageGauss;
 
         // Loop over exposures in this band
         for (int e = 0; e < band_N; e++) {
             int exposure = band_start + e;
 
             // Do the convolution
-            Convolve(b, patch, sources, imageGauss);
+            imageGauss = (ImageGaussian *);
+            CreateImageGaussians(THISBAND, exposure, patch, sources, imageGauss);
 
             // Compute model for each pixel
             for (int p = 0 ; p < patch->exposure_N[exposure]; p ++) {
@@ -197,19 +291,31 @@ void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) 
                     // accum[accumnum].SumDChi2dp(dchi2_dp, gal);
                     // FIXME: this is not right....
                     pdchi2_dp[THISBAND, gal*NPARAMS] += dchi2_dp;
+                }
+            } //end loop over pixels
+        } // end loop over exposures
 
-            }
-        }
-            // Store the result
-            Response *r = (Response *)pdchi2_dp;
-            accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
+        // Store the result
+        //Response *r = (Response *)pdchi2_dp;
+        //accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
 
 
-    }
+    } // end loop over bands
 
 }
 
-PYBIND11_MODULE(compute, m) {
+void EvaluateProposalDummy(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) {
+
+    // Get the patch set up
+    Patch *patch = (Patch *)_patch;
+
+    // The Proposal is a vector of Sources[n_sources]
+    Source *sources = (Source *)_proposal;
+    return;
+}
+
+
+PYBIND11_MODULE(compute_gaussians_kernel, m) {
     m.def("EvaluateProposal", &EvaluateProposal);
 }
 
