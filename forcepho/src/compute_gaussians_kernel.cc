@@ -215,7 +215,7 @@ void CreateImageGaussians(int band, int exposure, Patch * patch, Source * source
 }
 
 
-void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) {
+void EvaluateProposal(int THISBAND, long _patch, long _proposal, long *pchi2, long *pdchi2_dp) {
 
     // We will use a block of shared memory
     // extern __shared__ char shared[];
@@ -226,93 +226,92 @@ void EvaluateProposal(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) 
     // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
 
-    // FIXME: where is this stored?
-    int N_bands = 12;
-
-    int n_gal_gauss;
-    int band_N;
-    int band_start;
-    int n_gauss_total;
-    int n_sources = patch->n_sources;
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
+    double pchi2; // this holds the chi2
 
-    double pchi2[N_bands];
-    float pdchi2_dp[N_bands, NPARAMS*MAXSOURCES];
+    // This holds the derivatives for multiple galaxies
+    float pdchi2_dp[NPARAMS*MAXSOURCES];
+
+    // Loop over bands.  this should be done with separate calls to enable parallelization
+    // int N_bands = ....
+    // for (int b = 0; b < N_bands; b++) {
+    //    int THISBAND = b;
+
+    int n_sources = patch->n_sources;
+    int n_gal_gauss = patch->n_psf_per_source[THISBAND];
+    int band_N = patch->band_N[THISBAND];
+    int band_start = patch->band_start[THISBAND];
+    int n_gauss_total = n_sources*n_gal_gauss;
+    ImageGaussian *imageGauss;
+    int ret = posix_memalign((void**) &imageGauss, 64, sizeof(ImageGaussian)*n_gauss_total);
+
+    // Loop over exposures in this band
+    for (int e = 0; e < band_N; e++) {
+        int exposure = band_start + e;
+        int npix = patch->exposure_N[exposure];
+
+        // Do the convolution
+        // imageGauss = (ImageGaussian *) (shared + shared_counter);
+
+        CreateImageGaussians(THISBAND, exposure, patch, sources, imageGauss);
+
+        // Compute model for each pixel
+        for (int p = 0 ; p < npix; p ++) {
+            int pix = patch->exposure_start[exposure] + p;
+
+            // Get the data and compute the model for this one pixel
+            float xp = patch->xpix[pix];
+            float yp = patch->ypix[pix];
+            PixFloat data = patch->data[pix];
+            PixFloat ierr = patch->ierr[pix];
+            PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gauss_total);
+
+            // Did the CPU ask that we output the residual image?
+            if(patch->residual != NULL)
+                patch->residual[pix] = residual;
+
+            // Compute chi2 and accumulate it
+            residual *= ierr;   // Form residual/sigma, which is chi
+            data *= ierr;
+            double chi2 = ((double) residual - (double) data);
+            chi2 *= ((double) residual + (double) data);
+            pchi2[THISBAND] += chi2;
+            residual *= ierr;   // We want res*ierr^2 for the derivatives
+
+            // Now we loop over Sources and compute the derivatives for each
+            for (int gal = 0; gal < n_sources; gal++) {
+                for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0f;
+                ComputeGaussianDerivative(xp, yp, residual,  //1.
+                        imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);
+
+                // accum[accumnum].SumDChi2dp(dchi2_dp, gal);
+                // FIXME: this is not right....
+                pdchi2_dp[gal*NPARAMS] += dchi2_dp;
+            }
+        } //end loop over pixels
+    } // end loop over exposures
+    free(imageGauss);
+
+    // Store the result
+    //Response *r = (Response *)pdchi2_dp;
+    //accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
 
 
-    // Loop over bands
-    for (int b = 0; b < N_bands; b++) {
-        int THISBAND = b;
+    //} // end loop over bands
 
-        n_gal_gauss = patch->n_psf_per_source[THISBAND];
-        band_N = patch->band_N[THISBAND];
-        band_start = patch->band_start[THISBAND];
-        n_gauss_total = n_sources*n_gal_gauss;
-        // imageGauss = (ImageGaussian *) (shared);
-        ImageGaussian *imageGauss;
-
-        // Loop over exposures in this band
-        for (int e = 0; e < band_N; e++) {
-            int exposure = band_start + e;
-
-            // Do the convolution
-            imageGauss = (ImageGaussian *);
-            CreateImageGaussians(THISBAND, exposure, patch, sources, imageGauss);
-
-            // Compute model for each pixel
-            for (int p = 0 ; p < patch->exposure_N[exposure]; p ++) {
-                int pix = patch->exposure_start[exposure] + p;
-
-                // Get the data and compute the model for this one pixel
-                float xp = patch->xpix[pix];
-                float yp = patch->ypix[pix];
-                PixFloat data = patch->data[pix];
-                PixFloat ierr = patch->ierr[pix];
-                PixFloat residual = ComputeResidualImage(xp, yp, data, imageGauss, n_gauss_total);
-
-                // Did the CPU ask that we output the residual image?
-                if(patch->residual != NULL)
-                    patch->residual[pix] = residual;
-
-                // Compute chi2 and accumulate it
-                residual *= ierr;   // Form residual/sigma, which is chi
-                data *= ierr;
-                double chi2 = ((double) residual - (double) data);
-                chi2 *= ((double) residual + (double) data);
-                pchi2[THISBAND] += chi2;
-                residual *= ierr;   // We want res*ierr^2 for the derivatives
-
-                // Now we loop over Sources and compute the derivatives for each
-                for (int gal = 0; gal < n_sources; gal++) {
-                    for (int j=0; j<NPARAMS; j++) dchi2_dp[j]=0.0f;
-                    ComputeGaussianDerivative(xp, yp, residual,  //1.
-                            imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);
-
-                    // accum[accumnum].SumDChi2dp(dchi2_dp, gal);
-                    // FIXME: this is not right....
-                    pdchi2_dp[THISBAND, gal*NPARAMS] += dchi2_dp;
-                }
-            } //end loop over pixels
-        } // end loop over exposures
-
-        // Store the result
-        //Response *r = (Response *)pdchi2_dp;
-        //accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
-
-
-    } // end loop over bands
+    // Return the response
+    //return response;
 
 }
 
-void EvaluateProposalDummy(long _patch, long _proposal,void *pchi2, void *pdchi2_dp) {
+//void EvaluateProposalDummy(long _patch, long _proposal) {
 
     // Get the patch set up
-    Patch *patch = (Patch *)_patch;
+//    Patch *patch = (Patch *)_patch;
 
     // The Proposal is a vector of Sources[n_sources]
-    Source *sources = (Source *)_proposal;
-    return;
-}
+//    Source *sources = (Source *)_proposal;
+//}
 
 
 PYBIND11_MODULE(compute_gaussians_kernel, m) {
