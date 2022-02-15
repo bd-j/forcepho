@@ -39,6 +39,7 @@ When done with all exposures, copy the accumulators to the output buffer.
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+namespace py = pybind11;
 
 void ConvolveOneSource(int band, int exposure, int g, int n_psf_per_source,
                        Patch * patch,  Source * sources, ImageGaussian * imageGauss) {
@@ -215,22 +216,29 @@ void CreateImageGaussians(int band, int exposure, Patch * patch, Source * source
 }
 
 
-void EvaluateProposal(int THISBAND, long _patch, long _proposal, long *pchi2, long *pdchi2_dp) {
+class CResponse{
+    public:
+      double chi2;
+      py::array_t<float> pdchi2_dp = py::array_t<float>(NPARAMS * MAXSOURCES);
+};
 
-    // We will use a block of shared memory
-    // extern __shared__ char shared[];
+
+CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
+
+    // Here's where we'll put the output
+    CResponse response;
+    // FIXME: can we move this to the Response object somehow?
+    py::buffer_info rbuf = response.pdchi2_dp.request();
+    float *pdchi2_dp = (float *) rbuf.ptr;
+    //float pdchi2_dp[NPARAMS*MAXSOURCES]; // This holds the derivatives for multiple galaxies
+    float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
+    double pchi2 = 0; // this holds the chi2
 
     // Get the patch set up
     Patch *patch = (Patch *)_patch;
 
     // The Proposal is a vector of Sources[n_sources]
     Source *sources = (Source *)_proposal;
-
-    float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
-    double pchi2; // this holds the chi2
-
-    // This holds the derivatives for multiple galaxies
-    float pdchi2_dp[NPARAMS*MAXSOURCES];
 
     // Loop over bands.  this should be done with separate calls to enable parallelization
     // int N_bands = ....
@@ -256,7 +264,7 @@ void EvaluateProposal(int THISBAND, long _patch, long _proposal, long *pchi2, lo
         CreateImageGaussians(THISBAND, exposure, patch, sources, imageGauss);
 
         // Compute model for each pixel
-        for (int p = 0 ; p < npix; p ++) {
+        for (int p = 0; p < npix; p ++) {
             int pix = patch->exposure_start[exposure] + p;
 
             // Get the data and compute the model for this one pixel
@@ -275,7 +283,7 @@ void EvaluateProposal(int THISBAND, long _patch, long _proposal, long *pchi2, lo
             data *= ierr;
             double chi2 = ((double) residual - (double) data);
             chi2 *= ((double) residual + (double) data);
-            pchi2[THISBAND] += chi2;
+            pchi2 += chi2;
             residual *= ierr;   // We want res*ierr^2 for the derivatives
 
             // Now we loop over Sources and compute the derivatives for each
@@ -284,37 +292,26 @@ void EvaluateProposal(int THISBAND, long _patch, long _proposal, long *pchi2, lo
                 ComputeGaussianDerivative(xp, yp, residual,  //1.
                         imageGauss+gal*n_gal_gauss, dchi2_dp, n_gal_gauss);
 
-                // accum[accumnum].SumDChi2dp(dchi2_dp, gal);
-                // FIXME: this is not right....
-                pdchi2_dp[gal*NPARAMS] += dchi2_dp;
+                for (int j=0; j<NPARAMS; j++) pdchi2_dp[gal*NPARAMS + j] += dchi2_dp[j];
             }
         } //end loop over pixels
     } // end loop over exposures
     free(imageGauss);
 
-    // Store the result
-    //Response *r = (Response *)pdchi2_dp;
-    //accum[0].store((double *) pchi2 + THISBAND, (float *) &(r[THISBAND].dchi2_dparam), n_sources);
+    // Fill the response
+    response.chi2 = pchi2;
 
-
-    //} // end loop over bands
-
-    // Return the response
-    //return response;
+    // response.
+    return response;
 
 }
 
-//void EvaluateProposalDummy(long _patch, long _proposal) {
-
-    // Get the patch set up
-//    Patch *patch = (Patch *)_patch;
-
-    // The Proposal is a vector of Sources[n_sources]
-//    Source *sources = (Source *)_proposal;
-//}
 
 
 PYBIND11_MODULE(compute_gaussians_kernel, m) {
     m.def("EvaluateProposal", &EvaluateProposal);
+    py::class_<CResponse>(m, "CResponse")
+        .def_readwrite("chi2", &CResponse::chi2)
+        .def_readwrite("dchi2_dp", &CResponse::pdchi2_dp);
 }
 

@@ -146,8 +146,10 @@ class CPUProposer:
                  kernel_name='EvaluateProposal', chi_dtype=np.float64,
                  kernel_fn='compute_gaussians_kernel.cc'):
 
-        import compute_gaussians_kernel
+        from ..src.compute_gaussians_kernel import EvaluateProposal
         self.ptr_dtype = ptr_dtype
+        self.kernel = EvaluateProposal
+        self.M = map
 
     def send_to_device(self, proposal):
         self.proposal = proposal
@@ -156,7 +158,9 @@ class CPUProposer:
 
     def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
         self.device_proposal = self.send_to_device(proposal)
-        ret = compute_gaussians_kernel.EvaluateProposal(patch.device_patch, self.device_proposal)
+
+        ret = [self.kernel(i, patch.device_patch, self.device_proposal)
+               for i in range(patch.n_bands)]
 
 
 
