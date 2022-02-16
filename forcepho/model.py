@@ -34,7 +34,7 @@ from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 from .slow.likelihood import lnlike_multi, make_image, WorkPlan
 
 
-__all__ = ["Posterior", "GPUPosterior", "SlowPosterior",
+__all__ = ["Posterior", "FastPosterior", "SlowPosterior",
            "LogLikeWithGrad",
            "Transform", "BoundedTransform"]
 
@@ -257,9 +257,9 @@ class Posterior:
         return dlnp, dlnp_num
 
 
-class GPUPosterior(Posterior):
+class FastPosterior(Posterior):
 
-    """A Posterior subclass that uses a GPU to evaluate the likelihood
+    """A Posterior subclass that uses a GPU or C code to evaluate the likelihood
     and its gradients.  Key ingredients are:
     * `lnprior`
     * `scene`
@@ -404,6 +404,10 @@ class GPUPosterior(Posterior):
 
         return self._residuals
 
+class GPUPosterior(FastPosterior):
+    """Alias for backwards compat.
+    """
+    pass
 
 class SlowPosterior(Posterior):
 
@@ -469,7 +473,6 @@ class SlowPosterior(Posterior):
 
 
 class ConstrainedTransformedPosterior(SlowPosterior):
-
 
     def check_constrained(self, theta):
         """Method that checks parameter values against constraints.  If they

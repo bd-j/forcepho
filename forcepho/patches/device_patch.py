@@ -6,7 +6,7 @@
 import numpy as np
 
 from ..sources import Scene, Galaxy
-from ..proposal import Proposer
+from ..proposal import GPUProposer, CPUProposer
 from ..model import GPUPosterior, Transform
 from ..superscene import bounds_vectors
 
@@ -31,10 +31,27 @@ class DevicePatchMixin:
         raise NotImplementedError
 
     def swap_on_device(self):
-        """Replace metadata on device, swap pointers to residual and data,
-        resend all pointers to device.
+        """This method does several things:
+            1) Free existing meta-data arrays on the device, and send new
+               (assumed already packed) metadata arrays to device,
+               replacing the associated CUDA pointers;
+            2) Swap the CUDA pointers for the data and the residual;
+            3) Free the existing device-side patch_struct;
+            4) Refill the patch_struct array of CUDA pointers and values,
+               and send to device
+
+        After this call the GPU uses the former "residual" vector as the "data"
         """
-        raise NotImplementedError
+        assert "residual" in self.device_ptrs, "Must instantiate the Patch with `return_residual=True`"
+        # replace gpu meta data pointers with currently packed meta
+        self.replace_device_meta_ptrs()
+        # Swap Cuda pointers for data and residual
+        self.device_ptrs["data"], self.device_ptrs["residual"] = self.device_ptrs["residual"], self.device_ptrs["data"]
+        # Pack pointers into structure and send structure to device
+        _ = self.send_patchstruct_to_device()
+        self._dirty_data = True
+
+        return self.device_patch
 
     def replace_device_meta_ptrs(self):
         raise NotImplementedError
@@ -43,6 +60,9 @@ class DevicePatchMixin:
         raise NotImplementedError
 
     def retrieve_array(self, **kwargs):
+        raise NotImplementedError
+
+    def get_proposer(self):
         raise NotImplementedError
 
     def subtract_fixed(self, fixed, active=None, big=None, maxactive=15,
@@ -95,7 +115,7 @@ class DevicePatchMixin:
         assert len(scenes) > 0, "No scenes to prepare!"
 
         # to communicate with the GPU
-        proposer = Proposer()
+        proposer = self.get_proposer()
 
         # Pack first scene and send it with pixel data
         self.return_residual = True
@@ -161,7 +181,7 @@ class DevicePatchMixin:
 
         # to communicate with the GPU
         if not proposer:
-            proposer = Proposer()
+            proposer = self.get_proposer()
 
         # Pack first scene and send it with pixel data
         self.return_residual = True
@@ -188,6 +208,9 @@ class GPUPatchMixin(DevicePatchMixin):
 
     """Mix-in class for communicating patch data with the GPU using PyCUDA.
     """
+
+    def get_proposer(self):
+        return GPUProposer()
 
     def prepare_model(self, active=None, fixed=None, big=None,
                       bounds=None,
@@ -226,7 +249,7 @@ class GPUPatchMixin(DevicePatchMixin):
 
     def send_to_device(self):
         """Transfer all the patch data to GPU main memory.  Saves the pointers
-        and builds the Patch struct from patch.cu; sends that to GPU memory.
+        and builds the Patch struct from patch.cc; sends that to GPU memory.
         Saves the struct pointer for forwarding to the likelihood call.
 
         Parameters
@@ -238,46 +261,23 @@ class GPUPatchMixin(DevicePatchMixin):
             A host-side pointer to the Patch struct on the GPU device.
         """
         # use names of struct dtype fields to transfer all arrays to the GPU
-        self.cuda_ptrs = {}
+        self.device_ptrs = {}
         for arrname in self.patch_struct_dtype.names:
             try:
                 arr = getattr(self, arrname)
                 arr_dt = self.patch_struct_dtype[arrname]
                 if arr_dt == self.ptr_dtype:
-                    self.cuda_ptrs[arrname] = cuda.to_device(arr)
+                    self.device_ptrs[arrname] = cuda.to_device(arr)
             except AttributeError:
                 if arrname != 'residual':
                     raise
 
         if self.return_residual:
-            self.cuda_ptrs['residual'] = cuda.mem_alloc(self.xpix.nbytes)
+            self.device_ptrs['residual'] = cuda.mem_alloc(self.xpix.nbytes)
 
         _ = self.send_patchstruct_to_device()
 
         self._dirty_data = False
-
-        return self.device_patch
-
-    def swap_on_device(self):
-        """This method does several things:
-            1) Free existing meta-data arrays on the device, and send new
-               (assumed already packed) metadata arrays to device,
-               replacing the associated CUDA pointers;
-            2) Swap the CUDA pointers for the data and the residual;
-            3) Free the existing device-side patch_struct;
-            4) Refill the patch_struct array of CUDA pointers and values,
-               and send to device
-
-        After this call the GPU uses the former "residual" vector as the "data"
-        """
-        assert "residual" in self.cuda_ptrs, "Must instantiate the Patch with `return_residual=True`"
-        # replace gpu meta data pointers with currently packed meta
-        self.replace_device_meta_ptrs()
-        # Swap Cuda pointers for data and residual
-        self.cuda_ptrs["data"], self.cuda_ptrs["residual"] = self.cuda_ptrs["residual"], self.cuda_ptrs["data"]
-        # Pack pointers into structure and send structure to device
-        _ = self.send_patchstruct_to_device()
-        self._dirty_data = True
 
         return self.device_patch
 
@@ -289,8 +289,8 @@ class GPUPatchMixin(DevicePatchMixin):
             arr = getattr(self, arrname)
             arr_dt = self.patch_struct_dtype[arrname]
             if arr_dt == self.ptr_dtype:
-                self.cuda_ptrs[arrname].free()
-                self.cuda_ptrs[arrname] = cuda.to_device(arr)
+                self.device_ptrs[arrname].free()
+                self.device_ptrs[arrname] = cuda.to_device(arr)
 
     def send_patchstruct_to_device(self):
         """Create new patch_struct and fill with values and with CUDA pointers
@@ -303,10 +303,10 @@ class GPUPatchMixin(DevicePatchMixin):
         for arrname in self.patch_struct_dtype.names:
             arr_dt = self.patch_struct_dtype[arrname]
             if arr_dt == self.ptr_dtype:
-                if arrname not in self.cuda_ptrs:
+                if arrname not in self.device_ptrs:
                     continue
                 # Array? Assign pointer.
-                patch_struct[arrname] = self.cuda_ptrs[arrname]
+                patch_struct[arrname] = self.device_ptrs[arrname]
             else:
                 # Value? Assign directly.
                 patch_struct[arrname] = getattr(self, arrname)
@@ -328,7 +328,7 @@ class GPUPatchMixin(DevicePatchMixin):
     def retrieve_array(self, arrname="residual"):
         """Retrieve a pixel array from the GPU
         """
-        flatdata = cuda.from_device(self.cuda_ptrs[arrname],
+        flatdata = cuda.from_device(self.device_ptrs[arrname],
                                     shape=self.xpix.shape,
                                     dtype=self.pix_dtype)
         return flatdata
@@ -336,10 +336,10 @@ class GPUPatchMixin(DevicePatchMixin):
     def free(self):
         # Release ALL the device-side arrays
         try:
-            for cuda_ptr in self.cuda_ptrs.values():
+            for cuda_ptr in self.device_ptrs.values():
                 if cuda_ptr:
                     cuda_ptr.free()
-            self.cuda_ptrs = {}
+            self.device_ptrs = {}
         except(AttributeError):
             pass  # no cuda_ptrs
 
@@ -402,20 +402,37 @@ class CPUPatchMixin(DevicePatchMixin):
     """Mix-in class for communicating patch data with the CPU
     """
 
+    def get_proposer(self):
+        return CPUProposer()
+
     def prepare_model(self, active=None, fixed=None, big=None,
                       bounds=None,
                       maxactive=15, shapes=Galaxy.SHAPE_COLS,
                       big_scene_kwargs={}, model_kwargs={}):
-        assert fixed is None
-        assert big is None
+
         scenes = [self.set_scene(active, **scene_kwargs)]
         self.pack_meta(scenes[0])
 
     def send_to_device(self):
+        """Transfer pointers to all patch data.  Saves the pointers
+        and builds the Patch struct from patch.cc; . Saves the struct pointer
+        for forwarding to the likelihood call.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        device_patch: self.ptr_dtype
+            A host-side pointer to the Patch struct (which is itself filled with
+            pointers)
+        """
         self.device_ptrs = {}
         self.buffer_sizes = {}
         # TODO: is this the right place for this?
         self.residual = np.zeros_like(self.data)
+
+        # Create dictionary of pointers to relevant arrays
         for arrname in self.patch_struct_dtype.names:
             try:
                 arr = getattr(self, arrname)
@@ -428,13 +445,30 @@ class CPUPatchMixin(DevicePatchMixin):
             except AttributeError:
                 if arrname != 'residual':
                     raise
+        # fill patchstruct with the pointers, get a pointer to the patchstruct
         self.device_patch = self.send_patchstruct_to_device()
         return self.device_patch
 
-    def swap_on_device(self):
-        raise NotImplementedError
+    def replace_device_meta_ptrs(self):
+        """Replace the metadata on the GPU, as well as the Cuda pointers. This
+        also releases the device side arrays corresponding to old metadata.
+        """
+        for arrname in self.meta_names:
+            arr = getattr(self, arrname)
+            arr_dt = self.patch_struct_dtype[arrname]
+            if arr_dt == self.ptr_dtype:
+                ptr, rof = arr.__array_interface__['data']
+                self.device_ptrs[arrname] = ptr
 
     def send_patchstruct_to_device(self):
+        """Create a patchstruct array and fill it with pointers.
+
+        Returns
+        -------
+        patchstruct_ptr : ptr_dtype
+            A pointer to the patchstruct array of pointers.
+        """
+        # Get a singlet of the custom dtype
         patch_struct = np.zeros(1, dtype=self.patch_struct_dtype)[0]
         for arrname in self.patch_struct_dtype.names:
             arr_dt = self.patch_struct_dtype[arrname]
@@ -442,13 +476,17 @@ class CPUPatchMixin(DevicePatchMixin):
                 patch_struct[arrname] = self.device_ptrs[arrname]
             else:
                 patch_struct[arrname] = getattr(self, arrname)
-        self.patchstruct_ptr, rof = patch_struct.__array_interface__['data']
-        self.patch_struct = patch_struct
-        return self.ptr_dtype(self.patchstruct_ptr)
 
-    def replace_device_meta_ptrs(self):
-        raise NotImplementedError
+        self.patch_struct = patch_struct
+        self.patchstruct_ptr, rof = patch_struct.__array_interface__['data']
+        self.device_patch = self.ptr_dtype(self.patchstruct_ptr)
+        return self.device_patch
 
     def retrieve_array(self, arrname="residual"):
-        raise NotImplementedError
+        """Retrieve a pixel array from the GPU
+        """
+        flatdata = getattr(self, arrname)
+        #shape=self.xpix.shape, dtype=self.pix_dtype)
+
+        return flatdata
 

@@ -1,4 +1,4 @@
-/* compute_gaussians.cc
+/* compute_gaussians_kernel.cc
 
 This is the core code to compute a Gaussian mixture likelihood and derivative
 Top-level code view:
@@ -41,6 +41,7 @@ When done with all exposures, copy the accumulators to the output buffer.
 
 namespace py = pybind11;
 
+// This function sets up the imageGaussians for all the components of a single source and a single PSF
 void ConvolveOneSource(int band, int exposure, int g, int n_psf_per_source,
                        Patch * patch,  Source * sources, ImageGaussian * imageGauss) {
 
@@ -113,10 +114,8 @@ void ConvolveOneSource(int band, int exposure, int g, int n_psf_per_source,
 }
 
 
-// This function sets up the gaussians for a single source and a single PSF
-// But it's very inefficient if not being done in parallel
-//
-
+// This function sets up the imageGauss for a single source gaussian and a single PSF gaussian
+// But it's very inefficient if not being done in parallel, so we will use ConvolveOneSource
 void ConvolveOne(int band, int exposure, int tid, int n_psf_per_source,
                  Patch * patch, Source * sources,  ImageGaussian * imageGauss) {
 
@@ -194,6 +193,7 @@ void ConvolveOne(int band, int exposure, int tid, int n_psf_per_source,
 }
 
 
+// This functiona creates all the imageGaussians for all the sources in a single exposure
 void CreateImageGaussians(int band, int exposure, Patch * patch, Source * sources,
                  ImageGaussian * imageGauss) {
 
@@ -212,7 +212,6 @@ void CreateImageGaussians(int band, int exposure, Patch * patch, Source * source
     for (int sid = 0; sid < n_gal; sid++){
         ConvolveOneSource(band, exposure, sid, n_psf_per_source, patch, sources, imageGauss);
     }
-
 }
 
 
@@ -302,7 +301,7 @@ CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
     free(imageGauss);
 
     // Fill the response
-    printf("%f", pchi2);
+    //printf("%f", pchi2);
     response.chi2 = pchi2;
 
     // response.

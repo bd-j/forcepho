@@ -24,7 +24,35 @@ except:
     pass
 
 
-class Proposer:
+__all__ = ["ProposerBase", "Proposer", "GPUProposer", "CPUProposer"]
+
+
+class ProposerBase:
+
+    def __init__(self):
+        pass
+
+    def evaluate_proposal(self, proposal, **kwargs):
+        raise NotImplementedError
+
+    def unpack_residuals(self, residuals_flat, patch, reshape=False):
+        """Unpack flat, padded residuals into original images
+        """
+        residuals = np.split(residuals_flat, np.cumsum(patch.exposure_N)[:-1])
+
+        # This tries to reshape the residuals into square stamps after removing
+        # padding, if that's how the data was originally packed.  Otherwise, one
+        # would want have the xpix and ypix arrays along with the residuals to
+        # be able to reconstruct an image
+        if reshape:
+            for e, residual in enumerate(residuals):
+                residual = residual[:patch.original_sizes[e]]
+                residuals[e] = residual.reshape(patch.original_shapes[e])
+
+        return residuals
+
+
+class GPUProposer:
 
     """
     This class invokes the PyCUDA kernel.
@@ -123,21 +151,11 @@ class Proposer:
         else:
             return chi_out, chi_derivs_out
 
-    def unpack_residuals(self, residuals_flat, patch, reshape=False):
-        """Unpack flat, padded residuals into original images
-        """
-        residuals = np.split(residuals_flat, np.cumsum(patch.exposure_N)[:-1])
 
-        # This tries to reshape the residuals into square stamps after removing
-        # padding, if that's how the data was originally packed.  Otherwise, one
-        # would want have the xpix and ypix arrays along with the residuals to
-        # be able to reconstruct an image
-        if reshape:
-            for e, residual in enumerate(residuals):
-                residual = residual[:patch.original_sizes[e]]
-                residuals[e] = residual.reshape(patch.original_shapes[e])
-
-        return residuals
+class Proposer(GPUProposer):
+    """Alias for backwards compat, deprecated.
+    """
+    pass
 
 
 class CPUProposer:
@@ -159,9 +177,28 @@ class CPUProposer:
     def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
         self.device_proposal = self.send_to_device(proposal)
 
-        ret = [self.kernel(i, patch.device_patch, self.device_proposal)
-               for i in range(patch.n_bands)]
+        n_bands, n_sources = patch.n_bands, patch.n_sources
+        chi_out = np.empty(n_bands, dtype=self.chi_dtype)
+        chi_derivs_out = np.empty(n_bands, dtype=response_struct_dtype)
 
+        vshape = n_bands, MAXSOURCES, NPARAMS
+        # TODO: Use map here
+        for i in range(n_bands):
+            ret = self.kernel(i, patch.device_patch, self.device_proposal)
+            # reshape output
+            chi_out[i] = ret.chi2
+            chi_derivs_out[i] = ret.dchi2_dp.reshape(MAXSOURCES, NPARAMS)[:n_sources]
+
+        # Unpack residuals
+        if patch.return_residual:
+            residuals = patch.retrieve_array("residual")
+            if unpack:
+                residuals = self.unpack_residuals(residuals, patch)
+
+        if patch.return_residual:
+            return chi_out, chi_derivs_out, residuals
+        else:
+            return chi_out, chi_derivs_out
 
 
 source_float_dt = np.float32
