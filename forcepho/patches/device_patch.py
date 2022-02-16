@@ -25,20 +25,69 @@ class DevicePatchMixin:
     """Abstract Base Class for device communication of Patch data.
     """
 
+    def prepare_model(self, active=None, fixed=None, big=None,
+                      bounds=None, maxactive=15, shapes=Galaxy.SHAPE_COLS,
+                      big_scene_kwargs={}, model_kwargs={}):
+        """Prepare the patch for sampling/evaluation.  This includes subtracting
+        big and fixed sources, and wrapping the patch in a FastPosterior
+        including transforms.
+
+        Parameters
+        ----------
+        active : structured ndarray of shape (n_active_sources,)
+            Catalog of active source parameters
+
+        fixed : structured ndarray of shape (n_fixed_sources,)
+            Catalog of fixed source parameters
+
+        maxactive : int
+            Maximum number of active sources at one time.
+
+        Returns
+        -------
+        model : instance of forcepho.model.GPUPosterior
+            The model object for this patch
+
+        q : ndarray of shape (n_dim,)
+            The initial parameter vector.
+        """
+        if shapes is None:
+            shapes = Galaxy.SHAPE_COLS
+
+        proposer, scene = self.subtract_fixed(fixed, active=active, big=big,
+                                              big_scene_kwargs=big_scene_kwargs,
+                                              maxactive=maxactive)
+        self.return_residual = False
+        q = scene.get_all_source_params().copy()
+
+        if bounds is None:
+            model = FastPosterior(proposer, scene=scene, patch=self,
+                                  transform=Transform(len(q)), **model_kwargs)
+        else:
+            lo, hi = bounds_vectors(bounds, self.bandlist, shapenames=shapes,
+                                    reference_coordinates=self.patch_reference_coordinates)
+            model = FastPosterior(proposer, scene=scene, patch=self,
+                                  lower=lo, upper=hi, **model_kwargs)
+
+        return model, q
+
     def send_to_device(self):
-        """Transfer all the patch data and pointers thereto to the device.
+        """Transfer all the patch data arrays to the device, collecting a
+        dicionary of pointers in the process. creates a dictionary of device
+        side pointers to the patch data, sending the individual arrays in the
+        process if necessary.
         """
         raise NotImplementedError
 
     def swap_on_device(self):
         """This method does several things:
-            1) Free existing meta-data arrays on the device, and send new
-               (assumed already packed) metadata arrays to device,
-               replacing the associated CUDA pointers;
-            2) Swap the CUDA pointers for the data and the residual;
-            3) Free the existing device-side patch_struct;
-            4) Refill the patch_struct array of CUDA pointers and values,
-               and send to device
+        1) Free existing meta-data arrays on the device, and send new
+            (assumed already packed) metadata arrays to device,
+            replacing the associated CUDA pointers;
+        2) Swap the CUDA pointers for the data and the residual;
+        3) Free the existing device-side patch_struct;
+        4) Refill the patch_struct array of CUDA pointers and values,
+            and send to device
 
         After this call the GPU uses the former "residual" vector as the "data"
         """
@@ -57,6 +106,10 @@ class DevicePatchMixin:
         raise NotImplementedError
 
     def send_patchstruct_to_device(self):
+        """Create new patch_struct and fill with values or pointers to arrays
+        and for the GPU send the patch_struct to the GPU.  Return a pointer to
+        the device side patchstruct.
+        """
         raise NotImplementedError
 
     def retrieve_array(self, **kwargs):
@@ -211,41 +264,6 @@ class GPUPatchMixin(DevicePatchMixin):
 
     def get_proposer(self):
         return GPUProposer()
-
-    def prepare_model(self, active=None, fixed=None, big=None,
-                      bounds=None,
-                      maxactive=15, shapes=Galaxy.SHAPE_COLS,
-                      big_scene_kwargs={}, model_kwargs={}):
-        """Prepare the patch for sampling/evaluation.  This includes subtracting
-        big and fixed sources, and wrapping the patch in a GPUPosterior including transforms.
-
-        Returns
-        -------
-        model : instance of forcepho.model.GPUPosterior
-            The model object for this patch
-
-        q : ndarray of shape (n_dim,)
-            The initial parameter vector.
-        """
-        if shapes is None:
-            shapes = Galaxy.SHAPE_COLS
-
-        proposer, scene = self.subtract_fixed(fixed, active=active, big=big,
-                                              big_scene_kwargs=big_scene_kwargs,
-                                              maxactive=maxactive)
-        self.return_residual = False
-        q = scene.get_all_source_params().copy()
-
-        if bounds is None:
-            model = FastPosterior(proposer, scene=scene, patch=self,
-                                  transform=Transform(len(q)), **model_kwargs)
-        else:
-            lo, hi = bounds_vectors(bounds, self.bandlist, shapenames=shapes,
-                                    reference_coordinates=self.patch_reference_coordinates)
-            model = FastPosterior(proposer, scene=scene, patch=self,
-                                  lower=lo, upper=hi, **model_kwargs)
-
-        return model, q
 
     def send_to_device(self):
         """Transfer all the patch data to GPU main memory.  Saves the pointers
@@ -404,14 +422,6 @@ class CPUPatchMixin(DevicePatchMixin):
 
     def get_proposer(self):
         return CPUProposer()
-
-    def prepare_model(self, active=None, fixed=None, big=None,
-                      bounds=None,
-                      maxactive=15, shapes=Galaxy.SHAPE_COLS,
-                      big_scene_kwargs={}, model_kwargs={}):
-
-        scenes = [self.set_scene(active, **scene_kwargs)]
-        self.pack_meta(scenes[0])
 
     def send_to_device(self):
         """Transfer pointers to all patch data.  Saves the pointers

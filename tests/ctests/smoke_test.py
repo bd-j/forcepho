@@ -66,26 +66,16 @@ if __name__ == "__main__":
     patcher.build_patch(region=None, allbands=bands)
     logger.info("Built patch.")
 
-    shape_cols = Galaxy.SHAPE_COLS
-    scene = patcher.set_scene(active)
-    patcher.pack_meta(scene)
-    _ = patcher.send_to_device()
+    # shape_cols = Galaxy.SHAPE_COLS
+    # scene = patcher.set_scene(active)
+    # patcher.pack_meta(scene)
+    # _ = patcher.send_to_device()
 
-    proposal = scene.get_proposal()
-    device_ptr, rof = proposal.__array_interface__['data']
-    device_proposal = np.uintp(device_ptr)
-    from compute_gaussians_kernel import EvaluateProposal
-    ret = EvaluateProposal(0, patcher.device_patch, device_proposal)
-
-    residuals = patcher.residual
-    im = np.zeros([32, 63])
-    valid = patcher.xpix >= 0
-    im[patcher.xpix[valid].astype(int), patcher.ypix[valid].astype(int)] = patcher.residual[valid]
-
-    if not HASGPU:
-        logger.info("No GPU available for further tests.")
-        sys.exit()
-
+    # proposal = scene.get_proposal()
+    # device_ptr, rof = proposal.__array_interface__['data']
+    # device_proposal = np.uintp(device_ptr)
+    # from forcepho.src.compute_gaussians_kernel import EvaluateProposal
+    # ret = EvaluateProposal(0, patcher.device_patch, device_proposal)
 
     # --- Build the model with scene ---
     shape_cols = Galaxy.SHAPE_COLS
@@ -98,13 +88,6 @@ if __name__ == "__main__":
     model_image = patcher.data - residuals
     logger.info("Computed residuals.")
 
-    # --- write the results ---
-    vers = forcepho.__version__
-    ts = time.strftime("%Y%b%d", time.localtime())
-    out = f"output/verification_residuals_V{vers}.h5"
-    write_residuals(patcher, out, residuals=[residuals])
-    logger.info(f"Wrote residuals to {out}")
-
     # check valid pixels
     valid = patcher.xpix >= 0
     if not np.allclose(residuals[0][valid], 0, atol=5e-7):
@@ -112,6 +95,23 @@ if __name__ == "__main__":
         raise ValueError(f"Model did not match reference image: max abs diff = {diff}")
     else:
         logger.info("Model matches reference, yay!")
+
+    #residuals = patcher.residual
+    im = np.zeros([63, 32])
+    valid = patcher.xpix >= 0
+    im[patcher.xpix[valid].astype(int), patcher.ypix[valid].astype(int)] = residuals[0][valid]
+
+    if not HASGPU:
+        logger.info("No GPU available for further tests.")
+        sys.exit()
+
+    # --- write the results ---
+    vers = forcepho.__version__
+    ts = time.strftime("%Y%b%d", time.localtime())
+    out = f"output/verification_residuals_ckernel_V{vers}.h5"
+    write_residuals(patcher, out, residuals=[residuals])
+    logger.info(f"Wrote residuals to {out}")
+
 
     # --- lnp, lnp_grad values ---
     #z = model.transform.inverse_transform(q).copy()

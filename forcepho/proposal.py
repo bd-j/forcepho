@@ -104,12 +104,12 @@ class GPUProposer:
 
         Returns
         -------
-        chi2: float
+        chi2: ndarray of shape (n_band,)
             The chi^2 for this proposal
 
         chi2_derivs: ndarray of dtype `source_float_dt`
             The derivatives of chi^2 with respect to proposal parameters.
-            This is an array with shape (nband, nactive_sources, 7)
+            This is an array with shape (nband, nactive_sources, NPARAM)
 
         residuals: list of ndarray of shape of original exposures
             The residual image (data - model) for each exposure.  No padding.
@@ -130,9 +130,9 @@ class GPUProposer:
             print(msg, file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
-        self.evaluate_proposal_kernel(patch.device_patch, cuda.In(proposal),     # inputs
-                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out), # outputs
-                                      grid=self.grid, block=self.block,            # launch config
+        self.evaluate_proposal_kernel(patch.device_patch, cuda.In(proposal),        # inputs
+                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out),  # outputs
+                                      grid=self.grid, block=self.block,             # launch config
                                       shared=self.shared_size)
 
         # Reshape the output
@@ -158,16 +158,19 @@ class Proposer(GPUProposer):
     pass
 
 
-class CPUProposer:
+class CPUProposer(ProposerBase):
 
     def __init__(self, patch=None, debug=False, ptr_dtype=np.uintp,
-                 kernel_name='EvaluateProposal', chi_dtype=np.float64,
-                 kernel_fn='compute_gaussians_kernel.cc'):
+                 chi_dtype=np.float64):
 
-        from ..src.compute_gaussians_kernel import EvaluateProposal
-        self.ptr_dtype = ptr_dtype
+        from .src.compute_gaussians_kernel import EvaluateProposal
         self.evaluate_proposal_kernel = EvaluateProposal
-        self.M = map
+
+        self.ptr_dtype = ptr_dtype
+        self.chi_dtype = chi_dtype
+        self.patch = patch
+
+        self.pool = None
 
     def send_to_device(self, proposal):
         self.proposal = proposal
@@ -175,11 +178,32 @@ class CPUProposer:
         return self.ptr_dtype(self.device_ptr)
 
     def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
+        """Call the C++ kernel to evaluate the likelihood of a parameter proposal.
+
+        Parameters
+        ----------
+        proposal: ndarray of dtype `source_struct_dtype`
+            An array of source parameters, packed into a Numpy array
+            (and thus ready to send to the GPU).
+
+        Returns
+        -------
+        chi2: ndarray of shape (n_band,)
+            The chi^2 for this proposal
+
+        chi2_derivs: ndarray of dtype `source_float_dt`
+            The derivatives of chi^2 with respect to proposal parameters.
+            This is an array with shape (nband, nactive_sources, NPARAM)
+
+        residuals: list of ndarray of shape of original exposures
+            The residual image (data - model) for each exposure.  No padding.
+            Only returned if patch.return_residual.
+        """
         self.device_proposal = self.send_to_device(proposal)
 
         n_bands, n_sources = patch.n_bands, patch.n_sources
         chi_out = np.empty(n_bands, dtype=self.chi_dtype)
-        chi_derivs_out = np.empty(n_bands, dtype=response_struct_dtype)
+        chi_derivs_out = np.empty([n_bands, n_sources, NPARAMS])
 
         vshape = n_bands, MAXSOURCES, NPARAMS
         # TODO: Use map here
@@ -187,7 +211,8 @@ class CPUProposer:
             ret = self.evaluate_proposal_kernel(i, patch.device_patch, self.device_proposal)
             # reshape output
             chi_out[i] = ret.chi2
-            chi_derivs_out[i] = ret.dchi2_dp.reshape(MAXSOURCES, NPARAMS)[:n_sources]
+            darr = ret.dchi2_dp.reshape(MAXSOURCES, NPARAMS)[:n_sources]
+            chi_derivs_out[i] = darr
 
         # Unpack residuals
         if patch.return_residual:

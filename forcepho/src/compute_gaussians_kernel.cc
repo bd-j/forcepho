@@ -222,6 +222,8 @@ class CResponse{
 };
 
 
+// Here's the main function that loops over pixels in each exposure in a band
+// and computes and accumulates residuals and gradients for every pixel
 CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
 
     // Here's where we'll put the output

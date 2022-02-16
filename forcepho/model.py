@@ -404,10 +404,12 @@ class FastPosterior(Posterior):
 
         return self._residuals
 
+
 class GPUPosterior(FastPosterior):
     """Alias for backwards compat.
     """
     pass
+
 
 class SlowPosterior(Posterior):
 
