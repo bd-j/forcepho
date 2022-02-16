@@ -166,7 +166,7 @@ class CPUProposer:
 
         from ..src.compute_gaussians_kernel import EvaluateProposal
         self.ptr_dtype = ptr_dtype
-        self.kernel = EvaluateProposal
+        self.evaluate_proposal_kernel = EvaluateProposal
         self.M = map
 
     def send_to_device(self, proposal):
@@ -184,7 +184,7 @@ class CPUProposer:
         vshape = n_bands, MAXSOURCES, NPARAMS
         # TODO: Use map here
         for i in range(n_bands):
-            ret = self.kernel(i, patch.device_patch, self.device_proposal)
+            ret = self.evaluate_proposal_kernel(i, patch.device_patch, self.device_proposal)
             # reshape output
             chi_out[i] = ret.chi2
             chi_derivs_out[i] = ret.dchi2_dp.reshape(MAXSOURCES, NPARAMS)[:n_sources]

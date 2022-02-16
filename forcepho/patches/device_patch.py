@@ -7,7 +7,7 @@ import numpy as np
 
 from ..sources import Scene, Galaxy
 from ..proposal import GPUProposer, CPUProposer
-from ..model import GPUPosterior, Transform
+from ..model import FastPosterior, Transform
 from ..superscene import bounds_vectors
 
 from .. import source_dir
@@ -237,13 +237,13 @@ class GPUPatchMixin(DevicePatchMixin):
         q = scene.get_all_source_params().copy()
 
         if bounds is None:
-            model = GPUPosterior(proposer, scene=scene, patch=self,
-                                 transform=Transform(len(q)), **model_kwargs)
+            model = FastPosterior(proposer, scene=scene, patch=self,
+                                  transform=Transform(len(q)), **model_kwargs)
         else:
             lo, hi = bounds_vectors(bounds, self.bandlist, shapenames=shapes,
                                     reference_coordinates=self.patch_reference_coordinates)
-            model = GPUPosterior(proposer, scene=scene, patch=self,
-                                 lower=lo, upper=hi, **model_kwargs)
+            model = FastPosterior(proposer, scene=scene, patch=self,
+                                  lower=lo, upper=hi, **model_kwargs)
 
         return model, q
 
@@ -489,4 +489,3 @@ class CPUPatchMixin(DevicePatchMixin):
         #shape=self.xpix.shape, dtype=self.pix_dtype)
 
         return flatdata
-
