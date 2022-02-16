@@ -34,7 +34,7 @@ from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS
 from .slow.likelihood import lnlike_multi, make_image, WorkPlan
 
 
-__all__ = ["Posterior", "GPUPosterior", "CPUPosterior",
+__all__ = ["Posterior", "GPUPosterior", "SlowPosterior",
            "LogLikeWithGrad",
            "Transform", "BoundedTransform"]
 
@@ -73,7 +73,6 @@ class Posterior:
 
         if kwargs:
             raise ValueError(f'Passed argument(s) {list(kwargs.keys())} to Posterior that were not understood')
-
 
     def evaluate(self, z):
         """Method to actually evaluate ln-probability and its gradient, at the
@@ -200,7 +199,7 @@ class Posterior:
             self.evaluate(z)
         nll = -self._lnp
         nll_grad = -self._lnp_grad
-        return  nll / self.ndof, nll_grad / self.ndof
+        return nll / self.ndof, nll_grad / self.ndof
 
     def nll_nograd(self, z):
         """A shortcut for the negative ln-priobability, for use with
@@ -352,7 +351,6 @@ class GPUPosterior(Posterior):
             self._lnp += self._lndetjac
             self._lnp_grad += self._lndetjac_grad
 
-
         # --- Logging/Debugging ---
         if self.debug:
             print("chi2: {}".format(chi2))
@@ -407,7 +405,7 @@ class GPUPosterior(Posterior):
         return self._residuals
 
 
-class CPUPosterior(Posterior):
+class SlowPosterior(Posterior):
 
     def __init__(self, scene=None, plans=[], stamps=[], lnlike=lnlike_multi,
                  lnlike_kwargs={"source_meta": True}, lnprior=None, transform=None):
@@ -470,7 +468,7 @@ class CPUPosterior(Posterior):
         return self._residuals
 
 
-class ConstrainedTransformedPosterior(CPUPosterior):
+class ConstrainedTransformedPosterior(SlowPosterior):
 
 
     def check_constrained(self, theta):

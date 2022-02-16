@@ -218,7 +218,7 @@ void CreateImageGaussians(int band, int exposure, Patch * patch, Source * source
 
 class CResponse{
     public:
-      double chi2;
+      double chi2 = 0;
       py::array_t<float> pdchi2_dp = py::array_t<float>(NPARAMS * MAXSOURCES);
 };
 
@@ -281,6 +281,9 @@ CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
             // Compute chi2 and accumulate it
             residual *= ierr;   // Form residual/sigma, which is chi
             data *= ierr;
+            //double chi2 = ((double) residual * (double) residual);
+            // below computes (r^2 - d^2) / sigma^2 in an attempt to decrease the size of the
+            // residual and avoid loss of significance, but has same derivative as r^2/sigma^2
             double chi2 = ((double) residual - (double) data);
             chi2 *= ((double) residual + (double) data);
             pchi2 += chi2;
@@ -299,6 +302,7 @@ CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
     free(imageGauss);
 
     // Fill the response
+    printf("%f", pchi2);
     response.chi2 = pchi2;
 
     // response.

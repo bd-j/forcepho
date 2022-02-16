@@ -402,9 +402,20 @@ class CPUPatchMixin(DevicePatchMixin):
     """Mix-in class for communicating patch data with the CPU
     """
 
+    def prepare_model(self, active=None, fixed=None, big=None,
+                      bounds=None,
+                      maxactive=15, shapes=Galaxy.SHAPE_COLS,
+                      big_scene_kwargs={}, model_kwargs={}):
+        assert fixed is None
+        assert big is None
+        scenes = [self.set_scene(active, **scene_kwargs)]
+        self.pack_meta(scenes[0])
+
     def send_to_device(self):
         self.device_ptrs = {}
         self.buffer_sizes = {}
+        # TODO: is this the right place for this?
+        self.residual = np.zeros_like(self.data)
         for arrname in self.patch_struct_dtype.names:
             try:
                 arr = getattr(self, arrname)
