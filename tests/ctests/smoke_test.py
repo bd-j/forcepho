@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def test_ingredients(config_file="./verification_config.yml",
-                     reference_image="./reference-2021Nov30_f200w_sersic=2.1",
+                     reference_image="./reference-2021Nov30_f200w_sersic=2.2_rhalf=0.10.fits",
                      bandlist=["F200W"],
                      ):
 
@@ -160,10 +160,18 @@ def test_gradients():
     valid = patcher.xpix >= 0
     im[patcher.xpix[valid].astype(int), patcher.ypix[valid].astype(int)] = residuals[0][valid]
 
-    if not HASGPU:
-        logger.info("No GPU available for further tests.")
-        sys.exit()
+    pass
 
+if __name__ == "__main__":
+    # --- Logger
+    logger = logging.getLogger('verify')
 
+    # --- ingredients ---
+    config, hdul, model, q = test_ingredients()
+    patcher = model.patch
+    valid = patcher.xpix >= 0
 
- 
+    # --- evaluate model ---
+    z = model.transform.inverse_transform(q)
+    lnp, lnp_grad = model.lnprob_and_grad(z)
+    logger.info("Computed likelihood.")

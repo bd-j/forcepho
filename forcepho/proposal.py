@@ -52,7 +52,7 @@ class ProposerBase:
         return residuals
 
 
-class GPUProposer:
+class GPUProposer(ProposerBase):
 
     """
     This class invokes the PyCUDA kernel.
