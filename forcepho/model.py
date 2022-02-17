@@ -250,9 +250,9 @@ class Posterior:
         for i, dp in enumerate(delta):
             theta = z0.copy()
             theta[i] -= dp
-            imlo = self.lnprob(theta)
+            imlo = self.lnprob(theta.copy())
             theta[i] += 2 * dp
-            imhi = self.lnprob(theta)
+            imhi = self.lnprob(theta.copy())
             dlnp_num[i] = ((imhi - imlo) / (2 * dp))
         return dlnp, dlnp_num
 

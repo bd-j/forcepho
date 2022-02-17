@@ -83,6 +83,11 @@ if __name__ == "__main__":
     write_residuals(patcher, out, residuals=[residuals])
     logger.info(f"Wrote residuals to {out}")
 
+    z = model.transform.inverse_transform(q)
+    dlnp, dlnp_num = model.check_grad(z)
+    logger.info(f"analytic gradients are {dlnp}")
+    logger.info(f"numerical gradients are {dlnp_num}")
+
     # check valid pixels
     valid = patcher.xpix >= 0
     if not np.allclose(residuals[0][valid], 0, atol=5e-7):

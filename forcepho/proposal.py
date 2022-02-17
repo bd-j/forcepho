@@ -173,7 +173,7 @@ class CPUProposer(ProposerBase):
         self.pool = None
 
     def send_to_device(self, proposal):
-        self.proposal = proposal
+        self.proposal = proposal.copy()
         self.device_ptr, rof = self.proposal.__array_interface__['data']
         return self.ptr_dtype(self.device_ptr)
 
