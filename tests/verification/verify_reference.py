@@ -38,7 +38,6 @@ def test_ingredients(config_file="./verification_config.yml",
                      bandlist=["F200W"],
                      kernel_type="gpukernel"):
 
-
     logger = logging.getLogger('ingredients')
 
     args = argparse.Namespace()
@@ -223,7 +222,7 @@ if __name__ == "__main__":
     logger.info("Computed residuals.")
 
     # --- write the results ---
-    if False:
+    if True:
         vers = forcepho.__version__
         ts = time.strftime("%Y%b%d", time.localtime())
         out = f"output/verification_residuals_{config.kernel_type}_v{vers}.h5"

@@ -78,8 +78,19 @@ produced.  This can lead to sources appearing in multiple overlapping patches.
 
 ## CPU/GPU
 
+The heavy lifting is done within one of several compute kernels.  One of these
+runs on a GPU and is written in CUDA, requiring compute capability >= 7.0.
+Another is written fully in C++, and does not require a GPU.  These kernels do
+share quite a bit of common code. Communication between python and these kernels
+is handled by `pyCUDA` and `pybind11` respectively.  Each requires different
+`Patch` functionality (implemented as kernel-specific mix-in classes for the
+base Patch) and different `Proposer` subclasses for each kernel.
+
+There is also a pure python implementation, which is extremely slow and found in
+the `forcepho.slow` modules.
+
 ## Code structure
 
-Graphic design is my passion
+Graphic design is my passion.
 
 ![structure](_static/images/ForcephoStructure.png)
