@@ -231,6 +231,9 @@ CResponse EvaluateProposal(int THISBAND, long _patch, long _proposal) {
     // FIXME: can we move this to the Response object somehow?
     py::buffer_info rbuf = response.pdchi2_dp.request();
     float *pdchi2_dp = (float *) rbuf.ptr;
+    for (int i=0; i<(NPARAMS*MAXSOURCES); i++){
+        pdchi2_dp[i] = 0;
+    }
     //float pdchi2_dp[NPARAMS*MAXSOURCES]; // This holds the derivatives for multiple galaxies
     float dchi2_dp[NPARAMS];   // This holds the derivatives for one galaxy
     double pchi2 = 0; // this holds the chi2
