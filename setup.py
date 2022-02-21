@@ -15,7 +15,7 @@ except ImportError:
     setup
 
 
-VERSION = "0.5"
+VERSION = "0.6"
 
 from pybind11 import get_cmake_dir
 from pybind11.setup_helpers import Pybind11Extension, build_ext
