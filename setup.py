@@ -6,6 +6,7 @@ import sys
 import re
 import glob
 import subprocess
+
 try:
     from setuptools import setup
     setup
@@ -14,7 +15,23 @@ except ImportError:
     setup
 
 
-VERSION = "0.5"
+VERSION = "0.6"
+
+from pybind11 import get_cmake_dir
+from pybind11.setup_helpers import Pybind11Extension, build_ext
+
+srcs = glob.glob("forcepho/src/compute_gaussians_kernel.cc")
+srcs.sort()
+
+ext_modules = [
+    Pybind11Extension("forcepho.src.compute_gaussians_kernel",
+                      srcs,
+                      include_dirs=["forcepho/src"],
+                      cxx_std=11,
+                      # Example: passing in the version to the compiled code
+                      # define_macros = [('VERSION_INFO', get_gitvers())],
+                      ),
+]
 
 
 def get_gitvers(version=VERSION):
@@ -43,11 +60,13 @@ setup(
     author="Ben Johnson",
     author_email="benjamin.johnson@cfa.harvard.edu",
     packages=["forcepho",
+              #"forcepho.src",
               "forcepho.patches",
               "forcepho.mixtures",
               "forcepho.slow"],
-
-    license="LICENSE",
+    ext_modules=ext_modules,
+    #cmdclass={"build_ext": build_ext},
+    #license="LICENSE",
     description="Image Forward Modeling",
     long_description=open("README.md").read(),
     package_data={"": ["README.md", "LICENSE"],

@@ -1,4 +1,4 @@
-/* patch.cu
+/* patch.cc
 
 This is the data model for the Patch class on the GPU.  A Patch contains
 all exposures for all bands in a patch.  It also contains per-source

@@ -24,7 +24,35 @@ except:
     pass
 
 
-class Proposer:
+__all__ = ["ProposerBase", "Proposer", "GPUProposer", "CPUProposer"]
+
+
+class ProposerBase:
+
+    def __init__(self):
+        pass
+
+    def evaluate_proposal(self, proposal, **kwargs):
+        raise NotImplementedError
+
+    def unpack_residuals(self, residuals_flat, patch, reshape=False):
+        """Unpack flat, padded residuals into original images
+        """
+        residuals = np.split(residuals_flat, np.cumsum(patch.exposure_N)[:-1])
+
+        # This tries to reshape the residuals into square stamps after removing
+        # padding, if that's how the data was originally packed.  Otherwise, one
+        # would want have the xpix and ypix arrays along with the residuals to
+        # be able to reconstruct an image
+        if reshape:
+            for e, residual in enumerate(residuals):
+                residual = residual[:patch.original_sizes[e]]
+                residuals[e] = residual.reshape(patch.original_shapes[e])
+
+        return residuals
+
+
+class GPUProposer(ProposerBase):
 
     """
     This class invokes the PyCUDA kernel.
@@ -76,12 +104,12 @@ class Proposer:
 
         Returns
         -------
-        chi2: float
+        chi2: ndarray of shape (n_band,)
             The chi^2 for this proposal
 
         chi2_derivs: ndarray of dtype `source_float_dt`
             The derivatives of chi^2 with respect to proposal parameters.
-            This is an array with shape (nband, nactive_sources, 7)
+            This is an array with shape (nband, nactive_sources, NPARAM)
 
         residuals: list of ndarray of shape of original exposures
             The residual image (data - model) for each exposure.  No padding.
@@ -102,9 +130,9 @@ class Proposer:
             print(msg, file=sys.stderr, flush=True)
         # is this synchronous?
         # do we need to "prepare" the call?
-        self.evaluate_proposal_kernel(patch.device_patch, cuda.In(proposal),     # inputs
-                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out), # outputs
-                                      grid=self.grid, block=self.block,            # launch config
+        self.evaluate_proposal_kernel(patch.device_patch, cuda.In(proposal),        # inputs
+                                      cuda.Out(chi_out), cuda.Out(chi_derivs_out),  # outputs
+                                      grid=self.grid, block=self.block,             # launch config
                                       shared=self.shared_size)
 
         # Reshape the output
@@ -123,21 +151,79 @@ class Proposer:
         else:
             return chi_out, chi_derivs_out
 
-    def unpack_residuals(self, residuals_flat, patch, reshape=False):
-        """Unpack flat, padded residuals into original images
+
+class Proposer(GPUProposer):
+    """Alias for backwards compat, deprecated.
+    """
+    pass
+
+
+class CPUProposer(ProposerBase):
+
+    def __init__(self, patch=None, debug=False, ptr_dtype=np.uintp,
+                 chi_dtype=np.float64):
+
+        from .src.compute_gaussians_kernel import EvaluateProposal
+        self.evaluate_proposal_kernel = EvaluateProposal
+
+        self.ptr_dtype = ptr_dtype
+        self.chi_dtype = chi_dtype
+        self.patch = patch
+
+        self.pool = None
+
+    def send_to_device(self, proposal):
+        self.proposal = proposal.copy()
+        self.device_ptr, rof = self.proposal.__array_interface__['data']
+        return self.ptr_dtype(self.device_ptr)
+
+    def evaluate_proposal(self, proposal, patch=None, verbose=False, unpack=True):
+        """Call the C++ kernel to evaluate the likelihood of a parameter proposal.
+
+        Parameters
+        ----------
+        proposal: ndarray of dtype `source_struct_dtype`
+            An array of source parameters, packed into a Numpy array
+            (and thus ready to send to the GPU).
+
+        Returns
+        -------
+        chi2: ndarray of shape (n_band,)
+            The chi^2 for this proposal
+
+        chi2_derivs: ndarray of dtype `source_float_dt`
+            The derivatives of chi^2 with respect to proposal parameters.
+            This is an array with shape (nband, nactive_sources, NPARAM)
+
+        residuals: list of ndarray of shape of original exposures
+            The residual image (data - model) for each exposure.  No padding.
+            Only returned if patch.return_residual.
         """
-        residuals = np.split(residuals_flat, np.cumsum(patch.exposure_N)[:-1])
+        self.device_proposal = self.send_to_device(proposal)
 
-        # This tries to reshape the residuals into square stamps after removing
-        # padding, if that's how the data was originally packed.  Otherwise, one
-        # would want have the xpix and ypix arrays along with the residuals to
-        # be able to reconstruct an image
-        if reshape:
-            for e, residual in enumerate(residuals):
-                residual = residual[:patch.original_sizes[e]]
-                residuals[e] = residual.reshape(patch.original_shapes[e])
+        n_bands, n_sources = patch.n_bands, patch.n_sources
+        chi_out = np.empty(n_bands, dtype=self.chi_dtype)
+        chi_derivs_out = np.empty([n_bands, n_sources, NPARAMS])
 
-        return residuals
+        vshape = n_bands, MAXSOURCES, NPARAMS
+        # TODO: Use map here
+        for i in range(n_bands):
+            ret = self.evaluate_proposal_kernel(i, patch.device_patch, self.device_proposal)
+            # reshape output
+            chi_out[i] = ret.chi2
+            darr = ret.dchi2_dp.reshape(MAXSOURCES, NPARAMS)[:n_sources]
+            chi_derivs_out[i] = darr
+
+        # Unpack residuals
+        if patch.return_residual:
+            residuals = patch.retrieve_array("residual")
+            if unpack:
+                residuals = self.unpack_residuals(residuals, patch)
+
+        if patch.return_residual:
+            return chi_out, chi_derivs_out, residuals
+        else:
+            return chi_out, chi_derivs_out
 
 
 source_float_dt = np.float32

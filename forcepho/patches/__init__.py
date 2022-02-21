@@ -1,5 +1,5 @@
 from .patch import Patch
-from .device_patch import GPUPatchMixin
+from .device_patch import GPUPatchMixin, CPUPatchMixin
 from .pixel_patch import PixelPatch, StorePatch, FITSPatch
 
 __all__ = ["Patch",

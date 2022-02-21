@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'forcepho'
-copyright = '2019-2021, Benjamin Johnson and Contributors'
+copyright = '2019-2022, Benjamin Johnson and Contributors'
 author = 'Benjamin Johnson'
 
 # The full version, including alpha/beta/rc tags
-release = '0.4'
+release = '0.6'
 
 
 # -- General configuration ---------------------------------------------------
