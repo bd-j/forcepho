@@ -73,5 +73,5 @@ setup(
                   "forcepho": ["src/*.cu", "src/*.cc", "src/*.h", "src/*.hh"]},
     #scripts=glob.glob("scripts/*.py"),
     include_package_data=True,
-    install_requires=["numpy"],
+    install_requires=["numpy", "pybind11"],
 )
