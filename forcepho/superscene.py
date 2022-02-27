@@ -845,7 +845,7 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
     bcat = np.zeros(len(active), dtype=dtype)
 
     # Fill the easy ones
-    bcat["q"] =  sqrtq_range
+    bcat["q"] = sqrtq_range
     bcat["pa"] = pa_range
     bcat["sersic"] = sersic_range
     bcat["rhalf"] = rhalf_range
