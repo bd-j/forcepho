@@ -45,7 +45,7 @@ def infer(model, hmc=True, num_warmup=1000, num_samples=500, dense_mass=True,
 
         rng_key = random.PRNGKey(0)
         rng_key, rng_key_ = random.split(rng_key)
-        mcmc.run(rng_key_, extra_fields=("potential_energy",), **model_args)
+        mcmc.run(rng_key_, extra_fields=("potential_energy", "accept_prob"), **model_args)
 
         samples = mcmc.get_samples()
         nlnp = mcmc.get_extra_fields()["potential_energy"]

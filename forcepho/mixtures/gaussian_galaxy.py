@@ -61,7 +61,7 @@ def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
     else:
         npar = len(radii)
         #amp = np.linspace(np.log(0.01), np.log(maxrad), len(radii))
-        amp = 1 -(radii - np.log(rh))**2
+        amp = 1 - (radii - np.log(rh))**2
         amp[0] = amp[1]  # deal with zero radii
         amp = np.ones_like(radii) * 1e-5
         p0 = amp
@@ -70,16 +70,15 @@ def fit_gaussians(nsersic=4., rh=1., smoothing=0.0, radii=None,
     beta = gammaincinv(2.0 * nsersic, 0.90)
     rbeta = rh * (beta / alpha)**nsersic
 
-        
     sersic = sersic_profile(x, n=nsersic, rh=rh, sigma=smoothing)
     extras = {'radii': radii, 'x': x, 'target': sersic,
-              'smoothing':smoothing,
+              'smoothing': smoothing,
               'asmooth': asmooth, 'arpenalty': arpenalty, 'arscale': rbeta}
     partial_chisq = partial(chisq, **extras)
 
     result = minimize(partial_chisq, p0, method="powell")
-    result = minimize(partial_chisq, result.x, method="BFGS", jac=False)   
-    result = minimize(partial_chisq, result.x, method="CG", jac=False)   
+    result = minimize(partial_chisq, result.x, method="BFGS", jac=False)
+    result = minimize(partial_chisq, result.x, method="CG", jac=False)
     return result
 
 
@@ -105,7 +104,7 @@ def chisq(params, x=None, target=None, radii=None,
     amps /= disps * np.sqrt(2 * np.pi)
     gauss = normal_oned(x, 0.0, amps, disps)
     delta = (gauss - target) / target
-    weighted_chisq = np.sum(delta * delta * target * x) / np.sum(x * target) #+ 1e-3 * np.sum(amps**2)
+    weighted_chisq = np.sum(delta * delta * target * x) / np.sum(x * target)  # + 1e-3 * np.sum(amps**2)
     weighted_chisq *= 1e-2
 
     # smoothness regularization
@@ -127,7 +126,7 @@ def chisq(params, x=None, target=None, radii=None,
     if return_models:
         return weighted_chisq, x, target, gauss
     else:
-        return  weighted_chisq 
+        return weighted_chisq
 
 
 def sersic_profile(x, n=4, rh=1, sigma=0.0, order=50):
@@ -152,17 +151,17 @@ def sersic_profile(x, n=4, rh=1, sigma=0.0, order=50):
             k = k * 1.0
             mu = 1 + k/(2*n)
             term = (-1)**k / factorial(k)
-            term *= (np.sqrt(2.) * sigma / r0)** (k / n)
+            term *= (np.sqrt(2.) * sigma / r0)**(k / n)
             term *= gamma(mu)
             term *= hyper(mu, 1, -p)
             total += term
             #good = np.isfinite(term)
             #total[good] += term[good]
-        value[use] = A * total * np.exp(alpha) # last term normalizes to unit intensity at the half-light radius
+        value[use] = A * total * np.exp(alpha)  #  last term normalizes to unit intensity at the half-light radius
         # deal with large radii where the gaussian fails, by replacing with the unconvolved sersic
         bad = (~np.isfinite(value)) | (~use) | ((sersic > 1.5 * value) & (x > sigma))
         value[bad] = sersic[bad]
-        return value #[:-1] / value[-1], value[-1]
+        return value  # [:-1] / value[-1], value[-1]
 
 
 def normal_oned(x, mu, A, sigma):
@@ -192,19 +191,19 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
                   ns=0.0, rh=0.0, chisq=None, amps=None,
                   xmax=None, smoothing=None):
     fig = pl.figure()
-    ax = fig.add_axes((.1,.5,.8,.4))
-    cax = fig.add_axes((.1,.1,.8,.2))
-    rax = fig.add_axes((.1,.3,.8,.2))
-    
+    ax = fig.add_axes((0.1, 0.5, 0.8, 0.4))
+    cax = fig.add_axes((0.1, 0.1, 0.8, 0.2))
+    rax = fig.add_axes((0.1, 0.3, 0.8, 0.2))
+
     ax.plot(x, sersic, label='Sersic:n={:3.1f}, rh={:3.3f}'.format(ns, rh))
-    if  sm_sersic is not None:
+    if sm_sersic is not None:
         residual = gauss / sm_sersic - 1
         ax.plot(x, sm_sersic, label='smooth Sersic', linewidth=2)
     else:
         residual = gauss / sersic - 1
-        
+
     ax.plot(x, gauss, label='GaussMix', alpha=0.7)
-        
+
     for a, r in zip(amps, radii):
         #print(r)
         ax.axvline(r, linestyle=":", color='k', alpha=0.1)
@@ -216,10 +215,10 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
     ax.set_yscale('log')
     ax.set_ylim(2e-6, 9e4)
     ax.set_ylabel("I(r)/I(rh)")
-        
+
     ax.legend()
     ax.set_xticklabels([])
-        
+
     rax.plot(x, residual)
     rax.set_ylabel('GM/smSersic - 1')
     rax.axvline(rh * 4, linestyle=":", color='k')
@@ -234,7 +233,6 @@ def plot_profiles(x, sersic, gauss, sm_sersic=None, radii=None,
     cax.set_xlabel('pixels')
     [a.set_xlim(x.min() * 0.8, x.max()*1.2) for a in [ax, rax, cax]]
 
-    
     return fig
 
 
@@ -243,7 +241,7 @@ def rfrac_from_halfn(frac, n=4, rh=1):
     beta = gammaincinv(2 * n, frac)
     alpha = gammaincinv(2 * n, 0.5)
     r0 = rh / alpha**n
-    r_frac = r0 * beta **n
+    r_frac = r0 * beta**n
     return r_frac
 
 
@@ -251,7 +249,7 @@ def plot_cfd(x, ns, rh, amps, radii, smoothing, ax=None):
     alpha = gammaincinv(2 * ns, 0.5)
     xprime = (x / rh)**(1./ns) * alpha
     cfd_sersic = gammainc(2. * ns, xprime)
-    disps =  np.hypot(radii, smoothing)
+    disps = np.hypot(radii, smoothing)
     cfd_gauss = gauss_cfd(x, amps, radii)
     cfd_smgauss = gauss_cfd(x, amps, disps)
 
@@ -269,7 +267,7 @@ def plot_cfd(x, ns, rh, amps, radii, smoothing, ax=None):
     ax.set_ylabel('f(<r)/f(total)')
     ax.legend(fontsize='x-small', loc="upper left")
     return fig, ax
-    
+
 
 def gauss_cfd(x, amplitudes, radii):
     num = np.zeros_like(x)
@@ -296,7 +294,7 @@ def amplitude_table(hname="gauss_gal_results/v3/mog_model.smooth=0.2.h5"):
               "#   of dispersion {:3.2f} before fitting.\n"
               "# Produced by gaussian_galaxy.py\n\n").format(dat.attrs['smoothing'])
     cols = '# n  r_h  ' + ' '.join(rtext)
-    fmt = ['{:3.1f}','{:4.2f}'] + len(radii) * ['{:5.3e}']
+    fmt = ['{:3.1f}', '{:4.2f}'] + len(radii) * ['{:5.3e}']
     fmt = '  '.join(fmt)
     with open(hname.replace('.h5', '.tbl'), 'w') as out:
         out.write(header + '\n')
@@ -324,9 +322,8 @@ def plot_amps(radii, amps):
     ax.set_yscale('log')
     ax.set_xlabel('scale (pixels)')
     ax.set_ylabel('amplitude/scale')
-   
-    return fig
 
+    return fig
 
 
 def fit_profiles(outroot=None, rgrid=rgrid,
@@ -449,7 +446,6 @@ if __name__ == "__main__":
                                lnradii=lnradii + np.log(pixscale), ngrid=ngrid,
                                rgrid=rgrid*pixscale, x=x*pixscale,
                                asmooth=1e-8, arpenalty=1e-6)
-
 
     if True:
         rgrid = np.arange(0.5, 10.25, 1.0)
