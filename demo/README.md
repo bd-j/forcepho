@@ -10,4 +10,4 @@ It would be nice to show
     and then at the mosaic level.
  4. `demo4/` - Demonstrating the use of superscenes to sample smaller scenes in
     a Gibbs-like fashion.
- 3. Biases due to color gradients, or unmodeled substructure.
+ 5. Biases due to color gradients, or unmodeled substructure.
