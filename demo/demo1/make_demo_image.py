@@ -208,6 +208,8 @@ if __name__ == "__main__":
     signal = scene[0][config.band] / 2
     noise = signal / config.snr
     noise_per_pix = noise / np.sqrt(npix)
+    unc = np.ones_like(im)*noise_per_pix
+    noise = np.random.normal(0, noise_per_pix, size=im.shape)
 
     # --- write the test image ---
     hdul, wcs = stamp.to_fits()
@@ -216,8 +218,9 @@ if __name__ == "__main__":
     hdr["SNR"] = config.snr
     hdr["DFRAC"] = config.dist_frac
 
-    image = fits.PrimaryHDU(im.T, header=hdr)
-    uncertainty = fits.ImageHDU(np.ones_like(im.T)*noise_per_pix, header=hdr)
+    image = fits.PrimaryHDU((im+noise).T, header=hdr)
+    uncertainty = fits.ImageHDU(unc.T, header=hdr)
+    noise_realization = fits.ImageHDU(noise.T, header=hdr)
     catalog = fits.BinTableHDU(scene)
     catalog.header["FILTERS"] = ",".join([config.band])
 
@@ -229,7 +232,7 @@ if __name__ == "__main__":
         sys.exit()
 
     os.makedirs(os.path.dirname(config.outname), exist_ok=True)
-    hdul = fits.HDUList([image, uncertainty, catalog])
+    hdul = fits.HDUList([image, uncertainty, noise_realization, catalog])
     hdul.writeto(config.outname, overwrite=True)
     hdul.close()
 
