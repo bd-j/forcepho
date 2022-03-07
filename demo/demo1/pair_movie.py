@@ -64,7 +64,7 @@ if __name__ == "__main__":
         raxes[1].set_title("Residual")
         raxes[2].clear()
         raxes[2].imshow(((data-delta) * ierr).T, **kw)
-        raxes[1].set_title("Model")
+        raxes[2].set_title("Model")
 
         ymap = np.atleast_2d(v)
         scatter(ymap.T, paxes, zorder=20, color="grey", marker=".")

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import argparse
 import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -91,6 +92,10 @@ def plot_both(patchname, show_current=True):
 
 if __name__ == "__main__":
 
-    patchname = "output/patches/patch1_samples.h5"
+    # --- Arguments ---
+    parser = argparse.ArgumentParser()
+    # input
+    parser.add_argument("--patchname", type=str, default="")
+    args = parser.parse_args()
 
-    fig, raxes, paxes = plot_both(patchname)
+    fig, raxes, paxes = plot_both(args.patchname)

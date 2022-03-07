@@ -184,7 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("--dist_frac", type=float, default=1.5)
     # PSF
     parser.add_argument("--psf_type", type=str, default="simple")
-    parser.add_argument("--sigma_psf", type=float, default=4.0)
+    parser.add_argument("--sigma_psf", type=float, default=3.0)
     parser.add_argument("--psfstore", type=str, default="./single_gauss_psf.h5")
     # MOre
     parser.add_argument("--snr", type=float, default=50)
@@ -200,7 +200,7 @@ if __name__ == "__main__":
                        rhalf=config.rhalf, sersic=config.sersic)
 
     # render the scene
-    psf = get_galsim_psf(config.scale, psf_type="simple", sigma_psf=2.0)
+    psf = get_galsim_psf(config.scale, psf_type="simple", sigma_psf=config.sigma_psf)
     im = galsim_model(scene, stamp, band=config.band, psf=psf)
 
     # --- compute uncertainty ---
@@ -240,6 +240,7 @@ if __name__ == "__main__":
     if config.psf_type == "simple":
         try:
             make_psfstore(config, nradii=9)
+            print(f"wrote PSF info to {config.psfstore}")
         except(ValueError):
             print("PSF approx already exists")
             pass
