@@ -1,8 +1,8 @@
-# Demo 1
+# Demo: Close Pair of Galaxies
 
 In this demo we simultaneously fit two nearby sources in a single exposure.
 
-## `make_demo_image.py`
+## `pair_make.py`
 
 This script uses GalSim to make a (noisy) image of two galaxies in a single
 band. The PSF is modeled as a simple, symmetric Gaussian. The noise is modeled
@@ -23,7 +23,7 @@ FITS file has the following data model:
 
 In addition the header contains inormation about the WCS and the filter.
 
-## `demo_pair.py`
+## `pair_fit.py`
 
 This script fits the pair of sources using forcepho in sampling mode.  For
 initial guess catalog this uses the table of true source parameters in the last

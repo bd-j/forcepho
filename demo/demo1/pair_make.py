@@ -181,14 +181,14 @@ if __name__ == "__main__":
     parser.add_argument("--rhalf", type=float, nargs="*", default=[0.2])
     parser.add_argument("--sersic", type=float, nargs="*", default=[2.0])
     parser.add_argument("--flux", type=float, nargs="*", default=[1.0])
-    parser.add_argument("--dist_frac", type=float, default=1.0)
+    parser.add_argument("--dist_frac", type=float, default=1.5)
     # PSF
     parser.add_argument("--psf_type", type=str, default="simple")
     parser.add_argument("--sigma_psf", type=float, default=4.0)
     parser.add_argument("--psfstore", type=str, default="./single_gauss_psf.h5")
     # MOre
     parser.add_argument("--snr", type=float, default=50)
-    parser.add_argument("--outname", type=str, default="./demo1.fits")
+    parser.add_argument("--outname", type=str, default="./pair.fits")
     config = parser.parse_args()
     config.band = config.band.upper()
 
@@ -238,5 +238,8 @@ if __name__ == "__main__":
 
     # -- write the psf ---
     if config.psf_type == "simple":
-        make_psfstore(config, nradii=9)
-
+        try:
+            make_psfstore(config, nradii=9)
+        except(ValueError):
+            print("PSF approx already exists")
+            pass

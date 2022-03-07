@@ -12,7 +12,6 @@ from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
 from forcepho.utils import NumpyEncoder, read_config, write_residuals
 from forcepho.fitting import run_lmc
-#from child import accomplish_task, optimization, sampling
 
 
 class Patcher(FITSPatch, CPUPatchMixin):
@@ -46,10 +45,10 @@ if __name__ == "__main__":
     parser.add_argument("--config_file", type=str, default="")
     parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
-    parser.add_argument("--image_name", type=str, default="./demo1.fits")
+    parser.add_argument("--image_name", type=str, default="./pair.fits")
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
-    parser.add_argument("--outbase", type=str, default="./output/")
+    parser.add_argument("--outbase", type=str, default="./output/v1")
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=1024)
     parser.add_argument("--max_treedepth", type=int, default=8)
@@ -58,12 +57,12 @@ if __name__ == "__main__":
 
     # --- Logger ---
     logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger('demo1')
+    logger = logging.getLogger('demonstrator')
 
     # --- Configure ---
     config = parser.parse_args()
-    if args.config_file:
-        config = read_config(args.config_file, config)
+    if config.config_file:
+        config = read_config(config.config_file, config)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
     #_ = shutil.copy(config.config_file, config.outbase)
@@ -77,6 +76,7 @@ if __name__ == "__main__":
     sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
                                statefile=os.path.join(config.outbase, "superscene.fits"),
                                roi=cat["rhalf"] * 5,
+                               bounds_kwargs=dict(n_pix=1.0),
                                target_niter=config.sampling_draws)
     logger.info("Made SceneDB")
 
