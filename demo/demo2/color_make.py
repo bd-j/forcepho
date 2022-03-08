@@ -219,7 +219,7 @@ if __name__ == "__main__":
         band, scale, sigma = config.band[i].upper(), config.scale[i], config.sigma_psf[i]
         psf = get_galsim_psf(scale, psf_type="simple", sigma_psf=sigma)
         images.append(galsim_model(scene, stamps[i], psf=psf))
-        #make_psfstore(config.psfstore, band, sigma, nradii=9)
+        make_psfstore(config.psfstore, band, sigma, nradii=9)
 
     # --- compute uncertainty ---
     noise_per_pix = compute_noise_level(scene, config)
