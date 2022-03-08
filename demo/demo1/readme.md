@@ -5,7 +5,7 @@ In this demo we simultaneously fit two nearby sources in a single exposure.
 ## `pair_make.py`
 
 This script uses GalSim to make a (noisy) image of two galaxies in a single
-band. The PSF is modeled as a simple, symmetric Gaussian. The noise is modeled
+band. The PSF is modeled as a single, symmetric Gaussian. The noise is modeled
 as draws from an iid Gaussian in each pixel. Adjustable parameters in this
 script include the fluxes, half-light radii and Sersic parameters of each
 galaxy, as well as the separation between the centers of the two galaxies
@@ -16,19 +16,30 @@ adjustable.  The script also makes (or augments) a file called
 `single_gauss_psf.h5` that contains the PSF data in forcepho format.  The final
 FITS file has the following data model:
 
-* `EXT1` - the GalSim model flux in each pixel, including added noise.
+* `EXT1` - the GalSim model flux image, including added noise.
 * `EXT2` - the flux uncertainty in each pixel.
-* `EXT3` - the noise realizstion that was added to the GalSim model image.
+* `EXT3` - the noise realization that was added to the GalSim model image.
 * `EXT4` - A table of source parameters
 
-In addition the header contains inormation about the WCS and the filter.
+In addition the header contains information about the WCS and the filter.
 
 ## `pair_fit.py`
 
-This script fits the pair of sources using forcepho in sampling mode.  For
+This script fits the pair of sources using forcepho in sampling mode.  For the
 initial guess catalog this uses the table of true source parameters in the last
 extension of the demo data FITS file, and thus does not test for initial burn-in
 or optimization issues.  The interface demonstrated here is the simple FITS file
 `patch` with communication to and kernel execution in the CPU (as opposed to the
 GPU).
 
+## `pair_plot.py`
+
+This script plots the data, residual, and model for the last iteration in the
+chain as well as a corner plot for the fluxes of the two sources showing the
+covariance.
+
+## `pair_movie.py`
+
+This script re-instantiates the model and generates models and residuals for
+many samples from the chain.  These are shown in a movie, along with the
+location of each sample in the corner plot from `pair_plot.py`

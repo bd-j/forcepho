@@ -6,6 +6,7 @@ import argparse, logging
 import numpy as np
 import json, yaml
 
+import matplotlib.animation as manimation
 from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
@@ -57,18 +58,27 @@ if __name__ == "__main__":
     norm = raxes[0].get_images()[0].norm
     vmin, vmax = norm.vmin, norm.vmax
     kw = dict(origin="lower", vmin=vmin, vmax=vmax)
-    for i, v in enumerate(samples.chaincat["CLEAR"][:, ::args.thin].T):
-        delta = deltas[i].reshape(ierr.shape)
-        raxes[1].clear()
-        raxes[1].imshow((delta * ierr).T, **kw)
-        raxes[1].set_title("Residual")
-        raxes[2].clear()
-        raxes[2].imshow(((data-delta) * ierr).T, **kw)
-        raxes[2].set_title("Model")
 
-        ymap = np.atleast_2d(v)
-        scatter(ymap.T, paxes, zorder=20, color="grey", marker=".")
-        for j, ax in enumerate(np.diag(paxes)):
-            ax.axvline(ymap[0, j], color="grey", alpha=0.5)
+    FFMpegWriter = manimation.writers['ffmpeg']
+    metadata = dict(title='Pair Movie', artist='Matplotlib',
+                    comment='Posterior draws for a pair of sources')
+    writer = FFMpegWriter(fps=15, metadata=metadata)
 
-        fig.savefig(f"movie/frame{i:03.0f}.png")
+    with writer.saving(fig, "movie/pair_posterior.mp4", 200):
+
+        for i, v in enumerate(samples.chaincat["CLEAR"][:, ::args.thin].T):
+            delta = deltas[i].reshape(ierr.shape)
+            raxes[1].clear()
+            raxes[1].imshow((delta * ierr).T, **kw)
+            raxes[1].set_title("Residual")
+            raxes[2].clear()
+            raxes[2].imshow(((data-delta) * ierr).T, **kw)
+            raxes[2].set_title("Model")
+
+            ymap = np.atleast_2d(v)
+            scatter(ymap.T, paxes, zorder=20, color="grey", marker=".")
+            for j, ax in enumerate(np.diag(paxes)):
+                ax.axvline(ymap[0, j], color="grey", alpha=0.5)
+
+            writer.grab_frame()
+            #fig.savefig(f"movie/frame{i:03.0f}.png")
