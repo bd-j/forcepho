@@ -7,7 +7,7 @@ import matplotlib.pyplot as pl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from forcepho.postprocess import Samples, Residuals
-from prospect.plotting.corner import allcorner, scatter
+from prospect.plotting.corner import allcorner, scatter, marginal
 
 
 def plot_corner(patchname, band="CLEAR", smooth=0.05, hkwargs=dict(alpha=0.65),

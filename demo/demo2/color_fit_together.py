@@ -48,9 +48,9 @@ if __name__ == "__main__":
     parser.add_argument("--image_names", type=str, nargs=2, default=["./blue.fits", "./red.fits"])
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
-    parser.add_argument("--outbase", type=str, default="./output/v1")
+    parser.add_argument("--outbase", type=str, default="./output/together_v1")
     # sampling
-    parser.add_argument("--sampling_draws", type=int, default=1024)
+    parser.add_argument("--sampling_draws", type=int, default=2048)
     parser.add_argument("--max_treedepth", type=int, default=8)
     parser.add_argument("--warmup", type=int, nargs="*", default=[256])
     parser.add_argument("--progressbar", type=int, default=1)
