@@ -41,7 +41,7 @@ def infer(model, hmc=True, num_warmup=1000, num_samples=500, dense_mass=True,
     """
     if hmc:
         kernel = NUTS(model, dense_mass=dense_mass, max_tree_depth=max_tree_depth)
-        mcmc = MCMC(kernel, num_warmup, num_samples)
+        mcmc = MCMC(kernel, num_warmup=num_warmup, num_samples=num_samples)
 
         rng_key = random.PRNGKey(0)
         rng_key, rng_key_ = random.split(rng_key)
@@ -153,8 +153,8 @@ def radial_plot(image, model, times_r=True):
     import matplotlib.pyplot as pl
     fig, axes = pl.subplots(2, sharex=True)
     ax = axes[0]
-    ax.plot(r, image.data, ".", color="royalblue", label=r"data")
-    ax.plot(r, model, ".", color="darkorange", label=r"model")
+    ax.plot(r, image.data, ".", color="royalblue", label=r"data", rasterized=True)
+    ax.plot(r, model, ".", color="darkorange", label=r"model", rasterized=True)
     ax.legend()
     #ax.set_xscale("log")
     ax.set_ylim(max(model.min(), image.data.min()) * 0.1, image.data.max() * 2)
@@ -166,7 +166,7 @@ def radial_plot(image, model, times_r=True):
         factor = 1
 
     ax = axes[1]
-    ax.plot(r, factor * (model-image.data), ".", color="firebrick", label=r"(model - data) $\times \, r$")
+    ax.plot(r, factor * (model-image.data), ".", color="firebrick", rasterized=True, label=r"(model - data) $\times \, r$")
     ax.axhline(image.data.max() * 0.01, linestyle=":", color="k", label=r"1% of max pixel")
     ax.axhline(0, linestyle="--", color="k")
     ax.legend()
