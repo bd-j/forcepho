@@ -30,7 +30,7 @@ tweakbg:
 store_directory:
   $PROJECT_DIR/data/stores/
 splinedatafile:
-  $PROJECT_DIR/data/stores/sersic_mog_model.smooth=0.0150.h5
+  /n/home03/stacchella/programs/hforce/approx/output/GMM_v1/sersic_splinedata.h5
 psfstorefile:
   psf_jwst_oct21_ng4m0.h5
 frames_directory:

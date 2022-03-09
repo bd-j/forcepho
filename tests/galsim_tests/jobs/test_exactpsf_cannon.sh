@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --mail-type=None             # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --job-name=test-force        # Job name
-#SBATCH --partition=gpu_test         # queue for job submission
+#SBATCH --partition=gpu              # queue for job submission
 #SBATCH --ntasks=1                   # Number of MPI ranks
 #SBATCH --nodes=1                    # Number of nodes
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
