@@ -31,6 +31,7 @@ class PixelPatch(Patch):
     def __init__(self,
                  psfstore="",
                  splinedata="",
+                 spline_smoothing=None,
                  return_residual=False,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
@@ -42,7 +43,8 @@ class PixelPatch(Patch):
                          pix_dtype=pix_dtype,
                          debug=debug,
                          psfstore=psfstore,
-                         splinedata=splinedata)
+                         splinedata=splinedata,
+                         spline_smoothing=spline_smoothing)
 
         self.background_offsets = None
         self.max_snr = None
@@ -232,6 +234,7 @@ class StorePatch(PixelPatch):
                  metastore="",
                  psfstore="",
                  splinedata="",
+                 spline_smoothing=None,
                  return_residual=False,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
@@ -243,7 +246,8 @@ class StorePatch(PixelPatch):
                          pix_dtype=pix_dtype,
                          debug=debug,
                          psfstore=psfstore,
-                         splinedata=splinedata)
+                         splinedata=splinedata,
+                         spline_smoothing=spline_smoothing)
 
         self.metastore = MetaStore(metastore)
         self.pixelstore = PixelStore(pixelstore)
@@ -356,6 +360,7 @@ class FITSPatch(PixelPatch):
                  fitsfiles="",
                  psfstore="",
                  splinedata="",
+                 spline_smoothing=None,
                  return_residual=False,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
@@ -367,7 +372,8 @@ class FITSPatch(PixelPatch):
                          pix_dtype=pix_dtype,
                          debug=debug,
                          psfstore=psfstore,
-                         splinedata=splinedata)
+                         splinedata=splinedata,
+                         spline_smoothing=spline_smoothing)
 
         self.fitsfiles = fitsfiles
         self.snr = None

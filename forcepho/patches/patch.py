@@ -222,6 +222,7 @@ class Patch(PatchBase):
     def __init__(self,
                  psfstore="",
                  splinedata="",
+                 spline_smoothing=None,
                  return_residual=False,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
@@ -235,6 +236,7 @@ class Patch(PatchBase):
 
         self.psfstore = PSFStore(psfstore)
         self.splinedata = splinedata
+        self.spline_smoothing = spline_smoothing
 
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
@@ -413,8 +415,12 @@ class Patch(PatchBase):
         """
         if splinedata is None:
             splinedata = self.splinedata
-        scene = Scene(catalog=sourcecat, filternames=self.bandlist,
-                      source_type=Galaxy, splinedata=splinedata)
+
+        scene = Scene(catalog=sourcecat,
+                      filternames=self.bandlist,
+                      source_type=Galaxy,
+                      splinedata=splinedata,
+                      spline_smoothing=self.spline_smoothing)
         #scene.from_catalog(sourcecat,)
         return scene
 

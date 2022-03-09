@@ -24,6 +24,7 @@ __all__ = ["Scene", "Source",
 # Also, use the Source get and set methods instead of subclasses, and replace
 # npos, nshape with just nshape
 
+
 class Scene(object):
     """The Scene holds the sources and provides the mapping between a giant 1-d
     array of parameters and the parameters of each source in each band/image
@@ -214,7 +215,7 @@ class Scene(object):
         return inds
 
 
-class Source(object):
+class Source:
     """Parameters describing a source in the celestial plane. For each galaxy
     there are 7 parameters, only some of which may be relevant for changing the
     apparent flux:
@@ -497,6 +498,179 @@ class Source(object):
             return im, None
 
 
+class Galaxy(Source):
+    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the
+    Scene parameters) All 7 Source parameters are relevant:
+    * flux: total flux
+    * ra: right ascension (degrees)
+    * dec: declination (degrees)
+    * q, pa: axis ratio squared and position angle
+    * sersic: sersic index
+    * rhalf: half-light radius (arcsec)
+
+    Methods are provided to return the amplitudes and covariance matrices of
+    the constituent gaussians, as well as derivatives of the amplitudes with
+    respect to sersic index and half light radius.
+
+    The amplitudes and the derivatives of the amplitudes with respect to the
+    sersic index and half-light radius are based on splines.
+
+    Note that only instances of :py:class:`Galaxy` with `free_sersic = True`
+    can generate proposals for the GPU
+    """
+
+    radii = np.ones(1)
+
+    # Galaxies have 2 position parameters,
+    #    2 or 4 shape parameters (pa and q),
+    #    and n_bands flux parameters
+    SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
+    npos = 2
+    nshape = 4
+
+    def __init__(self, filters=['band'], filternames=None, radii=None,
+                 splinedata=None, free_sersic=True, spline_smoothing=None):
+        if filternames:
+            self.filternames = filternames
+        else:
+            self.filternames = filters
+        self.flux = np.zeros(len(self.filternames))
+        if radii is not None:
+            self.radii = radii
+        try:
+            self.initialize_splines(splinedata, spline_smoothing=spline_smoothing)
+        except:
+            message = ("Could not load `splinedata`. "
+                       "Galaxies must have `splinedata` information "
+                       "to make A(r, n) bivariate splines")
+            warnings.warn(message)
+
+        if not free_sersic:
+            # Fix the sersic parameters n_sersic and r_h
+            self.nshape = 2
+            self.SHAPE_COLS = ["ra", "dec", "q", "pa"]
+
+        # For generating proposals that can be sent to the GPU
+        from .proposal import source_struct_dtype
+        self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
+
+    def set_params(self, theta, filtername=None):
+        """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
+        theta array.  Assumes that the order of parameters in the theta vector
+        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
+
+        Parameters
+        ----------
+        theta : Sequence of length `n_bands+npos+nshape` or `1+npos+nshape`
+            The source parameter values that are to be set.
+
+        filtername : string or None (optional, default: None)
+            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            ra, dec, q, pa) where flux_i is the source flux through the filter
+            given by `filtername`.  If `None` then the theta vector is assumed
+            to be of length `self.n_bands + 6`, where the first `n_bands`
+            elements correspond to the fluxes.
+        """
+        # FIXME: use a parameter name list and setattr here
+        if filtername is not None:
+            nflux = 1
+            flux_inds = self.filter_index(filtername)
+        else:
+            nflux = self.n_bands
+            flux_inds = slice(None)
+        msg = "The length of the parameter vector is not appropriate for this source"
+        assert len(theta) == nflux + self.npos + self.nshape, msg
+        self.flux[flux_inds] = theta[:nflux]
+        self.ra  = theta[nflux]
+        self.dec = theta[nflux + 1]
+        self.q   = theta[nflux + 2]
+        self.pa  = theta[nflux + 3]
+        if self.nshape > 2:
+            self.sersic = theta[nflux + 4]
+            self.rhalf = theta[nflux + 5]
+
+    def get_param_vector(self, filtername=None):
+        """Get the relevant source parameters as a simple 1-D ndarray.
+        """
+        if filtername is not None:
+            flux = [self.flux[self.filter_index(filtername)]]
+        else:
+            flux = self.flux
+        # FIXME: use a parameter name list and getattr here
+        params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
+        if self.nshape > 2:
+            params = np.concatenate([params, [self.sersic, self.rhalf]])
+        return params
+
+    def proposal(self):
+        """A parameter proposal in the form required for transfer to the GPU
+        """
+        self.proposal_struct["fluxes"][0, :self.n_bands] = self.flux
+        self.proposal_struct["ra"] = self.ra
+        self.proposal_struct["dec"] = self.dec
+        self.proposal_struct["q"] = self.q
+        self.proposal_struct["pa"] = self.pa
+        self.proposal_struct["nsersic"] = self.sersic
+        self.proposal_struct["rh"] = self.rhalf
+        self.proposal_struct["mixture_amplitudes"][0, :self.n_gauss] = self.amplitudes
+        self.proposal_struct["damplitude_drh"][0, :self.n_gauss] = self.damplitude_drh
+        self.proposal_struct["damplitude_dnsersic"][0, :self.n_gauss] = self.damplitude_dsersic
+
+        return self.proposal_struct
+
+    def initialize_splines(self, splinedata, spline_smoothing=None):
+        """Initialize Bivariate Splines used to interpolate and get derivatives
+        for gaussian amplitudes as a function of sersic and rhalf
+        """
+        with h5py.File(splinedata, "r") as data:
+            n = data["nsersic"][:]
+            r = data["rh"][:]
+            A = data["amplitudes"][:]
+            self.radii = data["radii"][:]
+
+        nm, ng = A.shape
+        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing)
+                        for i in range(ng)]
+        self.rh_range = (r.min(), r.max())
+        self.sersic_range = (n.min(), n.max())
+
+    @property
+    def covariances(self):
+        """This just constructs a set of covariance matrices based on the fixed
+        radii used in approximating the galaxies.
+        """
+        # n_gauss x 2 x 2
+        # this has no derivatives, since the radii are fixed.
+        return (self.radii**2)[:, None, None] * np.eye(2)
+
+    @property
+    def amplitudes(self):
+        """Code here for getting amplitudes from a splined look-up table
+        (dependent on self.n and self.r).  Placeholder code gives them all
+        equal amplitudes.
+        """
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf)
+                                    for spline in self.splines]))
+
+    @property
+    def damplitude_dsersic(self):
+        """Code here for getting amplitude derivatives from a splined look-up
+        table (dependent on self.n and self.r)
+        """
+        # n_gauss array of da/dsersic
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
+                                    for spline in self.splines]))
+
+    @property
+    def damplitude_drh(self):
+        """Code here for getting amplitude derivatives from a splined look-up
+        table (dependent on self.n and self.r)
+        """
+        # n_gauss array of da/drh
+        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
+                                    for spline in self.splines]))
+
+
 class Star(Source):
     """This is a represenation of a point source in terms of Scene (on-sky)
     parameters.  Only 3 of the 7 full Source parameters are relevant:
@@ -633,180 +807,6 @@ class SimpleGalaxy(Source):
         # n_gauss x 2 x 2
         # this has no derivatives, since the radii are fixed.
         return (self.radii**2)[:, None, None] * np.eye(2)
-
-
-class Galaxy(Source):
-    """Parameters describing a gaussian galaxy in the celestial plane (i.e. the
-    Scene parameters) All 7 Source parameters are relevant:
-    * flux: total flux
-    * ra: right ascension (degrees)
-    * dec: declination (degrees)
-    * q, pa: axis ratio squared and position angle
-    * sersic: sersic index
-    * rhalf: half-light radius (arcsec)
-
-    Methods are provided to return the amplitudes and covariance matrices of
-    the constituent gaussians, as well as derivatives of the amplitudes with
-    respect to sersic index and half light radius.
-
-    The amplitudes and the derivatives of the amplitudes with respect to the
-    sersic index and half-light radius are based on splines.
-
-    Note that only instances of :py:class:`Galaxy` with `free_sersic = True`
-    can generate proposals for the GPU
-    """
-
-    radii = np.ones(1)
-
-    # Galaxies have 2 position parameters,
-    #    2 or 4 shape parameters (pa and q),
-    #    and n_bands flux parameters
-    SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
-    npos = 2
-    nshape = 4
-
-    def __init__(self, filters=['band'], filternames=None, radii=None,
-                 splinedata=None, free_sersic=True):
-        if filternames:
-            self.filternames = filternames
-        else:
-            self.filternames = filters
-        self.flux = np.zeros(len(self.filternames))
-        if radii is not None:
-            self.radii = radii
-        try:
-            self.initialize_splines(splinedata)
-        except:
-            message = ("Could not load `splinedata`. "
-                       "Galaxies must have `splinedata` information "
-                       "to make A(r, n) bivariate splines")
-            warnings.warn(message)
-
-        if not free_sersic:
-            # Fix the sersic parameters n_sersic and r_h
-            self.nshape = 2
-            self.SHAPE_COLS = ["ra", "dec", "q", "pa"]
-
-        # For generating proposals that can be sent to the GPU
-        from .proposal import source_struct_dtype
-        self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
-
-    def set_params(self, theta, filtername=None):
-        """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
-        theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
-
-        Parameters
-        ----------
-        theta : Sequence of length `n_bands+npos+nshape` or `1+npos+nshape`
-            The source parameter values that are to be set.
-
-        filtername : string or None (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (flux_i,
-            ra, dec, q, pa) where flux_i is the source flux through the filter
-            given by `filtername`.  If `None` then the theta vector is assumed
-            to be of length `self.n_bands + 6`, where the first `n_bands`
-            elements correspond to the fluxes.
-        """
-        # FIXME: use a parameter name list and setattr here
-        if filtername is not None:
-            nflux = 1
-            flux_inds = self.filter_index(filtername)
-        else:
-            nflux = self.n_bands
-            flux_inds = slice(None)
-        msg = "The length of the parameter vector is not appropriate for this source"
-        assert len(theta) == nflux + self.npos + self.nshape, msg
-        self.flux[flux_inds] = theta[:nflux]
-        self.ra  = theta[nflux]
-        self.dec = theta[nflux + 1]
-        self.q   = theta[nflux + 2]
-        self.pa  = theta[nflux + 3]
-        if self.nshape > 2:
-            self.sersic = theta[nflux + 4]
-            self.rhalf = theta[nflux + 5]
-
-    def get_param_vector(self, filtername=None):
-        """Get the relevant source parameters as a simple 1-D ndarray.
-        """
-        if filtername is not None:
-            flux = [self.flux[self.filter_index(filtername)]]
-        else:
-            flux = self.flux
-        # FIXME: use a parameter name list and getattr here
-        params = np.concatenate([flux, [self.ra, self.dec, self.q, self.pa]])
-        if self.nshape > 2:
-            params = np.concatenate([params, [self.sersic, self.rhalf]])
-        return params
-
-    def proposal(self):
-        """A parameter proposal in the form required for transfer to the GPU
-        """
-        self.proposal_struct["fluxes"][0, :self.n_bands] = self.flux
-        self.proposal_struct["ra"] = self.ra
-        self.proposal_struct["dec"] = self.dec
-        self.proposal_struct["q"] = self.q
-        self.proposal_struct["pa"] = self.pa
-        self.proposal_struct["nsersic"] = self.sersic
-        self.proposal_struct["rh"] = self.rhalf
-        self.proposal_struct["mixture_amplitudes"][0, :self.n_gauss] = self.amplitudes
-        self.proposal_struct["damplitude_drh"][0, :self.n_gauss] = self.damplitude_drh
-        self.proposal_struct["damplitude_dnsersic"][0, :self.n_gauss] = self.damplitude_dsersic
-
-        return self.proposal_struct
-
-    def initialize_splines(self, splinedata, spline_smoothing=None):
-        """Initialize Bivariate Splines used to interpolate and get derivatives
-        for gaussian amplitudes as a function of sersic and rhalf
-        """
-        with h5py.File(splinedata, "r") as data:
-            n = data["nsersic"][:]
-            r = data["rh"][:]
-            A = data["amplitudes"][:]
-            self.radii = data["radii"][:]
-
-        nm, ng = A.shape
-        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing)
-                        for i in range(ng)]
-        self.rh_range = (r.min(), r.max())
-        self.sersic_range = (n.min(), n.max())
-
-    @property
-    def covariances(self):
-        """This just constructs a set of covariance matrices based on the fixed
-        radii used in approximating the galaxies.
-        """
-        # n_gauss x 2 x 2
-        # this has no derivatives, since the radii are fixed.
-        return (self.radii**2)[:, None, None] * np.eye(2)
-
-    @property
-    def amplitudes(self):
-        """Code here for getting amplitudes from a splined look-up table
-        (dependent on self.n and self.r).  Placeholder code gives them all
-        equal amplitudes.
-        """
-        return np.squeeze(np.array([spline(self.sersic, self.rhalf)
-                                    for spline in self.splines]))
-
-    @property
-    def damplitude_dsersic(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # n_gauss array of da/dsersic
-        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
-                                    for spline in self.splines]))
-
-    @property
-    def damplitude_drh(self):
-        """Code here for getting amplitude derivatives from a splined look-up
-        table (dependent on self.n and self.r)
-        """
-        # n_gauss array of da/drh
-        return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
-                                    for spline in self.splines]))
-
 
 
 class ConformalShearGalaxy(Galaxy):
