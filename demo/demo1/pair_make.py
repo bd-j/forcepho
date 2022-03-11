@@ -189,6 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--psfstore", type=str, default="./single_gauss_psf.h5")
     # MOre
     parser.add_argument("--snr", type=float, default=50)
+    parser.add_argument("--add_noise", type=int, default=1)
     parser.add_argument("--outname", type=str, default="./pair.fits")
     config = parser.parse_args()
     config.band = config.band.upper()
@@ -218,8 +219,11 @@ if __name__ == "__main__":
     hdr["FILTER"] = config.band
     hdr["SNR"] = config.snr
     hdr["DFRAC"] = config.dist_frac
+    hdr["NOISED"] = config.add_noise
 
-    image = fits.PrimaryHDU((im+noise).T, header=hdr)
+    if config.add_noise:
+        im += noise
+    image = fits.PrimaryHDU((im).T, header=hdr)
     uncertainty = fits.ImageHDU(unc.T, header=hdr)
     noise_realization = fits.ImageHDU(noise.T, header=hdr)
     catalog = fits.BinTableHDU(scene)

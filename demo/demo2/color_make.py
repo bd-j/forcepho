@@ -107,9 +107,9 @@ def galsim_model(scene, stamp, psf=None):
         # shift the galaxy
         x, y = wcs.all_world2pix(catrow["ra"], catrow["dec"], 0)
         dx, dy = x - (stamp.nx-1) / 2., y - (stamp.ny-1) / 2.
-        if np.hypot(dx, dy) / pixel_scale > 1e-2:
-            print(f"applying shift of {dx}, {dy} arcsec to {stamp.filtername}")
-            offset = dx / pixel_scale, dy / pixel_scale
+        if np.hypot(dx, dy) > 1e-2:
+            print(f"applying shift of {dx*pixel_scale}, {dy*pixel_scale} arcsec to {stamp.filtername}")
+            offset = dx , dy
         else:
             offset = 0, 0
         # shear the galaxy
@@ -199,10 +199,14 @@ if __name__ == "__main__":
     parser.add_argument("--sersic", type=float, nargs="*", default=[2.0])
     parser.add_argument("--flux", type=float, nargs="*", default=[1.0])
     parser.add_argument("--dist_frac", type=float, default=1.5)
-    # MOre
+    # More
     parser.add_argument("--snr", type=float, default=50)
+    parser.add_argument("--add_noise", type=int, default=1)
     parser.add_argument("--outdir", type=str, default=".")
     config = parser.parse_args()
+
+    ext = ["single", "pair"]
+    nsource = len(config.rhalf)
 
     # Make the images
     stamps = [make_stamp(band.upper(), nx=config.nx, ny=config.ny, scale=scale)
@@ -219,7 +223,10 @@ if __name__ == "__main__":
         band, scale, sigma = config.band[i].upper(), config.scale[i], config.sigma_psf[i]
         psf = get_galsim_psf(scale, psf_type="simple", sigma_psf=sigma)
         images.append(galsim_model(scene, stamps[i], psf=psf))
-        make_psfstore(config.psfstore, band, sigma, nradii=9)
+        try:
+            make_psfstore(config.psfstore, band, sigma, nradii=9)
+        except(ValueError):
+            pass
 
     # --- compute uncertainty ---
     noise_per_pix = compute_noise_level(scene, config)
@@ -232,12 +239,15 @@ if __name__ == "__main__":
         hdr["FILTER"] = band.upper()
         hdr["SNR"] = config.snr
         hdr["DFRAC"] = config.dist_frac
+        hdr["NOISED"] = config.add_noise
 
         im = images[i]
         unc = np.ones_like(im) * noise_per_pix[i]
         noise = np.random.normal(0, noise_per_pix[i], size=im.shape)
 
-        image = fits.PrimaryHDU((im + noise).T, header=hdr)
+        if config.add_noise:
+            im += noise
+        image = fits.PrimaryHDU(im.T, header=hdr)
         uncertainty = fits.ImageHDU(unc.T, header=hdr)
         noise_realization = fits.ImageHDU(noise.T, header=hdr)
         catalog = fits.BinTableHDU(scene)
@@ -252,5 +262,5 @@ if __name__ == "__main__":
 
         os.makedirs(config.outdir, exist_ok=True)
         hdul = fits.HDUList([image, uncertainty, noise_realization, catalog])
-        hdul.writeto(f"{config.outdir}/{band.lower()}.fits", overwrite=True)
+        hdul.writeto(f"{config.outdir}/{band.lower()}_{ext[nsource -1]}.fits", overwrite=True)
         hdul.close()

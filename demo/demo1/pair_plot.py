@@ -14,9 +14,9 @@ def plot_corner(patchname, band="CLEAR", smooth=0.05, hkwargs=dict(alpha=0.65),
                 dkwargs=dict(color="red", marker="."), axes=None):
 
     samples = Samples(patchname)
-    xx = samples.chaincat["CLEAR"]
+    xx = samples.chaincat["CLEAR"][:, samples.n_tune:]
     labels = ["Source 1 Flux", "Source 2 Flux"]
-    truth = np.atleast_2d(xx[:, 0])
+    truth = np.atleast_2d(samples.chaincat["CLEAR"][:, 0])
 
     axes = allcorner(xx, labels, axes,
                      color="royalblue",  # qcolor="black",
@@ -87,7 +87,17 @@ def plot_both(patchname, show_current=True):
             for i, ax in enumerate(np.diag(paxes)):
                 ax.axvline(ymap[0, i], color="grey", alpha=0.5)
 
-    return fig, raxes, paxes
+        # add total flux plot
+        samples = Samples(patchname)
+        ymap = samples.chaincat["CLEAR"][:, samples.n_tune:].sum(axis=0)
+        i, j = 0, 2
+        pax = fig.add_subplot(gs_corner[d0+i*dd:d0+(i+1)*dd, j])
+        marginal(ymap, ax=pax, color="royalblue", alpha=0.65)
+        pax.axvline(samples.chaincat["CLEAR"][:, 0].sum(), color="red")
+        pax.set_xlabel("Combined Flux")
+        pax.set_yticklabels("")
+
+    return fig, raxes, paxes.reshape(-1).tolist() + [pax]
 
 
 if __name__ == "__main__":

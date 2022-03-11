@@ -26,6 +26,7 @@ if __name__ == "__main__":
     # input
     parser.add_argument("--patchname", type=str, default="")
     parser.add_argument("--thin", type=int, default=10)
+    parser.add_argument("--fps", type=int, default=10)
     args = parser.parse_args()
 
     # --- check out scene  & bounds ---
@@ -49,11 +50,12 @@ if __name__ == "__main__":
         delta = model.residuals(q)[0].copy()
         deltas.append(delta)
 
-    fig, raxes, paxes = plot_both(args.patchname, show_current=False)
+    fig, raxes, paxes_all = plot_both(args.patchname, show_current=False)
     r = Residuals(args.patchname.replace("samples", "residuals"))
     data, _, _ = r.make_exp(value="data")
     delta, _, _ = r.make_exp(value="residual")
     ierr, _, _ = r.make_exp(value="ierr")
+    paxes = np.array(paxes_all[:4]).reshape(2, 2)
 
     norm = raxes[0].get_images()[0].norm
     vmin, vmax = norm.vmin, norm.vmax
@@ -62,11 +64,11 @@ if __name__ == "__main__":
     FFMpegWriter = manimation.writers['ffmpeg']
     metadata = dict(title='Pair Movie', artist='Matplotlib',
                     comment='Posterior draws for a pair of sources')
-    writer = FFMpegWriter(fps=15, metadata=metadata)
+    writer = FFMpegWriter(fps=args.fps, metadata=metadata)
 
     with writer.saving(fig, "movie/pair_posterior.mp4", 200):
 
-        for i, v in enumerate(samples.chaincat["CLEAR"][:, ::args.thin].T):
+        for i, v in enumerate(samples.chaincat["CLEAR"][:, samples.n_tune::args.thin].T):
             delta = deltas[i].reshape(ierr.shape)
             raxes[1].clear()
             raxes[1].imshow((delta * ierr).T, **kw)
@@ -79,6 +81,8 @@ if __name__ == "__main__":
             scatter(ymap.T, paxes, zorder=20, color="grey", marker=".")
             for j, ax in enumerate(np.diag(paxes)):
                 ax.axvline(ymap[0, j], color="grey", alpha=0.5)
+
+            paxes_all[-1].axvline(ymap.sum(), color="grey", alpha=0.5)
 
             writer.grab_frame()
             #fig.savefig(f"movie/frame{i:03.0f}.png")
