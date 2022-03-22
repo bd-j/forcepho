@@ -67,8 +67,8 @@ def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, origin=0):
                                     origin, ra_dec_order=True)
         cat["ra"] = ra
         cat["dec"] = dec + np.arange(nsource) * (np.array(rhalf) * dist_frac) / 3600
-        print(cat["ra"])
-        print(cat["dec"])
+        #print(cat["ra"])
+        #print(cat["dec"])
 
     return cat
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument("--ny", type=int, default=64)
     # PSF
     parser.add_argument("--psf_type", type=str, default="simple")
-    parser.add_argument("--sigma_psf", type=float, nargs=2, default=[2.0, 3.0], help="in pixels")
+    parser.add_argument("--sigma_psf", type=float, nargs=2, default=[1.5, 2.25], help="in pixels")
     parser.add_argument("--psfstore", type=str, default="./single_gauss_psf.h5")
     # scene
     parser.add_argument("--rhalf", type=float, nargs="*", default=[0.2], help="arcsec")
@@ -204,6 +204,11 @@ if __name__ == "__main__":
     parser.add_argument("--add_noise", type=int, default=1)
     parser.add_argument("--outdir", type=str, default=".")
     config = parser.parse_args()
+
+    try:
+        os.remove(config.psfstore)
+    except:
+        pass
 
     ext = ["single", "pair"]
     nsource = len(config.rhalf)
@@ -223,10 +228,7 @@ if __name__ == "__main__":
         band, scale, sigma = config.band[i].upper(), config.scale[i], config.sigma_psf[i]
         psf = get_galsim_psf(scale, psf_type="simple", sigma_psf=sigma)
         images.append(galsim_model(scene, stamps[i], psf=psf))
-        try:
-            make_psfstore(config.psfstore, band, sigma, nradii=9)
-        except(ValueError):
-            pass
+        make_psfstore(config.psfstore, band, sigma, nradii=9)
 
     # --- compute uncertainty ---
     noise_per_pix = compute_noise_level(scene, config)
@@ -261,6 +263,8 @@ if __name__ == "__main__":
             sys.exit()
 
         os.makedirs(config.outdir, exist_ok=True)
+        out = f"{config.outdir}/{band.lower()}_{ext[nsource -1]}.fits"
+        print(f"Writing to {out}")
         hdul = fits.HDUList([image, uncertainty, noise_realization, catalog])
-        hdul.writeto(f"{config.outdir}/{band.lower()}_{ext[nsource -1]}.fits", overwrite=True)
+        hdul.writeto(out, overwrite=True)
         hdul.close()

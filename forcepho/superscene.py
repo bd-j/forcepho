@@ -764,6 +764,8 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
         cat, header = sourcecatfile
 
     bands = [b.strip() for b in header["FILTERS"].split(",")]
+    for b in bands:
+        assert b in cat.dtype.names, f"'{b}' column not in input catalog"
 
     n_sources = len(cat)
     cat_dtype = sourcecat_dtype(bands=bands)
@@ -773,6 +775,7 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
     for f in cat.dtype.names:
         if f in sourcecat.dtype.names:
             sourcecat[f][:] = cat[f][:]
+
 
     # --- Rectify shape columns ---
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhalf_range)
