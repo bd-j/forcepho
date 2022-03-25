@@ -212,6 +212,8 @@ if __name__ == "__main__":
     noise_per_pix = noise / np.sqrt(npix)
     unc = np.ones_like(im)*noise_per_pix
     noise = np.random.normal(0, noise_per_pix, size=im.shape)
+    if config.add_noise:
+        im += noise
 
     # --- write the test image ---
     hdul, wcs = stamp.to_fits()
@@ -221,20 +223,11 @@ if __name__ == "__main__":
     hdr["DFRAC"] = config.dist_frac
     hdr["NOISED"] = config.add_noise
 
-    if config.add_noise:
-        im += noise
     image = fits.PrimaryHDU((im).T, header=hdr)
     uncertainty = fits.ImageHDU(unc.T, header=hdr)
     noise_realization = fits.ImageHDU(noise.T, header=hdr)
     catalog = fits.BinTableHDU(scene)
     catalog.header["FILTERS"] = ",".join([config.band])
-
-    if False:
-        import matplotlib.pyplot as pl
-        pl.ion()
-        fig, ax = pl.subplots()
-        ax.imshow(im.T, origin="lower")
-        sys.exit()
 
     os.makedirs(os.path.dirname(config.outname), exist_ok=True)
     hdul = fits.HDUList([image, uncertainty, noise_realization, catalog])

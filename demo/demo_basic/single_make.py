@@ -21,12 +21,11 @@ def make_stamp(band, scale=0.03, nx=64, ny=64):
     stamp = PostageStamp(nx, ny)
     stamp.scale = np.eye(2) / scale
     stamp.crval = [53.0, -27.0]
-    stamp.crpix = np.array([(stamp.nx - 1) / 2, (stamp.ny - 1) / 2])
     stamp.filtername = band
     return stamp
 
 
-def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, origin=0):
+def make_scene(stamp, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, origin=0):
     """Convert a configuration namespace to a structured ndarray in the forcepho
     catalog format.
 
@@ -46,29 +45,25 @@ def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, origin=0):
     wcs : the WCS for the stamp
     """
 
-    nsource = len(rhalf)
-    bands = [stamp.filtername for stamp in stamps]
+    nsource = 1
+    band = stamp.filtername
 
     from forcepho.superscene import sourcecat_dtype
-    cdtype = sourcecat_dtype(bands=bands)
+    cdtype = sourcecat_dtype(bands=[band])
     cat = np.zeros(nsource, dtype=cdtype)
-    cat["id"] = np.arange(nsource)
+    cat["id"] = np.arange(2)
     cat["rhalf"] = np.array(rhalf)
     cat["sersic"] = np.array(sersic)
+    cat[band] = np.array(flux)
     cat["q"] = 0.9
     cat["pa"] = np.pi / 2
 
-    for i, stamp in enumerate(stamps):
-        band = stamp.filtername
-        cat[band] = np.array(flux)
-        hdul, wcs = stamp.to_fits()
-        ra, dec = wcs.all_pix2world((stamp.nx-1) / 2.,
-                                    (stamp.ny-1) / 2.,
-                                    origin, ra_dec_order=True)
-        cat["ra"] = ra
-        cat["dec"] = dec + np.arange(nsource) * (np.array(rhalf) * dist_frac) / 3600
-        #print(cat["ra"])
-        #print(cat["dec"])
+    hdul, wcs = stamp.to_fits()
+    ra, dec = wcs.all_pix2world((stamp.nx-1) / 2.,
+                                (stamp.ny-1) / 2.,
+                                origin, ra_dec_order=True)
+    cat["ra"] = ra
+    cat["dec"] = dec + np.arange(nsource) * (np.array(rhalf) * dist_frac) / 3600
 
     return cat
 
@@ -97,19 +92,19 @@ def galsim_model(scene, stamp, psf=None):
     import galsim
 
     band = stamp.filtername
-    hdul, wcs = stamp.to_fits()
     pixel_scale = 1 / np.sqrt(np.linalg.det(stamp.scale))
     image = galsim.ImageF(stamp.nx, stamp.ny, scale=pixel_scale)
+    #xcen, ycen = stamp.wcs.all_world2pix(scene[0]["ra"], scene[0]["dec"], 0)
 
     for catrow in scene:
         gal = galsim.Sersic(half_light_radius=catrow["rhalf"],
                             n=catrow["sersic"], flux=catrow[band])
         # shift the galaxy
-        x, y = wcs.all_world2pix(catrow["ra"], catrow["dec"], 0)
-        dx, dy = x - (stamp.nx-1) / 2., y - (stamp.ny-1) / 2.
-        if np.hypot(dx, dy) > 1e-2:
-            print(f"applying shift of {dx*pixel_scale}, {dy*pixel_scale} arcsec to {stamp.filtername}")
-            offset = dx , dy
+        dx = 3600. * (catrow["ra"] - scene[0]["ra"]) * np.cos(np.deg2rad(catrow["dec"]))
+        dy = 3600. * (catrow["dec"] - scene[0]["dec"])
+        if np.hypot(dx, dy) / pixel_scale > 1e-2:
+            print(f"applying shift of {dx}, {dy} arcsec")
+            offset = dx / pixel_scale, dy / pixel_scale
         else:
             offset = 0, 0
         # shear the galaxy
@@ -155,8 +150,8 @@ def get_galsim_psf(scale, psf_type="simple", sigma_psf=1.0,
     return gpsf
 
 
-def make_psfstore(psfstore, band, sigma, nradii=9):
-    sigma = np.atleast_1d(sigma)
+def make_psfstore(config, nradii=9):
+    sigma = np.atleast_1d(config.sigma_psf)
     ngauss, nloc = len(sigma), 1
 
     from forcepho.patches.storage import PSF_COLS
@@ -168,101 +163,90 @@ def make_psfstore(psfstore, band, sigma, nradii=9):
     pars["Cyy"] = (sigma**2)[None, None, :]
     pars["sersic_bin"] = np.arange(nradii)[None, :, None]
 
-    with h5py.File(psfstore, "a") as h5:
-        bg = h5.create_group(band.upper())
+    with h5py.File(config.psfstore, "a") as h5:
+        bg = h5.create_group(config.band.upper())
         bg.create_dataset("parameters", data=pars.reshape(pars.shape[0], -1))
         bg.attrs["n_psf_per_source"] = pars.shape[1] * pars.shape[2]
-
-
-def compute_noise_level(scene, config):
-    npix = np.pi*(scene[0]["rhalf"] / config.scale)**2
-    signal = np.array([scene[0][b] for b in config.band]) / 2
-    noise = signal / config.snr
-    noise_per_pix = noise / np.sqrt(npix)
-    return noise_per_pix
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     # stamp
-    parser.add_argument("--scale", type=float, nargs=2, default=[0.03, 0.06], help="arcsec/pixel")
-    parser.add_argument("--band", type=str, nargs=2, default=["BLUE", "RED"])
+    parser.add_argument("--scale", type=float, default=0.03)
+    parser.add_argument("--band", type=str, default="CLEAR")
     parser.add_argument("--nx", type=int, default=64)
     parser.add_argument("--ny", type=int, default=64)
+    # scene
+    parser.add_argument("--rhalf", type=float, default=0.2)
+    parser.add_argument("--sersic", type=float, default=2.0)
+    parser.add_argument("--flux", type=float, default=1.0)
+    parser.add_argument("--dist_frac", type=float, default=1.5)
     # PSF
     parser.add_argument("--psf_type", type=str, default="simple")
-    parser.add_argument("--sigma_psf", type=float, nargs=2, default=[1.5, 2.25], help="in pixels")
-    parser.add_argument("--psfstore", type=str, default="")
-    # scene
-    parser.add_argument("--rhalf", type=float, nargs="*", default=[0.2], help="arcsec")
-    parser.add_argument("--sersic", type=float, nargs="*", default=[2.0])
-    parser.add_argument("--flux", type=float, nargs="*", default=[1.0])
-    parser.add_argument("--dist_frac", type=float, default=1.5)
-    # More
-    parser.add_argument("--snr", type=float, default=50, help="S/N within rhalf")
+    parser.add_argument("--sigma_psf", type=float, default=3.0)
+    parser.add_argument("--psfstore", type=str, default="./single_gausspsf.h5")
+    # MOre
+    parser.add_argument("--snr", type=float, nargs="*", default=[20, 50])
     parser.add_argument("--add_noise", type=int, default=1)
-    parser.add_argument("--outdir", type=str, default=".")
+    parser.add_argument("--outdir", type=str, default="./")
     config = parser.parse_args()
-
-    # Are we doing one or two sources
-    ext = ["single", "pair"]
-    nsource = len(config.rhalf)
-
-    # Where does the PSF info go?
-    if config.psftstore == "":
-        config.psfstore = f"./{ext[nsource-1]}_gausspsf.h5"
+    config.band = config.band.upper()
 
     try:
         os.remove(config.psfstore)
     except:
         pass
 
-    # Make the images
-    stamps = [make_stamp(band.upper(), nx=config.nx, ny=config.ny, scale=scale)
-              for band, scale in zip(config.band, config.scale)]
+    # Make the image
+    stamp = make_stamp(config.band, nx=config.nx, ny=config.ny, scale=config.scale)
 
     # Set the scene in the image
-    scene = make_scene(stamps, dist_frac=config.dist_frac,
+    scene = make_scene(stamp, dist_frac=config.dist_frac,
                        rhalf=config.rhalf, sersic=config.sersic)
 
-    # render the scene in each stamp
-    # also store the psf
-    images = []
-    for i in range(2):
-        band, scale, sigma = config.band[i].upper(), config.scale[i], config.sigma_psf[i]
-        psf = get_galsim_psf(scale, psf_type="simple", sigma_psf=sigma)
-        images.append(galsim_model(scene, stamps[i], psf=psf))
-        make_psfstore(config.psfstore, band, sigma, nradii=9)
+    # render the scene
+    psf = get_galsim_psf(config.scale, psf_type="simple", sigma_psf=config.sigma_psf)
+    im = galsim_model(scene, stamp, psf=psf)
 
-    # --- compute uncertainty ---
-    noise_per_pix = compute_noise_level(scene, config)
+    for snr in config.snr:
 
-    # --- write the test images ---
-    for i, stamp in enumerate(stamps):
-        band = stamp.filtername
+        # --- compute uncertainty ---
+        npix = np.pi*(scene[0]["rhalf"] / config.scale)**2
+        signal = scene[0][config.band] / 2
+        noise = signal / config.snr
+        noise_per_pix = noise / np.sqrt(npix)
+        unc = np.ones_like(im)*noise_per_pix
+        noise = np.random.normal(0, noise_per_pix, size=im.shape)
+        if config.add_noise:
+            im += noise
+
+        # --- write the test image ---
         hdul, wcs = stamp.to_fits()
         hdr = hdul[0].header
-        hdr["FILTER"] = band.upper()
+        hdr["FILTER"] = config.band
         hdr["SNR"] = config.snr
         hdr["DFRAC"] = config.dist_frac
         hdr["NOISED"] = config.add_noise
 
-        im = images[i]
-        unc = np.ones_like(im) * noise_per_pix[i]
-        noise = np.random.normal(0, noise_per_pix[i], size=im.shape)
-
-        if config.add_noise:
-            im += noise
-        image = fits.PrimaryHDU(im.T, header=hdr)
+        image = fits.PrimaryHDU((im).T, header=hdr)
         uncertainty = fits.ImageHDU(unc.T, header=hdr)
         noise_realization = fits.ImageHDU(noise.T, header=hdr)
         catalog = fits.BinTableHDU(scene)
-        catalog.header["FILTERS"] = ",".join(config.band)
+        catalog.header["FILTERS"] = ",".join([config.band])
 
-        os.makedirs(config.outdir, exist_ok=True)
-        out = f"{config.outdir}/{band.lower()}_{ext[nsource -1]}.fits"
+        out = os.path.join(f"{config.outdir}", f"single_snr{snr:.0f}.fits")
         print(f"Writing to {out}")
+        os.makedirs(os.path.dirname(config.outname), exist_ok=True)
         hdul = fits.HDUList([image, uncertainty, noise_realization, catalog])
         hdul.writeto(out, overwrite=True)
         hdul.close()
+
+    # -- write the psf ---
+    if config.psf_type == "simple":
+        try:
+            make_psfstore(config, nradii=9)
+            print(f"wrote PSF info to {config.psfstore}")
+        except(ValueError):
+            print("PSF approx already exists")
+            pass
