@@ -193,25 +193,30 @@ if __name__ == "__main__":
     # PSF
     parser.add_argument("--psf_type", type=str, default="simple")
     parser.add_argument("--sigma_psf", type=float, nargs=2, default=[1.5, 2.25], help="in pixels")
-    parser.add_argument("--psfstore", type=str, default="./single_gauss_psf.h5")
+    parser.add_argument("--psfstore", type=str, default="")
     # scene
     parser.add_argument("--rhalf", type=float, nargs="*", default=[0.2], help="arcsec")
     parser.add_argument("--sersic", type=float, nargs="*", default=[2.0])
     parser.add_argument("--flux", type=float, nargs="*", default=[1.0])
     parser.add_argument("--dist_frac", type=float, default=1.5)
     # More
-    parser.add_argument("--snr", type=float, default=50)
+    parser.add_argument("--snr", type=float, default=50, help="S/N within rhalf")
     parser.add_argument("--add_noise", type=int, default=1)
     parser.add_argument("--outdir", type=str, default=".")
     config = parser.parse_args()
+
+    # Are we doing one or two sources
+    ext = ["single", "pair"]
+    nsource = len(config.rhalf)
+
+    # Where does the PSF info go?
+    if config.psftstore == "":
+        config.psfstore = f"./{ext[nsource-1]}_gausspsf.h5"
 
     try:
         os.remove(config.psfstore)
     except:
         pass
-
-    ext = ["single", "pair"]
-    nsource = len(config.rhalf)
 
     # Make the images
     stamps = [make_stamp(band.upper(), nx=config.nx, ny=config.ny, scale=scale)

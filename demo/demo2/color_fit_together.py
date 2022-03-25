@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # input
     parser.add_argument("--config_file", type=str, default="")
-    parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
+    parser.add_argument("--psfstorefile", type=str, default="./pair_gausspsf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
     parser.add_argument("--image_names", type=str, nargs=2, default=["./blue_pair.fits", "./red_pair.fits"])
     # output
