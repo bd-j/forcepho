@@ -94,17 +94,16 @@ def galsim_model(scene, stamp, psf=None):
     band = stamp.filtername
     pixel_scale = 1 / np.sqrt(np.linalg.det(stamp.scale))
     image = galsim.ImageF(stamp.nx, stamp.ny, scale=pixel_scale)
-    #xcen, ycen = stamp.wcs.all_world2pix(scene[0]["ra"], scene[0]["dec"], 0)
 
     for catrow in scene:
         gal = galsim.Sersic(half_light_radius=catrow["rhalf"],
                             n=catrow["sersic"], flux=catrow[band])
         # shift the galaxy
-        dx = 3600. * (catrow["ra"] - scene[0]["ra"]) * np.cos(np.deg2rad(catrow["dec"]))
-        dy = 3600. * (catrow["dec"] - scene[0]["dec"])
-        if np.hypot(dx, dy) / pixel_scale > 1e-2:
-            print(f"applying shift of {dx}, {dy} arcsec")
-            offset = dx / pixel_scale, dy / pixel_scale
+        x, y = wcs.all_world2pix(catrow["ra"], catrow["dec"], 0)
+        dx, dy = x - (stamp.nx-1) / 2., y - (stamp.ny-1) / 2.
+        if np.hypot(dx, dy) > 1e-2:
+            print(f"applying shift of {dx*pixel_scale}, {dy*pixel_scale} arcsec to {stamp.filtername}")
+            offset = dx , dy
         else:
             offset = 0, 0
         # shear the galaxy

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import sys
@@ -14,14 +15,20 @@ __all__ = ["make_stamp", "make_scene",
            "make_galsim_image"]
 
 
-def make_stamp(band, scale=0.03, nx=64, ny=64):
+def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0,0)):
     """Make a simple stamp instance
+
+    Parameters
+    ----------
+    dither : 2-tuple of float
+        The dither in pixels (dx, dy)
     """
     from forcepho.slow.stamp import PostageStamp
     stamp = PostageStamp(nx, ny)
     stamp.scale = np.eye(2) / scale
     stamp.crval = [53.0, -27.0]
-    stamp.crpix = np.array([(stamp.nx - 1) / 2, (stamp.ny - 1) / 2])
+    stamp.crpix = np.array([(stamp.nx - 1) / 2 + dither[0],
+                            (stamp.ny - 1) / 2 + dither[1]])
     stamp.filtername = band
     return stamp
 
@@ -176,7 +183,7 @@ def make_psfstore(psfstore, band, sigma, nradii=9):
 
 def compute_noise_level(scene, config):
     npix = np.pi*(scene[0]["rhalf"] / config.scale)**2
-    signal = np.array([scene[0][b] for b in config.band]) / 2
+    signal = np.array([scene[0][b] for b in np.atleast_1d(config.band)]) / 2
     noise = signal / config.snr
     noise_per_pix = noise / np.sqrt(npix)
     return noise_per_pix
@@ -210,9 +217,8 @@ if __name__ == "__main__":
     nsource = len(config.rhalf)
 
     # Where does the PSF info go?
-    if config.psftstore == "":
+    if config.psfstore == "":
         config.psfstore = f"./{ext[nsource-1]}_gausspsf.h5"
-
     try:
         os.remove(config.psfstore)
     except:

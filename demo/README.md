@@ -17,4 +17,6 @@ It would be nice to show
 - [ ] `demo_scene/` - Demonstrating the use of superscenes to sample smaller scenes in
     a Gibbs-like fashion.
 
+- [ ] Bulge/Disk - fit two sources with a common center but different profiles to a composite object.
+
 - [ ] Biases due to color gradients, or unmodeled substructure.
