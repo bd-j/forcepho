@@ -10,31 +10,14 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import NumpyEncoder, read_config, write_residuals
+from forcepho.utils import NumpyEncoder, read_config
 from forcepho.fitting import run_lmc
+
+from demo_utils import write_to_disk
 
 
 class Patcher(FITSPatch, CPUPatchMixin):
     pass
-
-
-def write_to_disk(out, outroot, model, config, residual=None):
-
-    # --- write the chain and meta-data for this task ---
-    outfile = f"{outroot}_samples.h5"
-    try:
-        out.config = json.dumps(vars(config))
-    except(TypeError):
-        pass
-    out.dump_to_h5(outfile)
-
-    # --- Write image data and residuals if requested ---
-    if config.write_residuals:
-        outfile = f"{outroot}_residuals.h5"
-        if residual is None:
-            q = out.chain[-1, :]  # last position in chain
-            residual = model.residuals(q)
-        write_residuals(model.patch, outfile, residuals=residual)
 
 
 if __name__ == "__main__":
@@ -57,7 +40,7 @@ if __name__ == "__main__":
 
     # --- Logger ---
     logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger('demonstrator')
+    logger = logging.getLogger('demonstrator-pair')
 
     # --- Configure ---
     config = parser.parse_args()
