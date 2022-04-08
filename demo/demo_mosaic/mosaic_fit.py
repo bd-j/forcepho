@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os, sys, glob, shutil
+import argparse, logging
+import numpy as np
+import json, yaml
+
+from astropy.io import fits
+
+from forcepho.patches import FITSPatch, CPUPatchMixin
+from forcepho.superscene import LinkedSuperScene
+from forcepho.utils import NumpyEncoder, read_config
+from forcepho.fitting import run_lmc
+
+from demo_utils import write_to_disk
+
+
+class Patcher(FITSPatch, CPUPatchMixin):
+    pass
+
+
+if __name__ == "__main__":
+
+    # --- Arguments ---
+    parser = argparse.ArgumentParser()
+    # input
+    parser.add_argument("--config_file", type=str, default="")
+    parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
+    parser.add_argument("--fit_mosaic", type=int, default=1, choices=[0, 1])
+    # output
+    parser.add_argument("--write_residuals", type=int, default=1)
+    parser.add_argument("--outbase", type=str, default="./output/v1")
+    # sampling
+    parser.add_argument("--sampling_draws", type=int, default=2048)
+    parser.add_argument("--max_treedepth", type=int, default=8)
+    parser.add_argument("--warmup", type=int, nargs="*", default=[256])
+    parser.add_argument("--progressbar", type=int, default=1)
+
+    # --- Logger ---
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('demonstrator-mosaic')
+
+    # --- Configure ---
+    config = parser.parse_args()
+    if config.config_file:
+        config = read_config(config.config_file, config)
+    config.patch_dir = os.path.join(config.outbase, "patches")
+    [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
+    #_ = shutil.copy(config.config_file, config.outbase)
+    with open(f"{config.outbase}/config.json", "w") as cfg:
+        json.dump(vars(config), cfg, cls=NumpyEncoder)
+    logger.info(f"Configured, writing to {config.outbase}.")
+
+    outname = ["dithers", "mosaic"]
+    image_search = ["./data/dither_0*fits", "./data/mosaic.fits"]
+    pattern = image_search[config.fit_mosaic]
+    config.image_names = glob.glob(pattern)
+    logger.info(f"Got {len(config.image_names)} image matching {pattern}.")
+
+    # --- build the scene server ---
+    cat = fits.getdata(config.image_names[0], -1)
+    bands = fits.getheader(config.image_names[0], -1)["FILTERS"].split(",")
+    sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
+                               statefile=os.path.join(config.outbase, "superscene.fits"),
+                               roi=cat["rhalf"] * 5,
+                               bounds_kwargs=dict(n_pix=1.0),
+                               target_niter=config.sampling_draws)
+    logger.info("Made SceneDB")
+
+    # --- load the image data ---
+    patcher = Patcher(fitsfiles=config.image_names,
+                      psfstore=config.psfstorefile,
+                      splinedata=config.splinedatafile,
+                      return_residual=True)
+
+    # --- check out scene  & bounds ---
+    region, active, fixed = sceneDB.checkout_region(seed_index=-1)
+    bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
+    taskID = outname[config.fit_mosaic]
+    logger.info(f"Checked out scene and bounds.")
+
+    # --- prepare model and data, and sample ---
+    patcher.build_patch(region, None, allbands=bands)
+    model, q = patcher.prepare_model(active=active, fixed=fixed,
+                                     bounds=bounds, shapes=sceneDB.shape_cols)
+    out, step, stats = run_lmc(model, q.copy(),
+                               n_draws=config.sampling_draws,
+                               warmup=config.warmup,
+                               z_cov=cov, full=True,
+                               weight=max(10, active["n_iter"].min()),
+                               discard_tuned_samples=False,
+                               max_treedepth=config.max_treedepth,
+                               progressbar=config.progressbar)
+
+    # --- Check results back in and end ---
+    final, covs = out.fill(region, active, fixed, model, bounds=bounds,
+                           step=step, stats=stats, patchID=taskID)
+    outroot = os.path.join(config.patch_dir, f"patch_{taskID}")
+    logger.info(f"Writing to {outroot}")
+    write_to_disk(out, outroot, model, config)
+    sceneDB.checkin_region(final, fixed,
+                           config.sampling_draws,
+                           block_covs=covs,
+                           taskID=taskID)
+    sceneDB.writeout()
+    logger.info(f'SuperScene is done, shutting down.')

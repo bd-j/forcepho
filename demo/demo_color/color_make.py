@@ -13,7 +13,6 @@ from demo_utils import make_psfstore, write_fits_to
 if __name__ == "__main__":
 
     # Configure
-    parser = argparse.ArgumentParser()
     parser = get_parser()
     parser.set_defaults(bands=["BLUE", "RED"],
                         scales=[0.03, 0.06],

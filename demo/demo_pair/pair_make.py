@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # --- write the test image ---
     hdul, wcs = stamp.to_fits()
     hdr = hdul[0].header
-    hdr["FILTER"] = band
+    hdr["FILTER"] = stamp.filtername
     hdr["SNR"] = config.snr
     hdr["DFRAC"] = config.dist_frac
     hdr["NOISED"] = config.add_noise
