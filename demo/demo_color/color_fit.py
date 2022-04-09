@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, sys, glob, shutil
+import os, sys, glob
 import argparse, logging
 import numpy as np
 import json, yaml
@@ -10,7 +10,7 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import NumpyEncoder, read_config
+from forcepho.utils import NumpyEncoder
 from forcepho.fitting import run_lmc
 
 from demo_utils import write_to_disk
@@ -20,16 +20,14 @@ class Patcher(FITSPatch, CPUPatchMixin):
     pass
 
 
-
 if __name__ == "__main__":
 
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--config_file", type=str, default="")
     parser.add_argument("--psfstorefile", type=str, default="./pair_gausspsf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
-    parser.add_argument("--image_names", type=str, nargs=2, default=["./blue_pair.fits", "./red_pair.fits"])
+    parser.add_argument("--image_names", type=str, nargs="*", default=["./blue_pair.fits", "./red_pair.fits"])
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
     parser.add_argument("--outbase", type=str, default="./output/together_v1")
@@ -45,18 +43,17 @@ if __name__ == "__main__":
 
     # --- Configure ---
     config = parser.parse_args()
-    if config.config_file:
-        config = read_config(config.config_file, config)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
-    #_ = shutil.copy(config.config_file, config.outbase)
     with open(f"{config.outbase}/config.json", "w") as cfg:
         json.dump(vars(config), cfg, cls=NumpyEncoder)
     logger.info(f"Configured, writing to {config.outbase}.")
 
+    bands = [fits.getheader(n)["FILTER"] for n in config.image_names]
+    bands = np.unique(bands)
+
     # --- build the scene server ---
     cat = fits.getdata(config.image_names[0], -1)
-    bands = fits.getheader(config.image_names[0], -1)["FILTERS"].split(",")
     sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
                                statefile=os.path.join(config.outbase, "superscene.fits"),
                                roi=cat["rhalf"] * 5,
@@ -73,7 +70,7 @@ if __name__ == "__main__":
     # --- check out scene & bounds ---
     region, active, fixed = sceneDB.checkout_region(seed_index=-1)
     bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
-    taskID = 1
+    taskID = "+".join(bands)
     logger.info(f"Checked out scene and bounds.")
 
     # --- prepare model and data, and sample ---
@@ -92,7 +89,7 @@ if __name__ == "__main__":
     # --- Check results back in and end ---
     final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                            step=step, stats=stats, patchID=taskID)
-    outroot = os.path.join(config.patch_dir, f"patch{taskID}")
+    outroot = os.path.join(config.patch_dir, f"patch_{taskID}")
     write_to_disk(out, outroot, model, config)
     sceneDB.checkin_region(final, fixed,
                            config.sampling_draws,

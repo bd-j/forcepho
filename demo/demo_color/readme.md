@@ -3,6 +3,21 @@
 In this demo we simultaneously fit one or two (nearby) sources in a two exposures that
 represent different bands with different PSFs and pixel sizes.
 
+```sh
+# get some common info
+ln -s ../demo_utils.py demo_utils.py
+ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+
+# make mock images with a pair of galaxies in blue and red bands
+python color_make.py --add_noise 0
+# fit the sources in the blue image
+python color_fit.py --image_names blue_pair.fits
+# fit the sources in the red image
+python color_fit.py --image_names red_pair.fits
+# fit the sources in the blue + red image
+python color_fit.py --image_names blue_pair red_pair.fits
+```
+
 ## `color_make.py`
 
 This script uses GalSim to make a (noisy) image of one or two galaxies in two
@@ -25,26 +40,20 @@ bands in forcepho format.  The final FITS files have the following data model:
 
 In addition the header contains information about the WCS and the filter.
 
-## `color_fit_together.py`
+## `color_fit.py`
 
-This script fits the sources in both exposures simultaneously using forcepho in
-sampling mode.  For the initial guess catalog this uses the table of true source
-parameters in the last extension of the demo data FITS file, and thus does not
-test for initial burn-in or optimization issues.  The interface demonstrated
-here is the simple FITS file `patch` with communication to and kernel execution
-in the CPU (as opposed to the GPU).
+This script fits the sources in one or both exposures simultaneously using
+forcepho in sampling mode.  For the initial guess catalog this uses the table of
+true source parameters in the last extension of the demo data FITS file, and
+thus does not test for initial burn-in or optimization issues.  The interface
+demonstrated here is the simple FITS file `patch` with communication to and
+kernel execution in the CPU (as opposed to the GPU).
 
 ## `color_plot_together.py`
 
 This script plots the data, residual, and model for the last iteration in the
 chain as well as a corner plot for the colors of the two sources inferred when
 fitting sources in all bands simultaneously.
-
-## `color_fit_separate.py`
-
-This script loops over the different exposures, fitting the sources in each band
-independently using forcepho in sampling mode.  This results in two separate
-output chains, one for each band.
 
 ## `color_plot_separate.py`
 

@@ -2,6 +2,22 @@
 
 In this demo we simultaneously fit two nearby sources in a single exposure.
 
+```sh
+# get some common info
+ln -s ../demo_utils.py demo_utils.py
+ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+
+# make the mock image, with no noise realization added
+python pair_make.py --add_noise 0
+# fit the mock image
+python pair_fit.py
+
+# plot residuals and corner plot
+python pair_plot.py
+# make a movie showing posterior samples
+python pair_movie.py
+```
+
 ## `pair_make.py`
 
 This script uses GalSim to make a (noisy) image of two galaxies in a single

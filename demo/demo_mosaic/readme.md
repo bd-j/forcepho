@@ -2,22 +2,26 @@
 
 In this demo we fit two nearby sources in a series of dithered exposures, in the
 drizzled mosaic made from those dithers, or in a direct image with comparable
-S/N and pixel scale to the mosaic.
+S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and `stsci` python packages to make the mosaic.
 
 ```sh
+# get some common info
+ln -s ../demo_utils.py demo_utils.py
+ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+
 # make dithers
 python mosaic_make_dithers.py --snr 15 --add_noise 0
 # drizzle dithers to mosaic
 python mosaic_combine_dithers.py --pixfrac 0.8
 # make mosaic-like deep single image
-python mosaic_make_dithers.py --snr 45 --all_dithers 0 --basename deep --add_noise 0
+python mosaic_make_dithers.py --snr 45 --n_dither 1 --basename deep --add_noise 0
 
 # fit the mosaic
-python mosaic_fit.py --fit_mosaic 1
+python mosaic_fit.py --image_basename ./data/mosaic
 # fit the dithers
-python mosaic_fit.py --fit_mosaic 0
+python mosaic_fit.py --image_basename ./data/dither
 # fit the deep image
-python mosaic_fit.py --fit_mosaic 2
+python mosaic_fit.py --image_basename ./data/deep
 
 # plot corner plot comparisons
 python mosaic_plot.py
