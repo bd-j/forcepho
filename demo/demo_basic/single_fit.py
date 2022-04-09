@@ -10,31 +10,14 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import NumpyEncoder, read_config, write_residuals
+from forcepho.utils import NumpyEncoder
 from forcepho.fitting import run_lmc
+
+from demo_utils import write_to_disk
 
 
 class Patcher(FITSPatch, CPUPatchMixin):
     pass
-
-
-def write_to_disk(out, outroot, model, config, residual=None):
-
-    # --- write the chain and meta-data for this task ---
-    outfile = f"{outroot}_samples.h5"
-    try:
-        out.config = json.dumps(vars(config))
-    except(TypeError):
-        pass
-    out.dump_to_h5(outfile)
-
-    # --- Write image data and residuals if requested ---
-    if config.write_residuals:
-        outfile = f"{outroot}_residuals.h5"
-        if residual is None:
-            q = out.chain[-1, :]  # last position in chain
-            residual = model.residuals(q)
-        write_residuals(model.patch, outfile, residuals=residual)
 
 
 if __name__ == "__main__":
@@ -42,13 +25,12 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--config_file", type=str, default="")
-    parser.add_argument("--psfstorefile", type=str, default="./single_gausspsf.h5")
+    parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
-    parser.add_argument("--image_name", type=str, default="./single_snr50.fits")
+    parser.add_argument("--image_name", type=str, default="./single_snr030.fits")
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
-    parser.add_argument("--outbase", type=str, default="./output/snr50")
+    parser.add_argument("--outbase", type=str, default="./output/v1")
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=2048)
     parser.add_argument("--max_treedepth", type=int, default=8)
@@ -61,8 +43,6 @@ if __name__ == "__main__":
 
     # --- Configure ---
     config = parser.parse_args()
-    if config.config_file:
-        config = read_config(config.config_file, config)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
     with open(f"{config.outbase}/config.json", "w") as cfg:
@@ -88,7 +68,7 @@ if __name__ == "__main__":
     # --- check out scene & bounds ---
     region, active, fixed = sceneDB.checkout_region(seed_index=-1)
     bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
-    taskID = 1
+    taskID = os.path.basename(config.image_name).replace(".fits", "")
     logger.info(f"Checked out scene and bounds.")
 
     # --- prepare model and data, and sample ---
@@ -107,12 +87,11 @@ if __name__ == "__main__":
     # --- Check results back in and end ---
     final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                            step=step, stats=stats, patchID=taskID)
-    outroot = os.path.join(config.patch_dir, f"patch{taskID}")
+    outroot = os.path.join(config.patch_dir, f"patch_{taskID}")
     write_to_disk(out, outroot, model, config)
     sceneDB.checkin_region(final, fixed,
                            config.sampling_draws,
                            block_covs=covs,
                            taskID=taskID)
     sceneDB.writeout()
-    logger.info(f"writing to {os.path.dirname(sceneDB.statefilename)}.")
     logger.info(f'SuperScene is done, shutting down.')

@@ -2,6 +2,11 @@
 
 In this demo we make and fit a single source in a single exposure.
 
+```sh
+python single_make.py
+python single_fit.py --image_name single_snr030.fits
+```
+
 ## `single_make.py`
 
 This script uses GalSim to make a (noisy) image of a single galaxy in a single

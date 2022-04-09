@@ -9,10 +9,10 @@ __pycache__/
 *.png
 build/
 dist/
-misc
+demo/
+misc/
 detritus/
 *results/
-demo/
 tests/
 docs/key
 docs/tex
