@@ -12,7 +12,7 @@ from demo_utils import make_psfstore, write_fits_to
 
 if __name__ == "__main__":
 
-    # Configure
+    # --- Configure ---
     parser = get_parser()
     parser.set_defaults(bands=["BLUE", "RED"],
                         scales=[0.03, 0.06],
@@ -21,21 +21,21 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=str, default=".")
     config = parser.parse_args()
 
-    # Are we doing one or two sources
+    # --- Are we doing one or two sources ---
     ext = ["single", "pair"]
     nsource = len(config.rhalf)
 
-    # Where does the PSF info go?
+    # --- Where does the PSF info go? ---
     try:
         os.remove(config.psfstore)
     except:
         pass
 
-    # Make the images
+    # --- Make the images ---
     stamps = [make_stamp(band.upper(), nx=config.nx, ny=config.ny, scale=scale)
               for band, scale in zip(config.bands, config.scales)]
 
-    # Set the scene in the image
+    # --- Set the scene in the image ---
     scene = make_scene(stamps, dist_frac=config.dist_frac,
                        rhalf=config.rhalf, sersic=config.sersic)
 
@@ -69,4 +69,5 @@ if __name__ == "__main__":
 
         os.makedirs(config.outdir, exist_ok=True)
         out = f"{config.outdir}/{band.lower()}_{ext[nsource -1]}.fits"
-        write_fits_to(out, im, unc, hdr, config, noise=noise, scene=scene)
+        write_fits_to(out, im, unc, hdr, config.bands,
+                      noise=noise, scene=scene)

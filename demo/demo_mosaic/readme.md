@@ -1,6 +1,27 @@
 # Demo: Dithers vs. Mosaics
 
-In this demo we fit two nearby sources in a series of dithered exposures, in the drizzled mosaic made from those dithers, or in a direct image with comparable S/N and pixel scale to the mosaic.
+In this demo we fit two nearby sources in a series of dithered exposures, in the
+drizzled mosaic made from those dithers, or in a direct image with comparable
+S/N and pixel scale to the mosaic.
+
+```sh
+# make dithers
+python mosaic_make_dithers.py --snr 15 --add_noise 0
+# drizzle dithers to mosaic
+python mosaic_combine_dithers.py --pixfrac 0.8
+# make mosaic-like deep single image
+python mosaic_make_dithers.py --snr 45 --all_dithers 0 --basename deep --add_noise 0
+
+# fit the mosaic
+python mosaic_fit.py --fit_mosaic 1
+# fit the dithers
+python mosaic_fit.py --fit_mosaic 0
+# fit the deep image
+python mosaic_fit.py --fit_mosaic 2
+
+# plot corner plot comparisons
+python mosaic_plot.py
+```
 
 ## `mosaic_make_dithers.py`
 
@@ -47,6 +68,5 @@ dithered exposures takes considerably longer.
 
 ## `mosaic_plot.py`
 
-This script plots the data, residual, and model for the last iteration in the
-chain as well as a corner plot for the fluxes of the two sources showing the
-covariance.
+This script shows corner plot for the fluxes and other selct parameters of the
+two sources from fits to both kinds of data.

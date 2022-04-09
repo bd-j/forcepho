@@ -8,6 +8,8 @@ from astropy.io import fits
 import stwcs
 from drizzlepac import adrizzle
 
+from demo_utils import write_fits_to
+
 
 def drizzle_combine(ditherlist, args, wt_scale=1e-4):
     """
@@ -22,8 +24,8 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
     """
 
     with fits.open(ditherlist[0], memmap=False) as hdul:
-        catalog = hdul[-1]
-        scene = catalog.data # force catalog to remain open
+        scene = np.array(hdul[-1].data)
+        bands = hdul[-1].header["FILTERS"].split(",")
         hdr_out = hdul[0].header
         wcs_out = stwcs.wcsutil.HSTWCS(hdul, wcskey=' ')
 
@@ -54,14 +56,9 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
                          0.0, "cps", 1.0, wcslin_pscale=args.scale,
                          pixfrac=args.pixfrac, kernel="square")
 
-        # write the output
-        image = fits.PrimaryHDU((sci_out), header=hdr_out)
-        uncertainty = fits.ImageHDU(1 / np.sqrt(wht_out/wt_scale), header=hdr_out)
-        hdul = fits.HDUList([image, uncertainty])
-        out = exp.replace("dither", "dither_drz")
-        print(f"writing to {out}")
-        hdul.writeto(out, overwrite=True)
-        hdul.close()
+        # write the drizzled single file output
+        out = exp.replace("dither", "drz_dither")
+        write_fits_to(out, sci_out, 1 / np.sqrt(wht_out/wt_scale), hdr_out, config)
 
         # accumulate in the final image
         w_single = wht_out / wt_scale
@@ -71,13 +68,8 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
         print(np.nanmax(sci_final))
 
     # write the mosaic
-    image = fits.PrimaryHDU((sci_final), header=hdr_out)
-    uncertainty = fits.ImageHDU(1 / np.sqrt(wht_final), header=hdr_out)
-    hdul = fits.HDUList([image, uncertainty, catalog])
     out = os.path.join(os.path.dirname(exp), "mosaic.fits")
-    print(f"writing to {out}")
-    hdul.writeto(out, overwrite=True)
-    return out
+    write_fits_to(sci_final, 1 / np.sqrt(wht_final), hdr_out, bands, scene=scene)
 
 
 if __name__ == "__main__":

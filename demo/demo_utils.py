@@ -244,7 +244,7 @@ def compute_noise_level(scene, config):
     return noise_per_pix
 
 
-def write_fits_to(out, im, unc, hdr, config, noise=None, scene=None):
+def write_fits_to(out, im, unc, hdr, bands=[], noise=None, scene=None):
     """Write a FITS image with multuple extensions for image and uncertainty
     """
     image = fits.PrimaryHDU((im).T, header=hdr)
@@ -253,9 +253,10 @@ def write_fits_to(out, im, unc, hdr, config, noise=None, scene=None):
     if noise is not None:
         hdus.append(fits.ImageHDU(noise.T, header=hdr))
 
-    catalog = fits.BinTableHDU(scene)
-    catalog.header["FILTERS"] = ",".join(config.bands)
-    hdus.append(catalog)
+    if scene is not None:
+        catalog = fits.BinTableHDU(scene)
+        catalog.header["FILTERS"] = ",".join(bands)
+        hdus.append(catalog)
 
     print(f"Writing to {out}")
     hdul = fits.HDUList(hdus)

@@ -53,4 +53,5 @@ if __name__ == "__main__":
         im += noise
 
     os.makedirs(os.path.dirname(config.outname), exist_ok=True)
-    write_fits_to(config.outname, im, unc, hdr, config, noise=noise, scene=scene)
+    write_fits_to(config.outname, im, unc, hdr, config.bands,
+                  noise=noise, scene=scene)

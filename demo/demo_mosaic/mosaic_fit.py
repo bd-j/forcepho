@@ -25,10 +25,9 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--config_file", type=str, default="")
     parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
-    parser.add_argument("--fit_mosaic", type=int, default=1, choices=[0, 1])
+    parser.add_argument("--image_basename", type=str, default="./data/dither", choices=[0, 1])
     # output
     parser.add_argument("--write_residuals", type=int, default=1)
     parser.add_argument("--outbase", type=str, default="./output/v1")
@@ -44,20 +43,15 @@ if __name__ == "__main__":
 
     # --- Configure ---
     config = parser.parse_args()
-    if config.config_file:
-        config = read_config(config.config_file, config)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
-    #_ = shutil.copy(config.config_file, config.outbase)
     with open(f"{config.outbase}/config.json", "w") as cfg:
         json.dump(vars(config), cfg, cls=NumpyEncoder)
     logger.info(f"Configured, writing to {config.outbase}.")
 
-    outname = ["dithers", "mosaic"]
-    image_search = ["./data/dither_0*fits", "./data/mosaic.fits"]
-    pattern = image_search[config.fit_mosaic]
-    config.image_names = glob.glob(pattern)
-    logger.info(f"Got {len(config.image_names)} image matching {pattern}.")
+    config.image_names = glob.glob(config.image_basename + "*.fits")
+    outname = os.path.basename(config.image_names[0]).split("_")[0]
+    logger.info(f"Got {len(config.image_names)} image matching {config.image_basename}.")
 
     # --- build the scene server ---
     cat = fits.getdata(config.image_names[0], -1)
