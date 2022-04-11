@@ -24,8 +24,8 @@ from .utils import read_config
 
 __all__ = ["REQUIRED_COLUMNS",
            "SuperScene", "LinkedSuperScene",
-           "sourcecat_dtype", "rectify_catalog",
-           "make_bounds", "bounds_vectors",
+           "sourcecat_dtype", "rectify_catalog", "convert_pa",
+           "make_bounds", "bounds_vectors", "check_bounds",
            "flux_bounds", "adjust_bounds"]
 
 
@@ -118,6 +118,7 @@ class SuperScene:
         self.bounds_catalog = make_bounds(self.sourcecat, self.bands,
                                           shapenames=self.shape_cols,
                                           **bounds_kwargs)
+        check_bounds(self.sourcecat, self.bounds_catalog)
 
         # make initial covariance matrices (identities)
         n_param = len(self.parameter_columns)
@@ -774,8 +775,8 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
     assert np.all([c in cat.dtype.names for c in shapenames])
     for f in cat.dtype.names:
         if f in sourcecat.dtype.names:
+            assert np.all(np.isfinite(cat[f][:])), f"The is a non-finite number in the '{f}' column of the input catalog"
             sourcecat[f][:] = cat[f][:]
-
 
     # --- Rectify shape columns ---
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhalf_range)
@@ -892,6 +893,26 @@ def bounds_vectors(bounds_cat, filternames, shapenames=Galaxy.SHAPE_COLS,
     return np.array(lower), np.array(upper)
 
 
+def check_bounds(sourcecat, boundscat):
+    """Check that parameter values are within bounds
+
+    Parameters
+    ----------
+    sourcecat : structured ndarray of shape (nsource,)
+        Must have columns included in `boundscat`
+
+    boundscat : structured ndarray of shape (nsource,)
+        Each field with shape (nsource, 2) gives the (lower, upper) bound for
+        that parameter.  Assumed to be in the same row-order as `sourcecat`
+    """
+    for c in boundscat.dtype.names:
+        b = boundscat[c][:]
+        if b.shape(-1) != 2:
+            continue
+        assert np.all(sourcecat[c] > b[:, 0]), f"An input value is below lower bound in column '{c}'"
+        assert np.all(sourcecat[c] < b[:, 1]), f"An input value is above bound in column '{c}'"
+
+
 def flux_bounds(flux, unc1, snr_max=10, precisions=None):
     """Generate flux bounds based on initial guesses and a reference S/N.
 
@@ -949,6 +970,37 @@ def adjust_bounds(sceneDB, bands, config):
             new_upper = np.maximum(upper, sceneDB.sourcecat[b] * config.maxfluxfactor)
             sceneDB.bounds_catalog[b][:, 1] = new_upper
     return sceneDB
+
+
+def convert_pa(pa_in, to_deg=False, rotate=False, reverse=False, max_try=4):
+    """Convert input PA from degrees to radians.  Optionally rotate and/or
+    reverse the angles to get radians North of East
+    """
+    if to_deg:
+        pa = np.deg2rad(pa_in)
+    else:
+        pa = pa_in.copy()
+
+    # restrict to the interval [-pi/2, pi/2]
+    count = 0
+    while count < max_try:
+        p = pa > np.pi / 2
+        n = pa < np.pi / 2
+        if (p.sum() == 0) & (n.sum() == 0):
+            break
+        else:
+            pa[p] -= np.pi
+            pa[n] += np.pi
+            count += 1
+
+    # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
+    if rotate:
+        p = pa > 0
+        pa += np.pi / 2. - p * np.pi
+    if reverse:
+        pa *= -1.0
+
+    return pa
 
 
 if __name__ == "__main__":

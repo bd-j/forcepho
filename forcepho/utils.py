@@ -201,6 +201,47 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     return cat
 
 
+def write_to_disk(out, outroot, model, config, residual=None):
+    """Write chain and optionally the residuals for a patch to disk.
+
+    Parameters
+    ----------
+    out : dictionary
+        The filled output object from one of the fitting methods
+
+    outroot : string
+        The base path and filename for the output.  Chain and residuals will be
+        written to `<outroot>_samples.h5` and `<outroot>_residuals.h5`
+
+    model : an instance of forcepho.model.Posterior()
+        Model object used for constructing residuals if not already supplied
+
+    config : Namespace
+        Configuration parameters used for the run.  The value of
+        `config.write_residuals` will be used to decide whether to write a
+        residual object as well.
+
+    residual : optional, list of ndarray
+        The residual pixel values in each band.  If not given, the residuals
+        will be computed from the last step in the chain.
+    """
+    # --- write the chain and meta-data for this task ---
+    outfile = f"{outroot}_samples.h5"
+    try:
+        out.config = json.dumps(vars(config))
+    except(TypeError):
+        pass
+    out.dump_to_h5(outfile)
+
+    # --- Write image data and residuals if requested ---
+    if config.get("write_residuals", False):
+        outfile = f"{outroot}_residuals.h5"
+        if residual is None:
+            q = out.chain[-1, :]  # last position in chain
+            residual = model.residuals(q)
+        write_residuals(model.patch, outfile, residuals=residual)
+
+
 def write_residuals(patcher, filename, residuals=None):
     # TODO: Should this be a method on Patch or Posterior ?
     pixattrs = ["data", "xpix", "ypix", "ierr"]
