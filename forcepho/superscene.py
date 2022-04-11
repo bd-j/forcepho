@@ -837,7 +837,7 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
     pm1 = np.array([-1., 1.])
 
     if dra is None:
-        dra = n_pix * pixscale / 3600. / np.cos(np.deg2rad(active["ra"]))
+        dra = n_pix * pixscale / 3600. / np.cos(np.deg2rad(active["dec"]))
     if ddec is None:
         ddec = np.array([n_pix * pixscale / 3600.])
 
@@ -907,7 +907,7 @@ def check_bounds(sourcecat, boundscat):
     """
     for c in boundscat.dtype.names:
         b = boundscat[c][:]
-        if b.shape(-1) != 2:
+        if b.shape[-1] != 2:
             continue
         assert np.all(sourcecat[c] > b[:, 0]), f"An input value is below lower bound in column '{c}'"
         assert np.all(sourcecat[c] < b[:, 1]), f"An input value is above bound in column '{c}'"
@@ -969,6 +969,7 @@ def adjust_bounds(sceneDB, bands, config):
             upper = sceneDB.bounds_catalog[b][:, 1]
             new_upper = np.maximum(upper, sceneDB.sourcecat[b] * config.maxfluxfactor)
             sceneDB.bounds_catalog[b][:, 1] = new_upper
+    check_bounds(self.sourcecat, self.bounds_catalog)
     return sceneDB
 
 
