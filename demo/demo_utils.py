@@ -264,29 +264,6 @@ def write_fits_to(out, im, unc, hdr, bands=[], noise=None, scene=None):
     hdul.close()
 
 
-def write_to_disk(out, outroot, model, config, residual=None):
-    """Write chain and residuals to disk
-    """
-    import json
-    from forcepho.utils import write_residuals
-
-    # --- write the chain and meta-data for this task ---
-    outfile = f"{outroot}_samples.h5"
-    try:
-        out.config = json.dumps(vars(config))
-    except(TypeError):
-        pass
-    out.dump_to_h5(outfile)
-
-    # --- Write image data and residuals if requested ---
-    if config.write_residuals:
-        outfile = f"{outroot}_residuals.h5"
-        if residual is None:
-            q = out.chain[-1, :]  # last position in chain
-            residual = model.residuals(q)
-        write_residuals(model.patch, outfile, residuals=residual)
-
-
 if __name__ == "__main__":
 
     parser = get_parser()

@@ -10,7 +10,7 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import NumpyEncoder, read_config
+from forcepho.utils import NumpyEncoder, write_to_disk
 from forcepho.fitting import run_lmc
 
 from demo_utils import write_to_disk

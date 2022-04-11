@@ -10,10 +10,8 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import NumpyEncoder, read_config
+from forcepho.utils import NumpyEncoder, write_to_disk
 from forcepho.fitting import run_lmc
-
-from demo_utils import write_to_disk
 
 
 class Patcher(FITSPatch, CPUPatchMixin):
@@ -25,7 +23,6 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--config_file", type=str, default="")
     parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
     parser.add_argument("--image_name", type=str, default="./pair.fits")
@@ -44,8 +41,6 @@ if __name__ == "__main__":
 
     # --- Configure ---
     config = parser.parse_args()
-    if config.config_file:
-        config = read_config(config.config_file, config)
     config.patch_dir = os.path.join(config.outbase, "patches")
     [os.makedirs(a, exist_ok=True) for a in (config.outbase, config.patch_dir)]
     #_ = shutil.copy(config.config_file, config.outbase)
