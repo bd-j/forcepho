@@ -8,7 +8,9 @@ Galaxies and PSFs are represented by mixtures of Gaussians.
 
 ## Installation & Requirements
 
-Requires Nvidia GPU (developed for V100), CUDA compiler, MPI & HDF5 libraries, and a Python (ideally Anaconda) installation.
+CPU operation requires a C compiler, HDF5 libraries, and a Python (ideally Anaconda) installation. See `requirements.txt` for minimum python package requirements.
+
+GPU operation requires Nvidia GPU with compute capability >= 7.0 (developed for V100), a CUDA compiler, and the pycuda python package
 
 1. create and activate a conda environment
    ```sh
@@ -18,3 +20,7 @@ Requires Nvidia GPU (developed for V100), CUDA compiler, MPI & HDF5 libraries, a
    conda activate force
    python -m pip install .
    ```
+
+## Demos
+
+See the `demo/` directory for several basic demos using the CPU kernel.

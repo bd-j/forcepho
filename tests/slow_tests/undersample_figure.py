@@ -103,10 +103,9 @@ if __name__ == "__main__":
     xs = [0.0, 0.3, 0.5]
     coordlist = list(product(xs, xs))
 
-    pars = []
-    rmax = []
+    pars, rmax, tot = [], [], []
 
-    for fwhm in 1.0, 1.2, 1.4, 1.6, 1.8, 2.0:
+    for fwhm in 1.0, 1.2, 1.35, 1.5, 1.8, 2.0, 2.5, 3.0:
         sigma = fwhm / 2.355
         native.psf.covariances = np.array([np.eye(2) * sigma**2])
         oversampled.psf.covariances = np.array([np.eye(2) * (sigma / dx)**2])
@@ -117,42 +116,74 @@ if __name__ == "__main__":
             radius = np.hypot(native.xpix - (native.crpix[0] + source.ra),
                               native.ypix - (native.crpix[1] + source.dec),)
 
+            # second order image
             nimage, _ = source.render(native, compute_deriv=False, second_order=True)
-            dimage, _ = source.render(native, compute_deriv=False, second_order=False)
-            oimage, _ = source.render(oversampled, compute_deriv=False)
             nimage = nimage.reshape(native.nx, native.ny)
+            # zeroth order image
+            dimage, _ = source.render(native, compute_deriv=False, second_order=False)
             dimage = dimage.reshape(native.nx, native.ny)
+            # oversampled image
+            oimage, _ = source.render(oversampled, compute_deriv=False)
             oimage = oimage.reshape(oversampled.nx, oversampled.ny)
-            rimage = rebin(oimage, nimage.shape) * oversample**2
-            residual = 100 * (nimage - rimage) / rimage.max()
-            r2 = 100 * (dimage - rimage) / rimage.max()
-            ims = [oimage, rimage, nimage, residual]
-            labels = ['oversampled (by {})'.format(oversample), 'rebinned',
-                      'direct (2nd order)', 'residual as % of max']
-
-            fig, axes = display(ims, labels, radius=radius)
-            axes[-1, 0].set_visible(False)
-            axes[-1, 1].axhline(0.0, linestyle=":", color="k")
-            title_string = 'FWHM={} pixels,\n$\\Delta x={{{}}}, \\Delta y={{{}}}$\nsums={:.3},{:.3},{:.3}'
-            title = title_string.format(fwhm, x, y, oimage.sum(), rimage.sum(), nimage.sum())
-            #fig.text(0.14, 0.8, title, transform=fig.transFigure)
-            fig.suptitle(title)
-            fig.tight_layout()
-            pdf.savefig(fig)
-            pl.close(fig)
+            # rebinned oversampled image
+            timage = rebin(oimage, nimage.shape) * oversample**2
+            # residual image
+            nresidual = 100 * (nimage - timage) / timage.max()
+            dresidual = 100 * (dimage - timage) / timage.max()
 
             pars.append((fwhm, x, y))
-            delt = residual.flat[np.argmax(np.abs(residual))], r2.flat[np.argmax(np.abs(r2))]
+            # Max deltas
+            delt = nresidual.flat[np.argmax(np.abs(nresidual))], dresidual.flat[np.argmax(np.abs(dresidual))]
             rmax.append(delt)
+            # totals
+            rflux = nimage.sum() / timage.sum(), dimage.sum() / timage.sum()
+            tot.append(rflux)
 
-    pdf.close()
+            if (fwhm == 1.5) & (x == 0) & (y == 0):
+                images = dict(oversampled=oimage.copy(),
+                              truth=timage.copy(),
+                              second_order=nimage.copy(),
+                              zeroth_order=dimage.copy(),
+                              second_order_residual=nresidual.copy(),
+                              zeroth_order_residual=dresidual.copy())
+    pars = np.array(pars)
+    rmax = np.array(rmax)
+    tot = np.array(tot)
 
+    # set up axes
     pl.ion()
-    fig, ax = pl.subplots()
-    ax.plot(np.array(pars)[:, 0], np.array(rmax)[:, 0], "o", label="2nd order")
-    ax.plot(np.array(pars)[:, 0], np.array(rmax)[:, 1], "o", label="0th order")
-    ax.set_xlabel("Gaussian FWHM (pixels)")
-    ax.set_ylabel("maximum residual deviation, as % of brightest pixel")
-    ax.axhline(0.0, linestyle=":", color="k")
-    ax.legend()
-    fig.savefig("oversample_1storder_summary.png", dpi=200)
+    ncol = 3
+    fig = pl.figure(figsize=(9, 11.5))
+    from matplotlib.gridspec import GridSpec
+    gs = GridSpec(5, ncol, height_ratios=[1, 15, 15, 1, 25],
+                  hspace=0.2, wspace=0.15,
+                  left=0.08, right=0.9, bottom=0.08, top=0.93)
+    cbaxes = np.array([[fig.add_subplot(gs[0, i]) for i in range(ncol)],
+                       [fig.add_subplot(gs[3, i]) for i in range(ncol)]])
+    imaxes = np.array([[fig.add_subplot(gs[1, i]) for i in range(ncol)],
+                       [fig.add_subplot(gs[2, i]) for i in range(ncol)]])
+    rax = fig.add_subplot(gs[-1, :])
+
+    # plot the images
+    show = ["truth", "zeroth_order", "second_order",
+            "oversampled", "zeroth_order_residual", "second_order_residual"]
+    for i, ax in enumerate(imaxes.flat):
+        label = show[i]
+        im = images[label]
+        if i < 3:
+            kw = dict(vmin=0, vmax=0.35)
+        elif i > 3:
+            kw = dict(vmin=-5, vmax=25)
+        else:
+            kw = {}
+        c = ax.imshow(im.T, origin='lower', **kw)
+        pl.colorbar(c, cax=cbaxes.flat[i], orientation="horizontal")
+        ax.text(0.1, 0.9, label.replace("_", " "), color="magenta", transform=ax.transAxes)
+
+    rax.plot(pars[:, 0], rmax[:, 0], "o", label="2nd order")
+    rax.plot(pars[:, 0], rmax[:, 1], "o", label="0th order")
+    rax.set_xlabel("Gaussian FWHM (pixels)")
+    rax.set_ylabel("maximum residual deviation, as % of brightest pixel")
+    rax.axhline(0.0, linestyle=":", color="k")
+    rax.legend()
+    fig.savefig("figures/undersample.png", dpi=400)

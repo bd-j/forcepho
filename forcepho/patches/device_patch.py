@@ -182,7 +182,7 @@ class DevicePatchMixin:
             out = proposer.evaluate_proposal(proposal, patch=self)
             # pack this scene
             self.pack_meta(scene)
-            # replace data on GPU with residual
+            # replace data on device with residual
             # replace meta of previous block with this block
             self.swap_on_device()
             # data array on GPU no longer matches self.data
@@ -493,8 +493,10 @@ class CPUPatchMixin(DevicePatchMixin):
         return self.device_patch
 
     def retrieve_array(self, arrname="residual"):
-        """Retrieve a pixel array from the GPU
+        """Retrieve a pixel array from the CPU
         """
+        # FIXME: this does not work if the data/residual pointers have been swapped
+        # May need to override swap_on_device to also swap the attribute references
         flatdata = getattr(self, arrname)
         #shape=self.xpix.shape, dtype=self.pix_dtype)
 
