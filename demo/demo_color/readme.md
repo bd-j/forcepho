@@ -3,6 +3,7 @@
 In this demo we simultaneously fit one or two (nearby) sources in a two exposures that
 represent different bands with different PSFs and pixel sizes.
 
+
 ```sh
 # get some common info
 ln -s ../demo_utils.py demo_utils.py
@@ -15,7 +16,7 @@ python color_fit.py --image_names blue_pair.fits
 # fit the sources in the red image
 python color_fit.py --image_names red_pair.fits
 # fit the sources in the blue + red image
-python color_fit.py --image_names blue_pair red_pair.fits
+python color_fit.py --image_names blue_pair.fits red_pair.fits
 ```
 
 ## `color_make.py`
@@ -52,8 +53,11 @@ kernel execution in the CPU (as opposed to the GPU).
 ## `color_plot_together.py`
 
 This script plots the data, residual, and model for the last iteration in the
-chain as well as a corner plot for the colors of the two sources inferred when
-fitting sources in all bands simultaneously.
+chain and for both images as well as corner plots for the colors (in magnitudes)
+of the two sources inferred when fitting sources in all bands simultaneously and
+the combined total flux of both sources in each band.
+
+![color posterior from simultaneous fit](./together_v1.png)
 
 ## `color_plot_separate.py`
 
