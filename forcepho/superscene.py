@@ -601,7 +601,7 @@ class LinkedSuperScene(SuperScene):
             active_inds += to_add
         active = self.sourcecat[active_inds]
 
-        # now redetermine the center and the radius
+        # now redetermine the region center and the radius
         cra, cdec = np.mean(active["ra"]), np.mean(active["dec"])
         center = self.sky_to_scene(cra, cdec)
         d = self.scene_coordinates[active_inds] - center
@@ -973,11 +973,20 @@ def adjust_bounds(sceneDB, bands, config):
     return sceneDB
 
 
-def convert_pa(pa_in, to_deg=False, rotate=False, reverse=False, max_try=4):
-    """Convert input PA from degrees to radians.  Optionally rotate and/or
-    reverse the angles to get radians North of East
+def convert_pa(pa_in, from_deg=False, rotate=False, reverse=False, max_try=4):
+    """Convert input PA from degrees to radians in the interval +/- pi/2.
+    Optionally rotate and/or reverse the angles to get radians North of East.
+
+    Parameters
+    ----------
+    from_deg : bool
+        If input is in deg, this will convert to radians
+
+    rotate: bool
+        If true, add 90 deg
+    reverse : bool
     """
-    if to_deg:
+    if from_deg:
         pa = np.deg2rad(pa_in)
     else:
         pa = pa_in.copy()

@@ -1,12 +1,10 @@
 from itertools import product
 import numpy as np
 import matplotlib.pyplot as pl
-from matplotlib.backends.backend_pdf import PdfPages
 
 from forcepho.sources import Star, Scene
 from forcepho.slow.stamp import PostageStamp
 from forcepho.slow.psf import PointSpreadFunction
-from forcepho.slow.likelihood import make_image, plan_sources, WorkPlan
 
 
 def get_stamp(n, dx=1, filtername="band"):
@@ -24,12 +22,6 @@ def get_stamp(n, dx=1, filtername="band"):
     return stamp
 
 
-def get_image(x, y, scene, stamp, **extras):
-    theta = np.array([1, x, y])
-    im, partials = make_image(scene, stamp, Theta=theta, **extras)
-    return im
-
-
 def rebin(a, new_shape):
     M, N = a.shape
     m, n = new_shape
@@ -37,49 +29,6 @@ def rebin(a, new_shape):
         return a.reshape((m, int(M/m), n, int(N/n))).mean(3).mean(1)
     else:
         return np.repeat(np.repeat(a, m/M, axis=0), n/N, axis=1)
-
-
-def compare(x, y, source, native, oversampled):
-    image = get_image(x, y, source, native)
-    oimage = get_image(x, y, source, oversampled)
-    rimage = rebin(oimage, image.shape) * oversample**2
-
-
-def display(ims, labels, radius=None):
-    """
-    ims : list of ndarrays
-        oversampled, rebinned oversampled, direct, residual
-    """
-    #nix = int(np.ceil(np.sqrt(len(ims) + 1)))
-    #niy = int(np.ceil(len(ims) / nix))
-    nix, niy = 3, 2
-    fig, axes = pl.subplots(nix, niy, figsize=(8.5, 8.5))
-    for i, im in enumerate(ims):
-        ax = axes.flat[i]
-        c = ax.imshow(im.T, origin='lower')
-        fig.colorbar(c, ax=ax)
-        ax.text(0.1, 0.9, labels[i], color="magenta", transform=ax.transAxes)
-
-    y, ylabel = ims[-1].flatten(), labels[-1]
-    if radius is None:
-        x, xlabel = ims[1].flatten(), labels[1]
-    else:
-        x, xlabel = radius.flatten(), "radius (pixels)"
-
-    ax = axes.flat[-1]
-    ax.plot(x, y, 'o')
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.yaxis.set_label_position("right")
-    ax.yaxis.tick_right()
-    cbar = fig.colorbar(c, ax=ax)
-    cbar.ax.set_visible(False)
-
-    if radius is None:
-        ax.set_xscale("log")
-        ax.set_xlim(ims[1].max()*1e-4, ims[1].max()*1.1)
-
-    return fig, axes
 
 
 if __name__ == "__main__":
@@ -99,7 +48,6 @@ if __name__ == "__main__":
     oversampled = get_stamp(int(width / dx), dx)
     oversampled.crpix = np.array([oversampled.nx/2, oversampled.ny/2]) + oversample/2. - 0.5
 
-    pdf = PdfPages('undersample_1storder.pdf')
     xs = [0.0, 0.3, 0.5]
     coordlist = list(product(xs, xs))
 
@@ -180,6 +128,7 @@ if __name__ == "__main__":
         pl.colorbar(c, cax=cbaxes.flat[i], orientation="horizontal")
         ax.text(0.1, 0.9, label.replace("_", " "), color="magenta", transform=ax.transAxes)
 
+    # plot the residual vs fwhm
     rax.plot(pars[:, 0], rmax[:, 0], "o", label="2nd order")
     rax.plot(pars[:, 0], rmax[:, 1], "o", label="0th order")
     rax.set_xlabel("Gaussian FWHM (pixels)")
