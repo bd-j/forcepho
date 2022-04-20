@@ -73,7 +73,7 @@ def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0,0)):
     return stamp
 
 
-def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, nsource=1):
+def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, nsource=1, pa=np.pi/2):
     """Convert a configuration namespace to a structured ndarray in the forcepho
     catalog format.
 
@@ -108,7 +108,7 @@ def make_scene(stamps, rhalf=0.15, sersic=1, dist_frac=1.0, flux=1.0, nsource=1)
     cat["rhalf"] = np.array(rhalf)
     cat["sersic"] = np.array(sersic)
     cat["q"] = 0.9
-    cat["pa"] = np.pi / 2
+    cat["pa"] = pa
 
     # add source fluxes (with color=0)
     for i, band in enumerate(bands):

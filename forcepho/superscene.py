@@ -140,6 +140,8 @@ class SuperScene:
         """
         for c in REQUIRED_COLUMNS:
             assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
+        for c in self.bands:
+            assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
 
         self.sourcecat = sourcecat
         self.n_sources = len(self.sourcecat)
@@ -979,10 +981,10 @@ def convert_pa(pa_in, from_deg=False, rotate=False, reverse=False, max_try=4):
 
     Parameters
     ----------
-    from_deg : bool
+    from_deg : bool (default: False)
         If input is in deg, this will convert to radians
 
-    rotate: bool
+    rotate: bool (default: False)
         If true, add 90 deg
     reverse : bool
     """

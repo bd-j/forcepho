@@ -234,7 +234,7 @@ def write_to_disk(out, outroot, model, config, residual=None):
     out.dump_to_h5(outfile)
 
     # --- Write image data and residuals if requested ---
-    if config.get("write_residuals", False):
+    if getattr(config, "write_residuals", False):
         outfile = f"{outroot}_residuals.h5"
         if residual is None:
             q = out.chain[-1, :]  # last position in chain

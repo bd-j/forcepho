@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     # Set the scene in the image
     scene = make_scene(stamp, dist_frac=config.dist_frac,
-                       rhalf=config.rhalf, sersic=config.sersic)
+                       rhalf=config.rhalf, sersic=config.sersic, pa=0.0)
 
     # render the scene
     psf = get_galsim_psf(scale, sigma_psf=sigma)
