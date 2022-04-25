@@ -335,7 +335,8 @@ if __name__ == "__main__":
     # Hide this MPI import in __main__ so one can import this module without MPI
     from mpi4py import MPI
 
-    parser = argparse.ArgumentParser(description='MPI dispatcher interface', formatter_class=ArgParseFormatter)
+    parser = argparse.ArgumentParser(description='MPI dispatcher interface',
+                                     formatter_class=ArgParseFormatter)
     # Any command line arguments can be added here
     parser.add_argument("--config_file", type=str, default="galsim.yml")
 

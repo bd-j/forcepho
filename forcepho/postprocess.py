@@ -39,7 +39,7 @@ class Residuals:
     def __init__(self, filename):
         self.filename = filename
         self.handle = h5py.File(self.filename, "r")
-        self.exposures = self.handle["epaths"][:]
+        self.exposures = [e.decode("utf-8") for e in self.handle["epaths"][:]]
         self.reference_coordinates = self.handle["reference_coordinates"][:]
 
     def make_exp(self, e=0, exp=None, value="data"):
@@ -102,17 +102,29 @@ class Residuals:
         pix = sky_to_pix(ra, dec, ee, ref_coords=self.reference_coordinates)
         return pix
 
-    def fill_images(self, images={}, fill_type="residual", imshape=(2048, 2048)):
+    def fill_images(self, images={}, headers={}, fill_type="residual",
+                    metastore=None, imshape=(2048, 2048)):
         """Add the stored pixel data to the images in the supplied `images` dictionary.
         """
         for e in self.exposures:
+            # create the empty array
             if e not in images:
+                if metastore is not None:
+                    band, exp = e.split("/")
+                    hdr = metastore.headers[band][exp]
+                    imshape = (hdr["NAXIS1"], hdr["NAXIS2"])
+                    headers[e] = hdr
+                elif os.path.exists(e):
+                    hdr = fits.getheader(e)
+                    imshape = (hdr["NAXIS1"], hdr["NAXIS2"])
+                    headers[e] = hdr
                 images[e] = np.zeros(imshape) + np.nan
+            # Fill array with values for this patch
             xpix, ypix = self.handle[e]["xpix"][:].astype(int), self.handle[e]["ypix"][:].astype(int)
             arr = self.handle[e][fill_type][:]
             images[e][xpix, ypix] = arr
 
-        return images
+        return images, headers
 
 
 class Samples(Result):
@@ -141,7 +153,7 @@ def run_metadata(root):
     """
     with open(f"{root}/config.json") as f:
         config = json.load(f)
-    scenestr = config["scene_catalog"].replace(".fits", "")
+    scenestr = config.get("scene_catalog", "superscene.fits").replace(".fits", "")
 
     with open(f"{root}/{scenestr}_log.json", "r") as f:
         logs = json.load(f)
@@ -507,32 +519,37 @@ def write_patchreg(root, plist="patches.reg"):
 
 
 def write_images(root, subdir="image", metafile=None, show_model=False, show_chi=False):
-    """Make data, residual, and optionally model images for the 
+    """Make data, residual, and optionally model images for the last iteration
+    of the chain.
     """
 
-    files = glob.glob(f"{root}/patches/*residuals.h5")
+    files = glob.glob(os.path.join(root, "patches/*residuals.h5"))
     assert len(files) > 0
+    files.sort()
 
     print(f"Writing to {root}/{subdir}")
     os.makedirs(f"{root}/{subdir}", exist_ok=True)
 
-    deltas, datas, ierrs = {}, {}, {}
-    patches = range(len(files))
-    for p in patches:
-        r = Residuals(f"{root}/patches/patch{p}_residuals.h5")
-        r.fill_images(deltas, fill_type="residual")
-        r.fill_images(datas, fill_type="data")
-        r.fill_images(ierrs, fill_type="ierr")
-
     if metafile:
         print(f"Using {metafile}")
         metastore = MetaStore(metafile)
+    else:
+        metastore = None
 
-    stypes = ["data", "delta", "model", "residual"]
+    deltas, datas, ierrs, hdrs = {}, {}, {}, {}
+    patches = range(len(files))
+    for p in files:
+        r = Residuals(p)
+        r.fill_images(deltas, fill_type="residual", metastore=metastore)
+        r.fill_images(datas, headers=hdrs, fill_type="data", metastore=metastore)
+        r.fill_images(ierrs, fill_type="ierr", metastore=metastore)
+
+    stypes = ["data", "delta", "model", "chi"]
 
     imnames = list(datas.keys())
     for n in imnames:
-        band, exp = n.decode("utf-8").split("/")
+        exp = n.split("/")[-1].replace(".fits", "")
+        hdr = hdrs.get(n, None)
         show = [datas[n], deltas[n], None, None]
         if show_model:
             show[2] = datas[n] - deltas[n]
@@ -546,14 +563,12 @@ def write_images(root, subdir="image", metafile=None, show_model=False, show_chi
                 continue
             stype = stypes[i]
             sh = fits.PrimaryHDU(s.T)
-            if metafile:
-                hdr = metastore.headers[band][exp]
-                hdr["BUNIT"] = "nJy"
+            if hdr is not None:
                 assert sh.header["NAXIS"] == hdr["NAXIS"]
                 assert sh.header["NAXIS1"] == hdr["NAXIS1"]
                 assert sh.header["NAXIS2"] == hdr["NAXIS2"]
                 sh.header.update(hdr)
-                sh.header["IMTYPE"] = stype.upper()
+            sh.header["IMTYPE"] = stype.upper()
             sh.writeto(f"{root}/{subdir}/{exp}_{stype}.fits", overwrite=True)
 
 
