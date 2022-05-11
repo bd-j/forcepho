@@ -21,7 +21,6 @@ class StaticPatch(PatchBase):
     of `patch_conversion.py`
     """
 
-
     def __init__(self,
         stamps,            # A list of PostageStamp objects (exposure data) from FITS files
         miniscene,         # All peaks identified in this patch region

@@ -38,7 +38,7 @@ def get_parser():
     return parser
 
 
-def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0,0)):
+def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0, 0)):
     """Make a simple stamp instance
 
     Parameters
