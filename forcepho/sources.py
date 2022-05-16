@@ -6,7 +6,7 @@ Module for objects describing individual sources and collections of sources (Sce
 """
 
 import numpy as np
-from scipy.interpolate import SmoothBivariateSpline
+from scipy.interpolate import SmoothBivariateSpline, RectBivariateSpline
 import warnings
 try:
     import h5py
@@ -529,7 +529,8 @@ class Galaxy(Source):
     nshape = 4
 
     def __init__(self, filters=['band'], filternames=None, radii=None,
-                 splinedata=None, free_sersic=True, spline_smoothing=None):
+                 free_sersic=True, splinedata=None, spline_smoothing=None,
+                 spline_type="rect"):
         if filternames:
             self.filternames = filternames
         else:
@@ -538,7 +539,8 @@ class Galaxy(Source):
         if radii is not None:
             self.radii = radii
         try:
-            self.initialize_splines(splinedata, spline_smoothing=spline_smoothing)
+            self.initialize_splines(splinedata, spline_smoothing=spline_smoothing,
+                                    spline_type=spline_type)
         except:
             message = ("Could not load `splinedata`. "
                        "Galaxies must have `splinedata` information "
@@ -618,7 +620,7 @@ class Galaxy(Source):
 
         return self.proposal_struct
 
-    def initialize_splines(self, splinedata, spline_smoothing=None):
+    def initialize_splines(self, splinedata, spline_smoothing=None, spline_type="rect"):
         """Initialize Bivariate Splines used to interpolate and get derivatives
         for gaussian amplitudes as a function of sersic and rhalf
         """
@@ -628,9 +630,17 @@ class Galaxy(Source):
             A = data["amplitudes"][:]
             self.radii = data["radii"][:]
 
-        nm, ng = A.shape
-        self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing)
-                        for i in range(ng)]
+        nm, ngauss = A.shape
+        if spline_type == "rect":
+            ngrid, rgrid = np.unique(n), np.unique(r)
+            nn, nr = len(ngrid), len(rgrid)
+            self.splines = [RectBivariateSpline(ngrid, rgrid, A[:, i].reshape(nn, nr),
+                                                s=spline_smoothing)
+                            for i in range(ngauss)]
+        else:
+            self.splines = [SmoothBivariateSpline(n, r, A[:, i], s=spline_smoothing)
+                            for i in range(ngauss)]
+
         self.rh_range = (r.min(), r.max())
         self.sersic_range = (n.min(), n.max())
 
