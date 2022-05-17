@@ -971,7 +971,7 @@ def adjust_bounds(sceneDB, bands, config):
             upper = sceneDB.bounds_catalog[b][:, 1]
             new_upper = np.maximum(upper, sceneDB.sourcecat[b] * config.maxfluxfactor)
             sceneDB.bounds_catalog[b][:, 1] = new_upper
-    check_bounds(self.sourcecat, self.bounds_catalog)
+    check_bounds(sceneDB.sourcecat, sceneDB.bounds_catalog)
     return sceneDB
 
 
