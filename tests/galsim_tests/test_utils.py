@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import sys, os, argparse
+from itertools import product
 import numpy as np
 import h5py
 
@@ -38,6 +39,28 @@ def get_parser():
     parser.add_argument("--add_noise", type=int, default=1)
 
     return parser
+
+
+def get_grid_params(config, start=0, stop=None):
+
+    import yaml
+
+    if "yml" in config.test_grid[-4:]:
+        with open(config.test_grid, "r") as f:
+            grid = yaml.load(f, Loader=yaml.Loader)
+        names = list(grid.keys())
+        names.sort()
+        dtype = np.dtype([(k, np.array(grid[k]).dtype) for k in names])
+        params = list(product(*[grid[k] for k in names]))
+        params = np.array(params, dtype=dtype)
+
+        fits.writeto(config.test_grid.replace("yml", "fits"),
+                     params, overwrite=True)
+
+    elif "fits" in config.test_grid[-5:]:
+        params = fits.getdata(config.test_grid)
+
+    return params[start:stop]
 
 
 def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0, 0)):
@@ -181,32 +204,30 @@ def galsim_model(scene, stamp, psf=None, verbose=False):
     return image.array.T
 
 
-def get_galsim_psf(scale, psf_type="simple", sigma_psf=1.0,
-                   bandname=None, psfstore=None):
+def get_galsim_psf(scale, psfimage=None, sigma_psf=1.0,
+                   psfmixture=None):
     """
     Parameters
     ----------
-    sigma_psf : float
-        pixels
     scale : float
         arcsec per science detector pxel
-    psf_type : string
-        'simple' | 'mixture' | 'webbpsf'
-    psfstore : string
-        patch to fits image (WebbPSF) or h5store (mixture)
-    bandname : string
-        e.g. 'F277W'
+    psfimage : string
+        name of fits file containing PSF image, if any
+    sigma_psf : float
+        dispersion of gaussian PSF in pixels
+    psfmixture :
+        Not implemented
     """
-    if psf_type == "simple":
-        gpsf = galsim.Gaussian(flux=1., sigma=sigma_psf * scale)
-    elif psf_type == "mixture":
+    if psfimage:
+        with fits.open(psfimage) as hdul:
+            det_samp = hdul[1].header.get("DETSAMP", 1.0)
+            psfim = hdul[1].data.astype(np.float64)
+            pim = galsim.Image(np.ascontiguousarray(psfim), scale=scale/det_samp)
+            gpsf = galsim.InterpolatedImage(pim)
+    elif psfmixture:
         raise NotImplementedError
-    elif config.psf_type == "image":
-        hdul = fits.open(psfstore)
-        det_samp = hdul[1].header["DETSAMP"]
-        psfim = hdul[1].data.astype(np.float64)
-        pim = galsim.Image(np.ascontiguousarray(psfim), scale=scale/det_samp)
-        gpsf = galsim.InterpolatedImage(pim)
+    else:
+        gpsf = galsim.Gaussian(flux=1., sigma=sigma_psf * scale)
 
     return gpsf
 
@@ -218,8 +239,8 @@ def make_psfstore(psfstore, band, sigma, nradii=9):
     ngauss, nloc = len(sigma), 1
 
     from forcepho.patches.storage import PSF_COLS
-    pdt = np.dtype([(c, np.float32) for c in PSF_COLS]
-                   + [("sersic_bin", np.int32)])
+    pdt = np.dtype([(c, np.float32) for c in PSF_COLS] +
+                   [("sersic_bin", np.int32)])
     pars = np.zeros([nloc, nradii, ngauss], dtype=pdt)
     pars["amp"] = 1.0
     pars["Cxx"] = (sigma**2)[None, None, :]

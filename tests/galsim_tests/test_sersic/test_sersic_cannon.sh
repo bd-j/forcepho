@@ -22,24 +22,15 @@ export PROJECT_DIR=$PWD/..
 cd $PROJECT_DIR
 source activate force
 
-task=${SLURM_ARRAY_TASK_ID}
-n_grid=100
-
-# all the output will be stored here
-outbase=./output/test_exactpsf_sampling_v1
-# could add optimization flags here
-extra_flags=""
-#extra_flags="--optimize 1 --add_barriers 1 --linear_optimize 1"
+outdir=./output/exact
+# clear previous results
+rm -rf $outdir
 
 # -- make and fit the galsim image ---
-python fit_galsim_image.py --config_file ./test_config.yml \
-                           --test_grid ./grids/galsim_exactpsf_grid.fits \
-                           --psfstorefile psf_gaussian_dec21.h5 --psf_type simple \
-                           --grid_index_start $task --n_grid $n_grid \
-                           --sampling_draws 2048 --warmup 512 \
-                           --maxfluxfactor 2 \
-                           --outbase $outbase $extra_flags
+python test_sersic_mixture.py  --test_grid ./test_grid.yml \
+                               --splinedatafile sersic_splinedata.h5 \
+                               --add_noise 1 \
+                               --dir $outdir
 
-echo "sample results at $outbase"
 
 date
