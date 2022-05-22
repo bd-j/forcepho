@@ -141,8 +141,11 @@ if __name__ == "__main__":
     parser.add_argument("--dir", type=str, default="./output/hst/")
     parser.add_argument("--test_grid", type=str, default="./test_hstpsf_grid.yml")
     parser.add_argument("--start", type=int, default=0)
-    # I/O
+    # filter/psf
+    # parser.add_argument("--psfstore", type=str, default="./psf_hlf_ng4.h5")
+    parser.add_argument("--bandname", type=str, default="F435W")
     parser.add_argument("--psfdir", type=str, default="./psf_images/")
+    # I/O
     parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
     # sampling
@@ -156,11 +159,19 @@ if __name__ == "__main__":
     params = get_grid_params(config, start=config.start)
     tags = []
 
+    # --- decide the band/psf to use ---
+    thisband = config.bandname
+    config.bands = [thisband.upper()]
+    config.psfimage = os.path.join(config.psfdir, f"{thisband.lower()}_psf.fits")
+    config.banddir = os.path.join(config.dir, config.bandname)
+    # copy the psfdata
+    os.makedirs(config.banddir, exist_ok=True)
+    shutil.copy(config.psfimage, os.path.join(config.banddir, os.path.basename(config.psfimage)))
+    shutil.copy(config.psfstore, os.path.join(config.banddir, os.path.basename(config.psfstore)))
+
     # loop over grid, generating images and fitting
     for param in params:
         # set parameters in config
-        config.psfimage = os.path.join(config.psfdir, f"{param['band'].lower()}_psf.fits")
-        config.bands = [param["band"]]
         config.rhalf = [param["rhalf"]]
         config.sersic = [param["sersic"]]
         config.q = [param["q"]]
@@ -173,11 +184,10 @@ if __name__ == "__main__":
 
         # make directories and names
         config.tag = make_tag(config)
-        config.outdir = os.path.join(config.dir, config.tag)
+        config.outdir = os.path.join(config.banddir, config.tag)
         os.makedirs(config.outdir, exist_ok=True)
         config.outroot = os.path.join(config.outdir, config.tag)
         config.image_name = f"{config.outroot}_data.fits"
-        #shutil.copy(config.psfimage, os.path.join(config.outdir, os.path.basename(config.psfimage)))
 
         # ---------------------
         # --- Make the data ---
@@ -212,12 +222,15 @@ if __name__ == "__main__":
 
     # Make summary plots
     grid = config.test_grid.replace(".yml", ".fits")
-    shutil.copy(grid, os.path.join(config.dir, os.path.basename(grid)))
+    shutil.copy(grid, os.path.join(config.banddir, os.path.basename(grid)))
     tcat = fits.getdata(grid)
     scat = make_catalog(tags)
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "fwhm")]
     for show, by in comp:
         fig, axes = compare_parameters(scat, tcat, show, colorby=by)
-        fig.savefig(os.path.join(config.dir, f"{show}_comparison.pdf"))
+        fig.savefig(os.path.join(config.banddir, f"{show}_comparison.pdf"))
         pl.close(fig)
+
+    fig, axes = compare_apflux(scat, tcat)
+    fig.savefig(os.path.join(config.banddir, "flux_comparison.png"), dpi=200)
 
