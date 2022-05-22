@@ -219,7 +219,10 @@ def galsim_model(scene, stamp, psf=None, verbose=False):
 
 def get_galsim_psf(scale, psfimage=None, sigma_psf=1.0,
                    psfmixture=None):
-    """
+    """If an image is given, this looks for the "DETSAMP" keyword that gives the
+    number of PSF image pixels per science detector pixel, to accomodate
+    oversampled PSF images.
+
     Parameters
     ----------
     scale : float
@@ -233,8 +236,8 @@ def get_galsim_psf(scale, psfimage=None, sigma_psf=1.0,
     """
     if psfimage:
         with fits.open(psfimage) as hdul:
-            det_samp = hdul[1].header.get("DETSAMP", 1.0)
-            psfim = hdul[1].data.astype(np.float64)
+            det_samp = hdul[0].header.get("DETSAMP", 1.0)
+            psfim = hdul[0].data.astype(np.float64)
             pim = galsim.Image(np.ascontiguousarray(psfim), scale=scale/det_samp)
             gpsf = galsim.InterpolatedImage(pim)
     elif psfmixture:

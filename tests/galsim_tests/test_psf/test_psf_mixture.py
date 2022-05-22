@@ -32,8 +32,7 @@ except:
     HASGPU = False
 
 
-__all__ = ["get_superscene",
-           "fit_test_image"]
+__all__ = ["make_image", "fit_image"]
 
 
 if HASGPU:
@@ -44,10 +43,10 @@ else:
         pass
 
 
-def make_tag(config):  #, params, names):
-    # this could be programmatic, but it would be annoying to write.
+def make_tag(config):
+    # this could be programmitic
     tag = f"sersic{config.sersic[0]:.1f}_rhalf{config.rhalf[0]:.3f}_q{config.q[0]:01.2f}"
-    tag += f"_fwhm{config.sigma_psf[0]*2.355:01.1f}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
+    tag += f"_band{config.bands[0]}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
     return tag
 
 
@@ -58,12 +57,8 @@ def make_image(config):
     scene = make_scene(stamp, dist_frac=config.dist_frac,
                        q=config.q, pa=config.pa,
                        rhalf=config.rhalf, sersic=config.sersic)
-    # Render the scene in galsim, including PSF
-    psf = get_galsim_psf(scale, sigma_psf=sigma)
-    try:
-        make_psfstore(config.psfstore, band, sigma, nradii=9)
-    except(ValueError):
-        pass
+    # Render the scene in galsim
+    psf = get_galsim_psf(scale, psfimage=config.psfimage)
     im = galsim_model(scene, stamp, psf=psf)
 
     # Noisify
@@ -79,6 +74,7 @@ def make_image(config):
     hdr["FILTER"] = band
     hdr["SNR"] = config.snr
     hdr["NOISED"] = config.add_noise
+    hdr["PSF"] = config.psfimage
     write_fits_to(config.image_name, im, unc, hdr, config.bands,
                   noise=noise, scene=scene)
     hdul.close()
@@ -93,7 +89,7 @@ def fit_image(config):
     sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
                                statefile=os.path.join(config.outdir, "final_scene.fits"),
                                roi=cat["rhalf"] * 5,
-                               bounds_kwargs=dict(n_pix=1.0, rhalf_range=(0.03, 1.0), sersic_range=(0.8, 5.0)),
+                               bounds_kwargs=dict(n_pix=1.5, rhalf_range=(0.03, 1.0), sersic_range=(0.8, 5.0)),
                                target_niter=config.sampling_draws)
 
     # load the image data
@@ -139,13 +135,15 @@ if __name__ == "__main__":
                         scales=[0.03],
                         sigma_psf=[2.5],
                         rhalf=[0.2],
-                        sersic=[2.0])
+                        sersic=[2.0],
+                        psfstore="./psf_hlf_ng4.h5")
     parser.add_argument("--tag", type=str, default="")
-    parser.add_argument("--dir", type=str, default="./output")
-    parser.add_argument("--test_grid", type=str, default="./test_sersic_grid.yml")
+    parser.add_argument("--dir", type=str, default="./output/hst/")
+    parser.add_argument("--test_grid", type=str, default="./test_hstpsf_grid.yml")
     parser.add_argument("--start", type=int, default=0)
     # I/O
-    parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
+    parser.add_argument("--psfdir", type=str, default="./psf_images/")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=2048)
@@ -155,20 +153,21 @@ if __name__ == "__main__":
     config = parser.parse_args()
 
     # --- Set up the grid ---
-    params = get_grid_params(config, start=config.start, tagger=make_tag)
+    params = get_grid_params(config, start=config.start)
     tags = []
 
     # loop over grid, generating images and fitting
-    for i, param in enumerate(params):
+    for param in params:
         # set parameters in config
+        config.psfimage = os.path.join(config.psfdir, f"{param['band'].lower()}_psf.fits")
+        config.bands = [param["band"]]
         config.rhalf = [param["rhalf"]]
         config.sersic = [param["sersic"]]
         config.q = [param["q"]]
-        config.sigma_psf = [param["fwhm"]/2.355]
         config.snr = param["snr"]
         config.pa = 0
 
-        size_img = int(np.clip(20.0*config.rhalf[0] / config.scales[0], 64, 256))
+        size_img = int(np.clip(20.0*config.rhalf[0]/config.scales[0], 64, 256))
         config.nx = size_img
         config.ny = size_img
 
@@ -177,8 +176,8 @@ if __name__ == "__main__":
         config.outdir = os.path.join(config.dir, config.tag)
         os.makedirs(config.outdir, exist_ok=True)
         config.outroot = os.path.join(config.outdir, config.tag)
-        config.psfstore = f"{config.outroot}_psf.h5"
         config.image_name = f"{config.outroot}_data.fits"
+        #shutil.copy(config.psfimage, os.path.join(config.outdir, os.path.basename(config.psfimage)))
 
         # ---------------------
         # --- Make the data ---
@@ -188,7 +187,6 @@ if __name__ == "__main__":
         # --------------------
         # --- Fit the data ---
         fit_image(config)
-        tags.append(config.outroot)
 
         # --------------------
         # --- make figures ---
@@ -210,17 +208,16 @@ if __name__ == "__main__":
         rfig.savefig(f"{config.outroot}_residual.png", dpi=200)
         pl.close(rfig)
 
+        tags.append(config.outroot)
+
     # Make summary plots
     grid = config.test_grid.replace(".yml", ".fits")
     shutil.copy(grid, os.path.join(config.dir, os.path.basename(grid)))
     tcat = fits.getdata(grid)
     scat = make_catalog(tags)
-    fits.writeto(os.path.join(config.dir, "ensemble_chains.fits"), scat)
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "fwhm")]
     for show, by in comp:
         fig, axes = compare_parameters(scat, tcat, show, colorby=by)
         fig.savefig(os.path.join(config.dir, f"{show}_comparison.pdf"))
         pl.close(fig)
 
-    fig, axes = compare_apflux(scat, tcat)
-    fig.savefig(os.path.join(config.dir, "flux_comparison.png"), dpi=200)
