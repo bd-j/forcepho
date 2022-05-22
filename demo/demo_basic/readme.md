@@ -12,8 +12,8 @@ ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 
 ## usage
 
-Generate, fit, and plot corner, trace, and residuals
+Generate image, fit it, and plot corner, trace, and residuals
 ```sh
-python single.py --sersic 1.6 --rhalf 0.08 --snr 100 --add_noise 0
-python single_plot.py tests/sersic1.6_rhalf0.080_snr100_noise0/sersic1.6_rhalf0.080_snr100_noise0
+python basic.py --sersic 1.6 --rhalf 0.08 --snr 100 --add_noise 0
+python basic_plot.py tests/sersic1.6_rhalf0.080_snr100_noise0/sersic1.6_rhalf0.080_snr100_noise0
 ```
