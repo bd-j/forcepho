@@ -5,7 +5,7 @@ make mock images using GalSim and to fit them with forcepho.  Code is also
 included for plotting some results. Each demo has a readme that describes the
 contents and the aim, and how to run the scripts. It would be nice to show
 
-- [x] `demo_basic/` - Basic: Trace, residuals, and corner plot for a single
+- [x] `demo_snr/` - Basic: Trace, residuals, and corner plot for a single
    source in a single band.  Show posterior PDFs as a function of S/N
 
 - [x] `demo_pair/` - Pairs: The covariances between adjacent sources as a
@@ -17,7 +17,7 @@ contents and the aim, and how to run the scripts. It would be nice to show
 - [x] `demo_mosaic/` - Mosaics: The impact of pixel covariances by fitting at
     the exposure level and then at the mosaic level.
 
-- [ ] `demo_scene/` - Demonstrating the use of superscenes to sample smaller
+- [x] `demo_scene/` - Demonstrating the use of superscenes to sample smaller
     scenes in a Gibbs-like fashion.
 
 - [ ] Bulge/Disk - fit two sources with a common center but different profiles

@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # input
     parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
-    parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--image_name", type=str, default="./single_snr030.fits")
     # output
     parser.add_argument("--write_residuals", type=int, default=1)

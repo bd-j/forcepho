@@ -7,7 +7,7 @@ Generate a galsim image with specific parameters and fit it with forcepho.
 ```sh
 # get some common info
 ln -s ../demo_utils.py demo_utils.py
-ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 ```
 
 ## usage

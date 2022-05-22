@@ -5,7 +5,7 @@ In this demo we simultaneously fit two nearby sources in a single exposure.
 ```sh
 # get some common info
 ln -s ../demo_utils.py demo_utils.py
-ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 
 # make the mock image, with no noise realization added
 python pair_make.py --add_noise 0

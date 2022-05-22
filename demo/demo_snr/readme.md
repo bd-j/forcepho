@@ -1,4 +1,4 @@
-# Demo: Basic
+# Demo: SNR
 
 In this demo we make and fit a single source in a single exposure but at
 different S/N, and explore how the posteriors change as a function of S/N
@@ -6,7 +6,7 @@ different S/N, and explore how the posteriors change as a function of S/N
 ```sh
 # get some common info
 ln -s ../demo_utils.py demo_utils.py
-ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 
 # make the test images
 python single_make.py --add_noise 0 --snrlist 10 30 100

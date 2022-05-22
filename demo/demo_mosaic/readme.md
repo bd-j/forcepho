@@ -7,7 +7,7 @@ S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and 
 ```sh
 # get some common info
 ln -s ../demo_utils.py demo_utils.py
-ln -s ../data/sersic_mog_model.smooth\=0.0150.h5 sersic_mog_model.smooth\=0.0150.h5
+ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 
 # make dithers
 python mosaic_make_dithers.py --snr 15 --add_noise 0

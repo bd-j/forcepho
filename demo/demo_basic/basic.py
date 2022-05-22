@@ -41,7 +41,7 @@ if __name__ == "__main__":
                         sersic=[2.0])
     parser.add_argument("--tag", type=str, default="")
     # I/O
-    parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=2048)
