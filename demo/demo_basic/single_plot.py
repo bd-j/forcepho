@@ -1,56 +1,70 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys, os, glob
 import argparse
+from copy import deepcopy
 import numpy as np
+
 import matplotlib.pyplot as pl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+from matplotlib.ticker import FormatStrFormatter
 
 from forcepho.postprocess import Samples, Residuals
 from prospect.plotting.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
 
-
-def multispan(parsets):
-    spans = []
-    for x in parsets:
-        spans.append(get_spans(None, x, weights=None))
-    spans = np.array(spans)
-    span = spans[:, :, 0].min(axis=0), spans[:, :, 1].max(axis=0)
-    span = tuple(np.array(span).T)
-    return span
+fsize = 8, 9.5
 
 
-def plot_corner(patchnames, band="CLEAR", smooth=0.05):
+def plot_trace(patchname, title_fmt=".2g", fsize=fsize):
+    samples = Samples(patchname)
+    fig, axes = pl.subplots(7, sharex=True, figsize=fsize)
+    samples.show_chain(0, axes=np.array(axes), truth=samples.active[0])
+    for i, c in enumerate(samples.bands + samples.shape_cols):
+        ax = axes[i]
+        xx = samples.chaincat[0][c]
+        truth = samples.active[c][0]
+        lim = np.percentile(xx, [1, 99])
+        ax.set_ylim(*lim)
+        v = np.percentile(xx, [16, 50, 84])
+        qm, qp = np.diff(v)
+        p = np.max(np.ceil(np.abs(np.log10(np.diff(v))))) + 1
+        # could do better here about automating the format
+        cfmt = "{{:.{}g}}".format(int(p)).format
+        fmt = "{{0:{0}}}".format(title_fmt).format
+        title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+        title = title.format(cfmt(v[1]), fmt(qm), fmt(qp))
+        ax.text(1.0, 0.7, title, color="blue", transform=ax.transAxes)
+        ax.text(1.0, 0.2, cfmt(truth), color="red", transform=ax.transAxes)
 
-    legends = [f"S/N={s:.0f}" for s in [10, 30, 100]]
-    colors = ["slateblue", "darkorange", "firebrick"]
+    axes[-1].set_xlabel("HMC iteration")
 
-    labels = ["Flux", r'R$_{half}$ (")', r"$n_{\rm sersic}$", r"$\sqrt{b/a}$", r"PA (radians)"]
-    show = [band, "rhalf", "sersic", "q", "pa"]
-    print(show)
-    xx = []
-    for name in patchnames:
-        s = Samples(name)
-        x = np.array([s.chaincat[c][0] for c in show])
-        xx.append(x)
-        n_tune = s.n_tune
+    return fig, axes
 
-    span = multispan([x[:, n_tune:] for x in xx])
-    kwargs = dict(hist_kwargs=dict(alpha=0.65, histtype="stepfilled"))
 
-    truths = np.atleast_2d(xx[0][:, 0]).T
+def plot_corner(patchname, smooth=0.05, hkwargs=dict(alpha=0.65),
+                dkwargs=dict(color="red", marker="."), fsize=(8, 8)):
+    from prospect.plotting.corner import allcorner, scatter
+    samples = Samples(patchname)
+    truth = np.atleast_2d(samples.starting_position)
+    labels = samples.chaincat.dtype.names[1:]
 
-    fig, axes = pl.subplots(len(labels), len(labels), figsize=(12, 12))
-    for x, color in zip(xx, colors):
-        axes = corner(x[:, n_tune:], axes, span=span, color=color, **kwargs)
-    scatter(truths, axes, zorder=20, marker="o", color="k", edgecolor="k")
-    prettify_axes(axes, labels, label_kwargs=dict(fontsize=12), tick_kwargs=dict(labelsize=10))
-    [ax.axvline(t, linestyle=":", color="k") for ax, t in zip(np.diag(axes), truths[:, 0])]
+    fig, axes = pl.subplots(7, 7, figsize=fsize)
+    axes = allcorner(samples.chain.T, labels, axes,
+                     color="royalblue",  # qcolor="black",
+                     psamples=truth.T,
+                     smooth=smooth, hist_kwargs=hkwargs,
+                     samples_kwargs=dkwargs)
+    for i, ax in enumerate(np.diag(axes)):
+        ax.axvline(truth[0, i], color="red")
+        if (labels[i] == "ra") | (labels[i] == "dec"):
+            axes[i, 0].yaxis.set_major_formatter(FormatStrFormatter('%.2g'))
+            axes[-1, i].xaxis.set_major_formatter(FormatStrFormatter('%.2g'))
 
-    from matplotlib.patches import Patch
-    artists = [Patch(color=color, alpha=0.6) for color in colors]
-    fig.legend(artists, legends, loc='upper right', bbox_to_anchor=(0.8, 0.8),
-               frameon=True, fontsize=14)
+    ymap = get_map(samples)
+    scatter(ymap.T, axes, zorder=20, color="k", marker=".")
+    for ax, val in zip(np.diag(axes), ymap[0]):
+        ax.axvline(val, linestyle=":", color="k")
 
     return fig, axes
 
@@ -74,45 +88,37 @@ def plot_residual(patchname, vmin=-1, vmax=5, rfig=None, raxes=None):
     return rfig, raxes, cb, val
 
 
-def plot_traces(patchname, fig=None, axes=None):
-    s = Samples(patchname)
-    if axes is None:
-        fig, axes = pl.subplots(7, 1, sharex=True)
-    truth = s.get_sample_cat(0)
-    s.show_chain(axes=axes, truth=truth, bandlist=["CLEAR"])
+def get_map(s):
+    lnp = s.stats["model_logp"]
+    ind_ml = np.argmax(lnp)
+    #row_map = s.get_sample_cat(ind_ml)[0]
+    #ymap = np.atleast_2d([row_map[c] for c in s.bands + s.shape_cols])
+    ymap = np.atleast_2d(s.chain[ind_ml, :])
 
-    span = 0.999999426697
-    q = 100 * np.array([0.5 - 0.5 * span, 0.5 + 0.5 * span])
-    lim = np.percentile(s.chaincat["CLEAR"], list(q))
-    axes[0].set_ylim(*lim)
-
-    labels = [r"Flux", r"RA", r"Dec", r"$\sqrt{b/a}$", r"PA (radians)", r"$n_{\rm sersic}$", r'R$_{half}$ (")']
-    for i, ax in enumerate(axes):
-        ax.set_ylabel(labels[i])
-        y = ax.get_ylim()
-        ax.fill_betweenx(y, [0, 0], [s.n_tune, s.n_tune], alpha=0.3, color="gray")
-    ax.set_xlim(0, s.chain.shape[0])
-    ax.set_xlabel("HMC iteration")
-
-    return fig, axes
+    return ymap
 
 
 if __name__ == "__main__":
 
-    patchnames = [f"./output/v1/patches/patch_single_snr{s:03.0f}_samples.h5"
-                  for s in [10, 30, 100]]
+    tdir = sys.argv[1]
+    patchname = f"{tdir}_samples.h5"
+    dirname = os.path.dirname(patchname)
+    tag = os.path.basename(patchname).replace(".h5", "")
+    title = tag.replace("_", ", ")
 
-    fig, axes = plot_corner(patchnames)
-    fig.savefig("corner_snr.png", dpi=300)
-    pl.close(fig)
+    tfig, ax = plot_trace(patchname)
+    tfig.suptitle(title)
+    tfig.tight_layout()
+    tfig.savefig(f"{dirname}/{tag}_trace.png", dpi=200)
+    pl.close(tfig)
 
-    fig, axes, cb, val = plot_residual(patchnames[1])
-    fig.suptitle("S/N=30")
-    fig.savefig("residuals.png", dpi=300)
-    pl.close(fig)
+    cfig, caxes = plot_corner(patchname)
+    cfig.text(0.4, 0.8, title, transform=cfig.transFigure)
+    cfig.savefig(f"{dirname}/{tag}_corner.png", dpi=200)
+    pl.close(cfig)
 
-    fig, axes = pl.subplots(7, 1, sharex=True, figsize=(5, 8))
-    fig, axes = plot_traces(patchnames[1], fig=fig, axes=axes)
-    fig.suptitle("S/N=30")
-    fig.savefig("trace.png", dpi=300)
-    pl.close(fig)
+    rfig, raxes, rcb, val = plot_residual(patchname)
+    rfig.savefig(f"{dirname}/{tag}_residual.png", dpi=200)
+    pl.close(rfig)
+
+    sys.exit()

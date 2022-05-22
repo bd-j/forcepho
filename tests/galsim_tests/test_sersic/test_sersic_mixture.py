@@ -44,8 +44,8 @@ else:
         pass
 
 
-def make_tag(config):
-    # this could be programmitic
+def make_tag(config):  #, params, names):
+    # this could be programmatic, but it would be annoying to write.
     tag = f"sersic{config.sersic[0]:.1f}_rhalf{config.rhalf[0]:.3f}_q{config.q[0]:01.2f}"
     tag += f"_fwhm{config.sigma_psf[0]*2.355:01.1f}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
     return tag
@@ -142,7 +142,7 @@ if __name__ == "__main__":
                         sersic=[2.0])
     parser.add_argument("--tag", type=str, default="")
     parser.add_argument("--dir", type=str, default="./output")
-    parser.add_argument("--test_grid", type=str, default="./test_sersic.yml")
+    parser.add_argument("--test_grid", type=str, default="./test_sersic_grid.yml")
     parser.add_argument("--start", type=int, default=0)
     # I/O
     parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
@@ -155,8 +155,10 @@ if __name__ == "__main__":
     config = parser.parse_args()
 
     # --- Set up the grid ---
-    params = get_grid_params(config, start=config.start)
+    params = get_grid_params(config, start=config.start, tagger=make_tag)
     tags = []
+
+    sys.exit()
 
     # loop over grid, generating images and fitting
     for i, param in enumerate(params):
@@ -168,7 +170,7 @@ if __name__ == "__main__":
         config.snr = param["snr"]
         config.pa = 0
 
-        size_img = int(np.clip(20.0*config.rhalf[0]/config.scales[0], 64, 256))
+        size_img = int(np.clip(20.0*config.rhalf[0] / config.scales[0], 64, 256))
         config.nx = size_img
         config.ny = size_img
 
