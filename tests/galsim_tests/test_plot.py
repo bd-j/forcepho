@@ -101,7 +101,10 @@ def get_map(s):
 def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
 
     # Get catalog data type
-    s = Samples(f"{tagnames[0]}_samples.h5")
+    for tag in tagnames:
+        if os.path.exists(f"{tag}_samples.h5"):
+            s = Samples(f"{tag}_samples.h5")
+            break
     n_sample, shapes = s.n_sample, s.shape_cols
     scols = bands + shapes
     icols = [("id", "<i4"), ("wall", "<f4"), ("lnp", "<f8", n_sample)]
@@ -113,6 +116,8 @@ def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
     # Make and fill the catalog
     cat["id"] = -1
     for p, tag in enumerate(tagnames):
+        if not os.path.exists(f"{tag}_samples.h5"):
+            continue
         s = Samples(f"{tag}_samples.h5")
         if s.n_sample != n_sample:
             print(f"sizes do not match for patch {p}")
@@ -149,6 +154,7 @@ def compare_parameters(scat, tcat, parname, point_type="median",
 
     dfig, daxes = pl.subplots(len(splits), 1, sharex=True,
                               figsize=(8, 1+3*len(splits)))
+    daxes = np.atleast_1d(daxes)
     for i, s in enumerate(splits):
         ax = daxes[i]
         sel = (scat["id"] >= 0) & (tcat[splitby] == s)
@@ -166,12 +172,24 @@ def compare_parameters(scat, tcat, parname, point_type="median",
     return dfig, daxes
 
 
-def compare_apflux(scat, tcat, colorby="fwhm"):
-    aflux, tflux = aperture_flux(scat, tcat)
+def compare_apflux(scat, tcat, band=["CLEAR"], colorby="fwhm"):
+    aflux, tflux = aperture_flux(scat, tcat, band=band)
+    aflux = aflux[0]
     ffig, faxes = pl.subplots(figsize=(8, 4))
+    print(aflux.shape)
     print(aflux.mean(axis=-1).shape, tcat[colorby].shape)
-    cb = faxes.scatter(tcat["snr"] * np.random.uniform(0.9, 1.1, len(tcat)),
-                       aflux.mean(axis=-1) * 2.0, c=tcat[colorby], alpha=0.5)
+
+    jitter = np.random.uniform(0.9, 1.1, len(tcat))
+    x = tcat["snr"] * jitter
+    yy = aflux * 2.0
+    y = np.percentile(yy, [16, 50, 84], axis=-1)
+    print(x.shape, y.shape)
+
+    faxes.errorbar(x, y[1, :], np.diff(y, axis=0),
+                   marker="", linestyle="", color="gray")
+    cb = faxes.scatter(x, yy.mean(axis=-1),
+                       c=tcat[colorby], alpha=0.75)
+
     ffig.colorbar(cb, orientation="vertical", label=colorby)
     faxes.axhline(1.0, color="k", linestyle=":")
     faxes.set_xlabel("SNR")
@@ -185,7 +203,7 @@ def aperture_flux(scat, truths, band=["CLEAR"]):
     from forcepho.utils import frac_sersic
     rhalf = truths["rhalf"]
     fr = frac_sersic(rhalf[:, None], sersic=scat["sersic"], rhalf=scat["rhalf"])
-    total_flux = np.array([scat[i][b] for i, b in enumerate(band)])
+    total_flux = np.array([scat[b] for i, b in enumerate(band)])
     aperture_flux = total_flux * fr
 
     return aperture_flux, total_flux

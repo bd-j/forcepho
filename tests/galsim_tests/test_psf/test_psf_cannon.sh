@@ -18,7 +18,7 @@ module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
 module load cuda/11.4.2-fasrc01     # HeLmod latest
 module load Anaconda3/5.0.1-fasrc01 # HeLmod w/o hdf5, matplotlib
 
-export PROJECT_DIR=$PWD/..
+export PROJECT_DIR=$PWD
 cd $PROJECT_DIR
 source activate force
 
@@ -29,7 +29,7 @@ outdir=./output/hst_noiseless
 rm -rf $outdir
 
 # -- make and fit the galsim image ---
-python test_psf_mixture.py  --test_grid ./test_psf_grid.yml \
+python test_psf_mixture.py  --test_grid ./test_hstpsf_grid.yml \
                             --splinedatafile ./sersic_splinedata.h5 \
                             --psfstore ./psf_hlf_ng4.h5 \
                             --bandname $band \

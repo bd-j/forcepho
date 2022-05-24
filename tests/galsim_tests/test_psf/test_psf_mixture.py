@@ -11,7 +11,7 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin, GPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import write_to_disk
+from forcepho.utils import write_to_disk, NumpyEncoder
 from forcepho.fitting import run_lmc
 from forcepho.postprocess import Samples
 
@@ -21,7 +21,7 @@ from test_utils import get_galsim_psf, galsim_model, compute_noise_level
 from test_utils import make_psfstore, write_fits_to
 
 from test_plot import plot_trace, plot_corner, plot_residual
-from test_plot import make_catalog, compare_parameters
+from test_plot import make_catalog, compare_parameters, compare_apflux
 
 try:
     import pycuda
@@ -48,6 +48,18 @@ def make_tag(config):
     tag = f"sersic{config.sersic[0]:.1f}_rhalf{config.rhalf[0]:.3f}_q{config.q[0]:01.2f}"
     tag += f"_band{config.bands[0]}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
     return tag
+
+
+def make_all_tags(grid, config):
+    from argparse import Namespace
+    pars = Namespace(add_noise=config.add_noise,
+                     bands=config.bands)
+    tags = []
+    for row in grid:
+        [setattr(pars, p, [row[p]]) for p in ["sersic", "rhalf", "q"]]
+        [setattr(pars, p, row[p]) for p in ["snr"]]
+        tags.append(make_tag(pars))
+    return tags
 
 
 def make_image(config):
@@ -144,7 +156,8 @@ if __name__ == "__main__":
     # filter/psf
     # parser.add_argument("--psfstore", type=str, default="./psf_hlf_ng4.h5")
     parser.add_argument("--bandname", type=str, default="F435W")
-    parser.add_argument("--psfdir", type=str, default="./psf_images/")
+    parser.add_argument("--psfdir", type=str, default="./psf_images/",
+                        help="directory continaing the PSF images as <band>_psf.fits")
     # I/O
     parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
@@ -155,10 +168,6 @@ if __name__ == "__main__":
     parser.add_argument("--progressbar", type=int, default=0)
     config = parser.parse_args()
 
-    # --- Set up the grid ---
-    params = get_grid_params(config, start=config.start)
-    tags = []
-
     # --- decide the band/psf to use ---
     thisband = config.bandname
     config.bands = [thisband.upper()]
@@ -168,6 +177,17 @@ if __name__ == "__main__":
     os.makedirs(config.banddir, exist_ok=True)
     shutil.copy(config.psfimage, os.path.join(config.banddir, os.path.basename(config.psfimage)))
     shutil.copy(config.psfstore, os.path.join(config.banddir, os.path.basename(config.psfstore)))
+    # copy the config data
+    with open(f"{config.banddir}/config.json", "w") as cfg:
+        json.dump(vars(config), cfg, cls=NumpyEncoder)
+
+    # --- Set up the grid ---
+    params = get_grid_params(config, start=config.start)
+    # write the input grid
+    gname = config.test_grid.replace(".yml", ".fits")
+    outgridname = os.path.join(config.banddir, os.path.basename(gname))
+    fits.writeto(outgridname, params, overwrite=True)
+    tags = []
 
     # loop over grid, generating images and fitting
     for param in params:
@@ -221,16 +241,18 @@ if __name__ == "__main__":
         tags.append(config.outroot)
 
     # Make summary plots
-    grid = config.test_grid.replace(".yml", ".fits")
-    shutil.copy(grid, os.path.join(config.banddir, os.path.basename(grid)))
-    tcat = fits.getdata(grid)
-    scat = make_catalog(tags)
-    comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "fwhm")]
+    tcat = fits.getdata(outgridname)
+    tags = make_all_tags(tcat, config)
+    tags = [os.path.join(config.banddir, tag, tag) for tag in tags]
+    scat = make_catalog(tags, bands=config.bands)
+    fits.writeto(os.path.join(config.banddir, "ensemble_chains.fits"), scat)
+
+    comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "rhalf")]
     for show, by in comp:
         fig, axes = compare_parameters(scat, tcat, show, colorby=by)
         fig.savefig(os.path.join(config.banddir, f"{show}_comparison.pdf"))
         pl.close(fig)
 
-    fig, axes = compare_apflux(scat, tcat)
-    fig.savefig(os.path.join(config.banddir, "flux_comparison.png"), dpi=200)
+    fig, axes = compare_apflux(scat, tcat, band=config.bands, colorby="rhalf")
+    fig.savefig(os.path.join(config.banddir, "flux_comparison.pdf"), dpi=200)
 

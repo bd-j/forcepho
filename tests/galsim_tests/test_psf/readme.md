@@ -12,13 +12,14 @@ otherwise the CPU will be used.
 # get some common info
 ln -s ../test_plot.py test_plot.py
 ln -s ../test_utils.py test_utils.py
-ln -s ../../data/sersic_splinedata.h5 sersic_splinedata.h5
+ln -s ../../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 
 # make and fit the test images
-python test_sersic_mixture.py  --test_grid ./test_hstpsf_grid.yml \
-                               --splinedatafile sersic_splinedata.h5 \
-                               --add_noise 1 \
-                               --dir ./output/hst_psfs
+python test_psf_mixture.py  --test_grid ./test_hstpsf_grid.yml \
+                            --splinedatafile sersic_splinedata_large.h5 \
+                            --add_noise 0 \
+                            --bandname F435W \
+                            --dir ./output/cpu/hst_noiseless
 ```
 
 This will make a directory `./output/exact_noised/` that is filled with
@@ -34,7 +35,7 @@ different set of test parameters can be specified in a custom yaml file.
 Within each subdirectory `<tag>` there will be
 
 1. `<tag>_data.fits` - The mock data as a multi-extension FITS file.
-2. `<band>_psf.fits` - The FITS image sued for the mock PSF.
+2. `<band>_psf.fits` - The FITS image used for the mock PSF.
 3. `<tag>_samples.h5` - The output sampling chain and associated information
 4. `<tag>_residuals.h5` - The output residuals from the last iteration of the
    chain, and associated information

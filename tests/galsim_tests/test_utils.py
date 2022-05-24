@@ -41,7 +41,7 @@ def get_parser():
     return parser
 
 
-def get_grid_params(config, start=0, stop=None, tagger=None):
+def get_grid_params(config, start=0, stop=None):
 
     import yaml
 
@@ -51,24 +51,13 @@ def get_grid_params(config, start=0, stop=None, tagger=None):
         names = list(grid.keys())
         names.sort()
         params = list(product(*[grid[k] for k in names]))
+
         cols = list([(k, np.array(grid[k]).dtype) for k in names])
-
-        tags, tagsize = [], 0
-        if tagger is not None:
-            for p in params:
-                _ = [setattr(config, n, [p[i]]) for i, n in enumerate(names)]
-                config.snr = config.snr[0]  # HACK
-                config.sigma_psf = [config.fwhm[0] / 2.355]  # HACK
-                tags.append(tagger(config))
-                tagsize = max(tagsize, len(tags[-1]))
-            cols += [("tag", f"U{tagsize}")]
-            params = [(*p, t) for p, t in zip(params, tags)]
-
         dtype = np.dtype(cols)
         params = np.array(params, dtype=dtype)
 
-        fits.writeto(config.test_grid.replace("yml", "fits"),
-                     params, overwrite=True)
+        #fits.writeto(config.test_grid.replace("yml", "fits"),
+        #             params, overwrite=True)
 
     elif "fits" in config.test_grid[-5:]:
         params = fits.getdata(config.test_grid)

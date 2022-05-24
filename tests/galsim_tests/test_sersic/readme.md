@@ -13,6 +13,8 @@ be used.
 ln -s ../test_plot.py test_plot.py
 ln -s ../test_utils.py test_utils.py
 ln -s ../../data/sersic_splinedata.h5 sersic_splinedata.h5
+ln -s ../../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
+
 
 # make and fit the test images
 python test_sersic_mixture.py  --test_grid ./test_sersic_grid.yml \

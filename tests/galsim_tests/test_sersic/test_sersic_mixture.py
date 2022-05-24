@@ -11,7 +11,7 @@ from astropy.io import fits
 
 from forcepho.patches import FITSPatch, CPUPatchMixin, GPUPatchMixin
 from forcepho.superscene import LinkedSuperScene
-from forcepho.utils import write_to_disk
+from forcepho.utils import write_to_disk, NumpyEncoder
 from forcepho.fitting import run_lmc
 from forcepho.postprocess import Samples
 
@@ -32,8 +32,8 @@ except:
     HASGPU = False
 
 
-__all__ = ["get_superscene",
-           "fit_test_image"]
+__all__ = ["make_image",
+           "fit_image"]
 
 
 if HASGPU:
@@ -47,8 +47,20 @@ else:
 def make_tag(config):  #, params, names):
     # this could be programmatic, but it would be annoying to write.
     tag = f"sersic{config.sersic[0]:.1f}_rhalf{config.rhalf[0]:.3f}_q{config.q[0]:01.2f}"
-    tag += f"_fwhm{config.sigma_psf[0]*2.355:01.1f}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
+    tag += f"_fwhm{config.fwhm:01.1f}_snr{config.snr:03.0f}_noise{config.add_noise:.0f}"
     return tag
+
+
+def make_all_tags(grid, config):
+    from argparse import Namespace
+    pars = Namespace(add_noise=config.add_noise,
+                     fwhm=config.fwhm)
+    tags = []
+    for row in grid:
+        [setattr(pars, p, [row[p]]) for p in ["sersic", "rhalf", "q"]]
+        [setattr(pars, p, row[p]) for p in ["snr"]]
+        tags.append(make_tag(pars))
+    return tags
 
 
 def make_image(config):
@@ -145,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_grid", type=str, default="./test_sersic_grid.yml")
     parser.add_argument("--start", type=int, default=0)
     # I/O
-    parser.add_argument("--splinedatafile", type=str, default="./sersic_mog_model.smooth=0.0150.h5")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=2048)
@@ -154,8 +166,17 @@ if __name__ == "__main__":
     parser.add_argument("--progressbar", type=int, default=0)
     config = parser.parse_args()
 
+    # copy the config data
+    os.makedirs(config.dir, exist_ok=True)
+    with open(f"{config.dir}/config.json", "w") as cfg:
+        json.dump(vars(config), cfg, cls=NumpyEncoder)
+
     # --- Set up the grid ---
-    params = get_grid_params(config, start=config.start, tagger=make_tag)
+    params = get_grid_params(config, start=config.start)
+    # write the input grid
+    gname = config.test_grid.replace(".yml", ".fits")
+    outgridname = os.path.join(config.dir, os.path.basename(gname))
+    fits.writeto(outgridname, params, overwrite=True)
     tags = []
 
     # loop over grid, generating images and fitting
@@ -166,6 +187,7 @@ if __name__ == "__main__":
         config.q = [param["q"]]
         config.sigma_psf = [param["fwhm"]/2.355]
         config.snr = param["snr"]
+        config.fwhm = param["fwhm"]
         config.pa = 0
 
         size_img = int(np.clip(20.0*config.rhalf[0] / config.scales[0], 64, 256))
@@ -211,16 +233,17 @@ if __name__ == "__main__":
         pl.close(rfig)
 
     # Make summary plots
-    grid = config.test_grid.replace(".yml", ".fits")
-    shutil.copy(grid, os.path.join(config.dir, os.path.basename(grid)))
-    tcat = fits.getdata(grid)
-    scat = make_catalog(tags)
+    tcat = fits.getdata(outgridname)
+    tags = make_all_tags(tcat, config)
+    tags = [os.path.join(config.dir, tag, tag) for tag in tags]
+    scat = make_catalog(tags, bands=config.bands)
     fits.writeto(os.path.join(config.dir, "ensemble_chains.fits"), scat)
+
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "fwhm")]
     for show, by in comp:
         fig, axes = compare_parameters(scat, tcat, show, colorby=by)
         fig.savefig(os.path.join(config.dir, f"{show}_comparison.pdf"))
         pl.close(fig)
 
-    fig, axes = compare_apflux(scat, tcat)
+    fig, axes = compare_apflux(scat, tcat, bands=config.bands)
     fig.savefig(os.path.join(config.dir, "flux_comparison.png"), dpi=200)
