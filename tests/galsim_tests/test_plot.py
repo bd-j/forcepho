@@ -160,7 +160,7 @@ def compare_parameters(scat, tcat, parname, point_type="median",
         sel = (scat["id"] >= 0) & (tcat[splitby] == s)
         ax.errorbar(x[sel], y[1, sel], np.diff(y, axis=0)[:, sel],
                     marker="", linestyle="", color="gray")
-        cb = ax.scatter(x[sel], y[1, sel], c=tcat[colorby][sel], alpha=0.5,
+        cb = ax.scatter(x[sel], y[1, sel], c=tcat[colorby][sel], alpha=0.75,
                         vmin=colors.min(), vmax=colors.max())
         ax.plot(line, line, "k:")
         ax.text(0.8, 0.2, f"{splitby.upper()}={s}", transform=ax.transAxes)

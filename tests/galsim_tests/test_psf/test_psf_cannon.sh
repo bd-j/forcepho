@@ -29,7 +29,7 @@ outdir=./output/hst_noiseless
 rm -rf $outdir
 
 # -- make and fit the galsim image ---
-python test_psf_mixture.py  --test_grid ./test_hstpsf_grid.yml \
+python test_psf_mixture.py  --test_grid ./test_psf_grid.yml \
                             --splinedatafile ./sersic_splinedata.h5 \
                             --psfstore ./psf_hlf_ng4.h5 \
                             --bandname $band \

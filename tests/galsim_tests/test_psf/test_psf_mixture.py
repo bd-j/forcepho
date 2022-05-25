@@ -69,7 +69,7 @@ def make_image(config):
     scene = make_scene(stamp, dist_frac=config.dist_frac,
                        q=config.q, pa=config.pa,
                        rhalf=config.rhalf, sersic=config.sersic)
-    # Render the scene in galsim
+    # Render the scene in galsim, using image based PSF
     psf = get_galsim_psf(scale, psfimage=config.psfimage)
     im = galsim_model(scene, stamp, psf=psf)
 
@@ -151,12 +151,12 @@ if __name__ == "__main__":
                         psfstore="./psf_hlf_ng4.h5")
     parser.add_argument("--tag", type=str, default="")
     parser.add_argument("--dir", type=str, default="./output/hst/")
-    parser.add_argument("--test_grid", type=str, default="./test_hstpsf_grid.yml")
+    parser.add_argument("--test_grid", type=str, default="./test_psf_grid.yml")
     parser.add_argument("--start", type=int, default=0)
     # filter/psf
     # parser.add_argument("--psfstore", type=str, default="./psf_hlf_ng4.h5")
     parser.add_argument("--bandname", type=str, default="F435W")
-    parser.add_argument("--psfdir", type=str, default="./psf_images/",
+    parser.add_argument("--psfdir", type=str, default="./psf_images/hst",
                         help="directory continaing the PSF images as <band>_psf.fits")
     # I/O
     parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata.h5")
