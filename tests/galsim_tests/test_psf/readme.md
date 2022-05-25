@@ -33,7 +33,7 @@ python test_psf_mixture.py  --test_grid ./test_psf_grid.yml \
                             --splinedatafile sersic_splinedata_large.h5 \
                             --add_noise 0 \
                             --psfstore psf_hst_ng4.h5 \
-                            --psfdir ./psf_images/hst/ \
+                            --psfdir ./mixtures/psf_images/hst/ \
                             --bandname F435W \
                             --scales 0.03 \
                             --dir ./output/cpu/hst_noiseless

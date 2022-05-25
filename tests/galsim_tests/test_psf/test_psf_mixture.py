@@ -70,7 +70,7 @@ def make_image(config):
                        q=config.q, pa=config.pa,
                        rhalf=config.rhalf, sersic=config.sersic)
     # Render the scene in galsim, using image based PSF
-    psf = get_galsim_psf(scale, psfimage=config.psfimage)
+    psf = get_galsim_psf(scale, psfimage=config.psfimage, sigma_psf=None)
     im = galsim_model(scene, stamp, psf=psf)
 
     # Noisify
@@ -145,12 +145,12 @@ if __name__ == "__main__":
     parser = get_parser()
     parser.set_defaults(bands=["CLEAR"],
                         scales=[0.03],
-                        sigma_psf=[2.5],
                         rhalf=[0.2],
                         sersic=[2.0],
-                        psfstore="./psf_hlf_ng4.h5")
+                        add_noise=0,
+                        psfstore="./mixtures/psf_hlf_ng4.h5")
     parser.add_argument("--tag", type=str, default="")
-    parser.add_argument("--dir", type=str, default="./output/hst/")
+    parser.add_argument("--dir", type=str, default="./output/test/")
     parser.add_argument("--test_grid", type=str, default="./test_psf_grid.yml")
     parser.add_argument("--start", type=int, default=0)
     # filter/psf
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     parser.add_argument("--psfdir", type=str, default="./psf_images/hst",
                         help="directory continaing the PSF images as <band>_psf.fits")
     # I/O
-    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata.h5")
+    parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--write_residuals", type=int, default=1)
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=2048)

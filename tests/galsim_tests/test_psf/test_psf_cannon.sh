@@ -23,7 +23,9 @@ cd $PROJECT_DIR
 source activate force
 
 bands=( F435W F606W F775W F814W F850LP F105W F125W F140W F160W )
+scales=( 0.03  0.03  0.03  0.03   0.03  0.06  0.06  0.06  0.06 )
 band=${bands[$SLURM_ARRAY_TASK_ID]}
+scale=${scales[$SLURM_ARRAY_TASK_ID]}
 
 outdir=./output/hst_noiseless
 rm -rf $outdir
@@ -31,8 +33,10 @@ rm -rf $outdir
 # -- make and fit the galsim image ---
 python test_psf_mixture.py  --test_grid ./test_psf_grid.yml \
                             --splinedatafile ./sersic_splinedata.h5 \
-                            --psfstore ./psf_hlf_ng4.h5 \
+                            --psfstore ./mixtures/psf_hlf_ng4.h5 \
+                            --psfdir ./psf_images/hst/
                             --bandname $band \
+                            --scales $scale
                             --add_noise 0 \
                             --dir $outdir
 
