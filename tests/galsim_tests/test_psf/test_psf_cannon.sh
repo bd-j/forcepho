@@ -32,11 +32,11 @@ rm -rf $outdir
 
 # -- make and fit the galsim image ---
 python test_psf_mixture.py  --test_grid ./test_psf_grid.yml \
-                            --splinedatafile ./sersic_splinedata.h5 \
+                            --splinedatafile ./sersic_splinedata_large.h5 \
                             --psfstore ./mixtures/psf_hlf_ng4.h5 \
-                            --psfdir ./psf_images/hst/
+                            --psfdir ./psf_images/hst/ \
                             --bandname $band \
-                            --scales $scale
+                            --scales $scale \
                             --add_noise 0 \
                             --dir $outdir
 

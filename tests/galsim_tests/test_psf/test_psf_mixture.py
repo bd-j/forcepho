@@ -250,9 +250,11 @@ if __name__ == "__main__":
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "rhalf")]
     for show, by in comp:
         fig, axes = compare_parameters(scat, tcat, show, colorby=by)
-        fig.savefig(os.path.join(config.banddir, f"{show}_comparison.pdf"))
+        fig.suptitle(config.bandname)
+        fig.savefig(os.path.join(config.banddir, f"{config.bandname.lower()}_{show}_comparison.pdf"))
         pl.close(fig)
 
     fig, axes = compare_apflux(scat, tcat, band=config.bands, colorby="rhalf")
-    fig.savefig(os.path.join(config.banddir, "flux_comparison.pdf"), dpi=200)
+    fig.suptitle(config.bandname)
+    fig.savefig(os.path.join(config.banddir, f"{config.bandname.lower()}_flux_comparison.pdf"), dpi=200)
 
