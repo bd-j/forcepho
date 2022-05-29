@@ -362,6 +362,8 @@ class FITSPatch(PixelPatch):
                  splinedata="",
                  spline_smoothing=None,
                  return_residual=False,
+                 sci_ext=0,
+                 unc_ext=1,
                  meta_dtype=np.float32,
                  pix_dtype=np.float32,
                  debug=0,
@@ -376,6 +378,8 @@ class FITSPatch(PixelPatch):
                          spline_smoothing=spline_smoothing)
 
         self.fitsfiles = fitsfiles
+        self.sci_ext = sci_ext
+        self.unc_ext = unc_ext
         self.snr = None
         self.unc = None
 
@@ -397,7 +401,8 @@ class FITSPatch(PixelPatch):
         hdrs, wcses, epaths, bands
         """
         fitsfiles = np.array(self.fitsfiles)
-        imbands = np.array([fits.getheader(f)["FILTER"] for f in fitsfiles])
+        imbands = np.array([fits.getheader(f, self.sci_ext)["FILTER"]
+                            for f in fitsfiles])
 
         epaths, bands, hdrs, wcses = [], [], [], []
         for band in bandlist:
@@ -407,7 +412,7 @@ class FITSPatch(PixelPatch):
             for i, s in enumerate(sel):
                 if not s:
                     continue
-                hdr = fits.getheader(fitsfiles[i])
+                hdr = fits.getheader(fitsfiles[i], self.sci_ext)
                 wcs = WCS(hdr)
                 # rough check for region coverage
                 # NOTE: If bounding box entirely contains image this might fail
@@ -432,13 +437,13 @@ class FITSPatch(PixelPatch):
     def find_pixels(self, epath, wcs, region):
 
         # get pixel data, note the transpose
-        flux = fits.getdata(epath, 0).T
+        flux = fits.getdata(epath, self.sci_ext).T
         if getattr(self, "snr", None) is not None:
             ie = self.snr / flux
         elif getattr(self, "unc", None) is not None:
             ie = np.zeros_like(flux) + 1.0 / self.unc
         else:
-            ie = 1.0 / fits.getdata(epath, 1).T
+            ie = 1.0 / fits.getdata(epath, self.unc_ext).T
 
         bad = ~np.isfinite(flux) | ~np.isfinite(ie) | (ie < 0)
         ie[bad] = 0
