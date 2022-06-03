@@ -13,7 +13,7 @@ from astropy.io import fits
 from .sources import Galaxy
 
 
-__all__ = ["Logger", "NumpyEncoder",
+__all__ = ["Logger", "NumpyEncoder", "write_to_disk",
            "read_config", "update_config",
            "extract_block_diag",
            "make_statscat", "make_chaincat",
