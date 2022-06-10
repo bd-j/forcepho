@@ -21,7 +21,7 @@ from test_utils import get_galsim_psf, galsim_model, compute_noise_level
 from test_utils import make_psfstore, write_fits_to
 
 from test_plot import plot_trace, plot_corner, plot_residual
-from test_plot import make_catalog, compare_parameters
+from test_plot import make_catalog, compare_parameters, compare_apflux
 
 try:
     import pycuda
@@ -209,12 +209,14 @@ if __name__ == "__main__":
 
         # --------------------
         # --- Fit the data ---
+        patchname = f"{config.outroot}_samples.h5"
+        if os.path.exists(patchname):
+            continue
         fit_image(config)
         tags.append(config.outroot)
 
         # --------------------
         # --- make figures ---
-        patchname = f"{config.outroot}_samples.h5"
         title = config.tag.replace("_", ", ")
 
         tfig, ax = plot_trace(patchname)

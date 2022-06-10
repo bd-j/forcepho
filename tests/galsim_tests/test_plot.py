@@ -105,6 +105,8 @@ def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
         if os.path.exists(f"{tag}_samples.h5"):
             s = Samples(f"{tag}_samples.h5")
             break
+        else:
+            continue
     n_sample, shapes = s.n_sample, s.shape_cols
     scols = bands + shapes
     icols = [("id", "<i4"), ("wall", "<f4"), ("lnp", "<f8", n_sample)]
@@ -132,10 +134,14 @@ def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
 
 
 def compare_parameters(scat, tcat, parname, point_type="median",
-                       colorby="fwhm", splitby="snr"):
+                       colorby="fwhm", splitby="snr", onlymax=True):
 
     splits = np.unique(tcat[splitby])
     colors = np.unique(tcat[colorby])
+
+    # HACK
+    if onlymax:
+        splits = [splits[-1]]
 
     # xcoordinate
     x = tcat[parname].copy()
@@ -159,7 +165,7 @@ def compare_parameters(scat, tcat, parname, point_type="median",
         ax = daxes[i]
         sel = (scat["id"] >= 0) & (tcat[splitby] == s)
         ax.errorbar(x[sel], y[1, sel], np.diff(y, axis=0)[:, sel],
-                    marker="", linestyle="", color="gray")
+                    marker="", linestyle="", color="gray", alpha=0.7, zorder=0)
         cb = ax.scatter(x[sel], y[1, sel], c=tcat[colorby][sel], alpha=0.75,
                         vmin=colors.min(), vmax=colors.max())
         ax.plot(line, line, "k:")
@@ -186,9 +192,9 @@ def compare_apflux(scat, tcat, band=["CLEAR"], colorby="fwhm"):
     print(x.shape, y.shape)
 
     faxes.errorbar(x, y[1, :], np.diff(y, axis=0),
-                   marker="", linestyle="", color="gray")
+                   marker="", linestyle="", color="gray", alpha=0.7, zorder=0)
     cb = faxes.scatter(x, yy.mean(axis=-1),
-                       c=tcat[colorby], alpha=0.75)
+                       c=tcat[colorby], alpha=0.8)
 
     ffig.colorbar(cb, orientation="vertical", label=colorby)
     faxes.axhline(1.0, color="k", linestyle=":")

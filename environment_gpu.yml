@@ -18,6 +18,7 @@ dependencies:
   - galsim  # optional, for testing
   # Inference
   - pip:
+    - pycuda==2020.1
     - littlemcmc==0.2.*
   # Optional but recommended
   #- mpi4py>=3.1.0
