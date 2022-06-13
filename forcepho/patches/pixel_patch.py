@@ -102,6 +102,7 @@ class PixelPatch(Patch):
 
         # --- Get BAND information for the exposures ---
         # band_ids must be an int identifier (does not need to be contiguous)
+        allbands = list(allbands)
         band_ids = [allbands.index(b) for b in self.bands]
         assert (np.diff(band_ids) >= 0).all(), 'Exposures must be sorted by band'
         u, n = np.unique(band_ids, return_counts=True)
