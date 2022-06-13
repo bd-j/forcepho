@@ -65,6 +65,10 @@ if __name__ == "__main__":
     metadata = dict(title='Pair Movie', artist='Matplotlib',
                     comment='Posterior draws for a pair of sources')
     writer = FFMpegWriter(fps=args.fps, metadata=metadata)
+    
+    # make sure output directory exists
+    if not os.path.exists("movie/"):
+        os.makedirs("movie/")
 
     with writer.saving(fig, "movie/pair_posterior.mp4", 200):
 
