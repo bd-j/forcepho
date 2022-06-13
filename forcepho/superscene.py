@@ -844,7 +844,7 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
         ddec = np.array([n_pix * pixscale / 3600.])
 
     # Make empty bounds catalog
-    colnames = filternames + shapenames
+    colnames = list(filternames) + shapenames
     cols = [("source_index", np.int32)] + [(c, np.float64, (2,))
                                            for c in colnames]
     dtype = np.dtype(cols)
