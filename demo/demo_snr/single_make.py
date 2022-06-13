@@ -39,16 +39,18 @@ if __name__ == "__main__":
     # render the scene
     psf = get_galsim_psf(scale, sigma_psf=sigma)
     make_psfstore(config.psfstore, band, sigma, nradii=9)
-    im = galsim_model(scene, stamp, psf=psf)
+    im_no_noise = galsim_model(scene, stamp, psf=psf)
 
     for snr in config.snrlist:
         config.snr = snr
         noise_per_pix = compute_noise_level(scene, config)
 
-        unc = np.ones_like(im)*noise_per_pix
-        noise = np.random.normal(0, noise_per_pix, size=im.shape)
+        unc = np.ones_like(im_no_noise)*noise_per_pix
+        noise = np.random.normal(0, noise_per_pix, size=im_no_noise.shape)
         if config.add_noise:
-            im += noise
+            im = im_no_noise + noise
+        else:
+            im = im_no_noise    
 
         # --- write the test image ---
         hdul, wcs = stamp.to_fits()
