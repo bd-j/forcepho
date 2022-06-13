@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--patchname", type=str, default="")
+    parser.add_argument("--patchname", type=str, default="output/v1/patches/patch1_samples.h5")
     parser.add_argument("--thin", type=int, default=10)
     parser.add_argument("--fps", type=int, default=10)
     args = parser.parse_args()
