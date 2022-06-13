@@ -22,14 +22,14 @@ class StaticPatch(PatchBase):
     """
 
     def __init__(self,
-        stamps,            # A list of PostageStamp objects (exposure data) from FITS files
-        miniscene,         # All peaks identified in this patch region
-        mask=None,              # The mask that defines the nominal patch
-        super_pixel_size=1,  # Number of pixels in each superpixel
-        return_residual=False,
-        pix_dtype=np.float32,  # data type for pixel and flux data
-        meta_dtype=np.float32,   # data type for non-pixel data
-        ):
+                 stamps,            # A list of PostageStamp objects (exposure data) from FITS files
+                 miniscene,         # All peaks identified in this patch region
+                 mask=None,              # The mask that defines the nominal patch
+                 super_pixel_size=1,  # Number of pixels in each superpixel
+                 return_residual=False,
+                 pix_dtype=np.float32,  # data type for pixel and flux data
+                 meta_dtype=np.float32,   # data type for non-pixel data
+                 ):
         """
         Constructs a Patch from PostageStamps (exposures) and a MiniScene
         (a list of pre-identified peaks/sources).  The Patch packs the

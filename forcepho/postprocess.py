@@ -239,11 +239,11 @@ def postsample_catalog(root, catname=None, patches=None):
 
     # Get catalog data type
     s = Samples(f"{root}/patches/patch{patches[0]}_samples.h5")
-    bands, shapes, n_sample = s.bands, s.shape_cols, s.n_sample
+    bands, shapes, n_sample = list(s.bands), list(s.shape_cols), s.n_sample
+    params = bands + shapes
     icols = [("id", "<i4"), ("source_index", "<i4"), ("patch_id", "<i4"),
              ("wall", "<f4"), ("lnp", "<f8", n_sample)]
-    new = np.dtype(icols + [(c, float, n_sample)
-                            for c in bands + shapes])
+    new = np.dtype(icols + [(c, float, n_sample) for c in params])
 
     # Make and fill the catalog
     cat = np.zeros(len(final), np.dtype(new))
@@ -256,7 +256,7 @@ def postsample_catalog(root, catname=None, patches=None):
         cat["source_index"][inds] = inds
         cat["wall"][inds] = s.wall_time
         cat["lnp"][inds] = s.stats["model_logp"][-n_sample:]
-        for col in bands + shapes:
+        for col in params:
             cat[col][inds] = s.chaincat[col][:, -n_sample:]
 
     #cat = cat[cat["id"] >= 0]

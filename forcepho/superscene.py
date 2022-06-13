@@ -61,7 +61,7 @@ class SuperScene:
                  bounds_kwargs={}):
 
         self.statefilename = statefile
-        self.bands = bands
+        self.bands = list(bands)
         self.shape_cols = Galaxy.SHAPE_COLS
         if sourcecat is not None:
             self.bounds_kwargs = bounds_kwargs
