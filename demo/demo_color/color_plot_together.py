@@ -24,7 +24,7 @@ def total_corner(samples, bands=["BLUE", "RED"], smooth=0.05, hkwargs=dict(alpha
     truth = np.atleast_2d(xx[:, 0])
 
     axes = allcorner(xx[:, samples.n_tune:], labels, axes,
-                     upper=False,
+                     #upper=False,
                      color="royalblue",
                      psamples=truth.T,
                      smooth=smooth,
@@ -44,7 +44,7 @@ def color_corner(samples, bands=["BLUE", "RED"], smooth=0.05, hkwargs=dict(alpha
     truth = np.atleast_2d(xx[:, 0])
 
     axes = allcorner(xx[:, samples.n_tune:], labels, axes,
-                     upper=True,
+                     #upper=True,
                      color="royalblue",
                      psamples=truth.T,
                      smooth=smooth,
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--patchname", type=str, default="")
+    parser.add_argument("--patchname", type=str, default="output/together_v1/patches/patch_BLUE+RED_samples.h5")
     args = parser.parse_args()
 
     fig, raxes, paxes = plot_both(args.patchname)
