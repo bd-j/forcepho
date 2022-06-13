@@ -89,7 +89,7 @@ class Result(object):
         # --- Header ---
         self.patchID = patchID
         self.reference_coordinates = ref
-        self.bandlist = bands
+        self.bandlist = bands  # FIXME: keep bandlist a list? It gets converted to list when reading...
         self.shapenames = shapenames
 
         # --- basic info ---
