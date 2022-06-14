@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--psfstorefile", type=str, default="./single_gauss_psf.h5")
+    parser.add_argument("--psfstorefile", type=str, default="./color_gausspsf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--image_names", type=str, nargs="*", default=["./blue_pair.fits", "./red_pair.fits"])
     # output
