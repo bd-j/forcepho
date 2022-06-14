@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--psfstorefile", type=str, default="./pair_gausspsf.h5")
+    parser.add_argument("--psfstorefile", type=str, default="./color_gausspsf.h5")
     parser.add_argument("--splinedatafile", type=str, default="./sersic_splinedata_large.h5")
     parser.add_argument("--image_names", type=str, nargs="*", default=["./blue_pair.fits", "./red_pair.fits"])
     # output
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     logger.info(f"Configured, writing to {config.outbase}.")
 
     bands = [fits.getheader(n)["FILTER"] for n in config.image_names]
-    bands = np.unique(bands)
+    bands = list(np.unique(bands))
 
     # --- build the scene server ---
     cat = fits.getdata(config.image_names[0], -1)

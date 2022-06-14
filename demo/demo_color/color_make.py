@@ -17,7 +17,8 @@ if __name__ == "__main__":
     parser.set_defaults(bands=["BLUE", "RED"],
                         scales=[0.03, 0.06],
                         sigma_psf=[1.5, 2.25],
-                        rhalf=[0.2, 0.2])
+                        rhalf=[0.2, 0.2],
+                        psfstore="./color_gausspsf.h5")
     parser.add_argument("--outdir", type=str, default=".")
     config = parser.parse_args()
 

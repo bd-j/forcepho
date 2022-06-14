@@ -105,7 +105,8 @@ if __name__ == "__main__":
     # --- Arguments ---
     parser = argparse.ArgumentParser()
     # input
-    parser.add_argument("--patchname", type=str, default="")
+    parser.add_argument("--patchname", type=str, default="output/v1/patches/patch1_samples.h5")
     args = parser.parse_args()
 
     fig, raxes, paxes = plot_both(args.patchname)
+    fig.savefig("plot.png")

@@ -909,7 +909,7 @@ def check_bounds(sourcecat, boundscat):
     """
     for c in boundscat.dtype.names:
         b = boundscat[c][:]
-        if b.shape[-1] != 2:
+        if (b.shape[-1] != 2) or (b.shape==(2,)):
             continue
         assert np.all(sourcecat[c] > b[:, 0]), f"An input value is below lower bound in column '{c}'"
         assert np.all(sourcecat[c] < b[:, 1]), f"An input value is above bound in column '{c}'"

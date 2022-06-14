@@ -20,10 +20,10 @@ def multispan(parsets):
     return span
 
 
-def plot_corner(patchnames, band="CLEAR", smooth=0.05):
+def plot_corner(patchnames, config, band="CLEAR", smooth=0.05):
 
-    legends = [f"S/N={s:.0f}" for s in [10, 30, 100]]
-    colors = ["slateblue", "darkorange", "firebrick"]
+    legends = [f"S/N={s:.0f}" for s in config.snrlist]
+    colors = ["slateblue", "darkorange", "firebrick", "grey", "cornflowerblue"]
 
     labels = ["Flux", r'R$_{half}$ (")', r"$n_{\rm sersic}$", r"$\sqrt{b/a}$", r"PA (radians)"]
     show = [band, "rhalf", "sersic", "q", "pa"]
@@ -41,7 +41,7 @@ def plot_corner(patchnames, band="CLEAR", smooth=0.05):
     truths = np.atleast_2d(xx[0][:, 0]).T
 
     fig, axes = pl.subplots(len(labels), len(labels), figsize=(12, 12))
-    for x, color in zip(xx, colors):
+    for x, color in zip(xx, colors[:len(config.snrlist)]):
         axes = corner(x[:, n_tune:], axes, span=span, color=color, **kwargs)
     scatter(truths, axes, zorder=20, marker="o", color="k", edgecolor="k")
     prettify_axes(axes, labels, label_kwargs=dict(fontsize=12), tick_kwargs=dict(labelsize=10))
@@ -99,20 +99,25 @@ def plot_traces(patchname, fig=None, axes=None):
 
 if __name__ == "__main__":
 
-    patchnames = [f"./output/v1/patches/patch_single_snr{s:03.0f}_samples.h5"
-                  for s in [10, 30, 100]]
+    # parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--snrlist", type=float, nargs="*", default=[10, 30, 100])
+    config = parser.parse_args()
 
-    fig, axes = plot_corner(patchnames)
+    patchnames = [f"./output/v1/patches/patch_single_snr{s:03.0f}_samples.h5"
+                  for s in config.snrlist]
+
+    fig, axes = plot_corner(patchnames, config)
     fig.savefig("corner_snr.png", dpi=300)
     pl.close(fig)
 
     fig, axes, cb, val = plot_residual(patchnames[1])
-    fig.suptitle("S/N=30")
+    fig.suptitle("S/N="+'{:.0f}'.format(config.snrlist[1]))
     fig.savefig("residuals.png", dpi=300)
     pl.close(fig)
 
     fig, axes = pl.subplots(7, 1, sharex=True, figsize=(5, 8))
     fig, axes = plot_traces(patchnames[1], fig=fig, axes=axes)
-    fig.suptitle("S/N=30")
+    fig.suptitle("S/N="+'{:.0f}'.format(config.snrlist[1]))
     fig.savefig("trace.png", dpi=300)
     pl.close(fig)

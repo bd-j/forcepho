@@ -2,7 +2,7 @@
 
 In this demo we fit two nearby sources in a series of dithered exposures, in the
 drizzled mosaic made from those dithers, or in a direct image with comparable
-S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and `stsci` python packages to make the mosaic.
+S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and `stsci` python packages to make the mosaic (https://github.com/spacetelescope/drizzlepac/blob/master/README.md).
 
 ```sh
 # get some common info
