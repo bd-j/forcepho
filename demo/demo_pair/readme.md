@@ -59,3 +59,6 @@ covariance.
 This script re-instantiates the model and generates models and residuals for
 many samples from the chain.  These are shown in a movie, along with the
 location of each sample in the corner plot from `pair_plot.py`
+
+Here's one frame:
+![flux posterior for two objects](./movie/frame001.png)
