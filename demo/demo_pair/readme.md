@@ -61,4 +61,5 @@ many samples from the chain.  These are shown in a movie, along with the
 location of each sample in the corner plot from `pair_plot.py`
 
 Here's one frame:
+
 ![flux posterior for two objects](./movie/frame001.png)
