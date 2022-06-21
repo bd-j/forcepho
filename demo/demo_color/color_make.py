@@ -45,7 +45,7 @@ if __name__ == "__main__":
     images = []
     for i in range(2):
         band, scale, sigma = config.bands[i].upper(), config.scales[i], config.sigma_psf[i]
-        psf = get_galsim_psf(scale, psf_type="simple", sigma_psf=sigma)
+        psf = get_galsim_psf(scale, sigma_psf=sigma)
         images.append(galsim_model(scene, stamps[i], psf=psf))
         make_psfstore(config.psfstore, band, sigma, nradii=9)
 

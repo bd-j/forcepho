@@ -181,32 +181,30 @@ def galsim_model(scene, stamp, psf=None, verbose=False):
     return image.array.T
 
 
-def get_galsim_psf(scale, psf_type="simple", sigma_psf=1.0,
-                   bandname=None, psfstore=None):
+def get_galsim_psf(scale, psfimage=None, sigma_psf=1.0,
+                   psfmixture=None):
     """
     Parameters
     ----------
-    sigma_psf : float
-        pixels
     scale : float
         arcsec per science detector pxel
-    psf_type : string
-        'simple' | 'mixture' | 'webbpsf'
-    psfstore : string
-        patch to fits image (WebbPSF) or h5store (mixture)
-    bandname : string
-        e.g. 'F277W'
+    psfimage : string
+        name of fits file containing PSF image, if any
+    sigma_psf : float
+        dispersion of gaussian PSF in pixels
+    psfmixture :
+        Not implemented
     """
-    if psf_type == "simple":
-        gpsf = galsim.Gaussian(flux=1., sigma=sigma_psf * scale)
-    elif psf_type == "mixture":
+    if psfimage:
+        with fits.open(psfimage) as hdul:
+            det_samp = hdul[0].header.get("OVERSAMP", 1.0)
+            psfim = hdul[0].data.astype(np.float64)
+            pim = galsim.Image(np.ascontiguousarray(psfim), scale=scale/det_samp)
+            gpsf = galsim.InterpolatedImage(pim)
+    elif psfmixture:
         raise NotImplementedError
-    elif config.psf_type == "image":
-        hdul = fits.open(psfstore)
-        det_samp = hdul[1].header["DETSAMP"]
-        psfim = hdul[1].data.astype(np.float64)
-        pim = galsim.Image(np.ascontiguousarray(psfim), scale=scale/det_samp)
-        gpsf = galsim.InterpolatedImage(pim)
+    else:
+        gpsf = galsim.Gaussian(flux=1., sigma=sigma_psf * scale)
 
     return gpsf
 
