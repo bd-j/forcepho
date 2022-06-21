@@ -11,10 +11,11 @@ import h5py
 from astropy.io import fits
 
 from .sources import Galaxy
+from .config import read_config
 
 
 __all__ = ["Logger", "NumpyEncoder", "write_to_disk",
-           "read_config", "update_config",
+           "read_config",
            "extract_block_diag",
            "make_statscat", "make_chaincat",
            "write_residuals", "make_imset", "sky_to_pix",
@@ -48,80 +49,6 @@ class NumpyEncoder(json.JSONEncoder):
             return str(obj)
         return json.JSONEncoder.default(self, obj)
 
-
-def read_config(config_file, args=None):
-    """Read a yaml formatted config file into a Namespace.  This also expands
-    shell variables in any configuration parameters, and prepends the value of
-    `store_directory` to the `psfstorefile`, `pixelstorefile` and
-    `metastorefile`
-
-    Parameters
-    ----------
-    config_file : string
-        Path to yaml formatted file with configuration parameters
-
-    args : Namespace, optional
-        Namespace of additional arguments that will override settings in the
-        yaml file.
-
-    Returns
-    -------
-    config : `argparse.Namespace()` instance.
-        The configuration parameters as attributes of a Namespace.
-    """
-    import yaml
-    if type(config_file) is str:
-        with open(config_file) as f:
-            config_dict = yaml.load(f, Loader=yaml.Loader)
-    elif type(config_file) is dict:
-        config_dict = yaml.load(config_file, Loader=yaml.Loader)
-
-    config = Namespace()
-    for k, v in config_dict.items():
-        if type(v) is list:
-            v = np.array(v)
-        if "dtype" in k:
-            v = np.typeDict[v]
-        setattr(config, k, v)
-
-    config = update_config(config, args)
-
-    return config
-
-
-def update_config(config, args):
-    """Update a configuration namespace with parsed command line arguments. Also
-    prepends config.store_directory to *storefile names, and expands shell
-    variables.
-    """
-    if args is not None:
-        d = vars(args)
-        for k, v in d.items():
-            try:
-                if v is not None:
-                    setattr(config, k, v)
-            except:
-                print("could not update {}={}".format(k, v))
-
-    # update the store paths
-    for store in ["pixel", "meta", "psf"]:
-        try:
-            attr = "{}storefile".format(store)
-            n = getattr(config, attr)
-            new = os.path.join(config.store_directory, n)
-            setattr(config, attr, new)
-        except(AttributeError):
-            print("could not update {}storefile path".format(store))
-
-    # expand shell variables
-    for k, v in vars(config).items():
-        try:
-            s = os.path.expandvars(v)
-            setattr(config, k, s)
-        except(TypeError):
-            pass
-
-    return config
 
 
 def extract_block_diag(a, n, k=0):
