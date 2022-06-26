@@ -13,32 +13,68 @@ def main_config_parser(FITS=True):
 
     parser = ArgumentParser()
 
-    # input peak & big-object lists
-    parser.add_argument("--peak_catalog", type=str, default="")
-    parser.add_argument("--big_catalog", type=str, default=None)
-    parser.add_argument("--bandlist", type=str, nargs="*", default=["F200W"])
-
+    # -------
     # output
     parser.add_argument("--outbase", type=str, default="output/",
                         help="Path to directory that will contain patch output directories and state info")
     parser.add_argument("--write_residuals", type=int, default=1, help="switch;")
 
+    # -------
+    # input peak & big-object lists
+    parser.add_argument("--peak_catalog", type=str, default="")
+    parser.add_argument("--big_catalog", type=str, default=None)
+    parser.add_argument("--bandlist", type=str, nargs="*", default=["F200W"])
+
+    # -------
+    # mixtures
+    parser.add_argument("--splinedatafile", type=str, default="")
+    parser.add_argument("--psfstorefile", type=str, default="")
+
+    # -------
+    # pixel data locations
+    if FITS:
+        # FITS filenames
+        parser.add_argument("--fitsfiles", type=str, nargs="*", default=[])
+    else:
+        # data store
+        parser.add_argument("--pixelstorefile", type=str, default=None)
+        parser.add_argument("--metastorefile", type=str, default=None)
+
+    # -------
+    # pixel data tweaks
+    parser.add_argument("--max_snr", type=float, default=0)
+    parser.add_argument("--tweak_background", type=str, default=None,
+                        help="Name of keyword in header giving background values to subtract from pixel data")
+
+    # -------
     # basic data types
     parser.add_argument("--pix_dtype", type=str, default="float32")
     parser.add_argument("--meta_dtype", type=str, default="float32")
 
+    # -------
+    # bounds
+    parser.add_argument("--sqrtq_range", type=float, nargs=2, default=[0.4, 1], help="sqrt(b/a)")
+    parser.add_argument("--pa_range", type=float, nargs=2, default=[-2, 2], help="radians")
+    parser.add_argument("--rhalf_range", type=float, default=[0.03, 1.0], help="arcsec")
+    #parser.add_argument("--delta_pos", type=float, nargs=2, default=[0.06, 0.06], help="arcsec")
+    parser.add_argument("--pixscale", type=float, default=0.03, help="arcsec per pixel")
+    parser.add_argument("--npix", type=float, default=2.0, help="width for positional pbounds in pixels")
+
+    # -------
     # optimization
     parser.add_argument("--use_gradients", type=int, default=1, help="switch;")
     parser.add_argument("--linear_optimize", type=int, default=0, help="switch;")
     parser.add_argument("--gtol", type=int, default=0.00001)
     parser.add_argument("--add_barriers", type=int, default=0, help="switch;")
 
+    # -------
     # sampling
     parser.add_argument("--sampling_draws", type=int, default=256)
     parser.add_argument("--warmup", type=int, nargs="*", default=[256])
     parser.add_argument("--max_treedepth", type=int, default=9)
     parser.add_argument("--full_cov", type=int, default=1, help="switch;")
 
+    # -------
     # dis-patching
     parser.add_argument("--target_niter", type=int, default=256)
     parser.add_argument("--patch_maxradius", type=float, default=15, help="arcsec")
@@ -48,41 +84,27 @@ def main_config_parser(FITS=True):
     parser.add_argument("--ntry_checkout", type=int, default=1000)
     parser.add_argument("--buffer_size", type=float, default=5e7)
 
-    # priors
-    parser.add_argument("--sqrtq_range", type=float, nargs=2, default=[0.4, 1], help="sqrt(b/a)")
-    parser.add_argument("--pa_range", type=float, nargs=2, default=[-2, 2], help="radians")
-    parser.add_argument("--rhalf_range", type=float, default=[0.03, 1.0], help="arcsec")
-    parser.add_argument("--delta_pos", type=float, nargs=2, default=[0.06, 0.06], help="arcsec")
+    return parser
 
-    # mixtures
-    parser.add_argument("--splinedatafile", type=str, default="")
-    parser.add_argument("--psfstorefile", type=str, default="")
 
-    # pixel data access
-    if FITS:
-        # FITS filenames
-        parser.add_argument("--fitsfiles", type=str, nargs="*", default=[])
-    else:
-        # image store creation
-        parser.add_argument("--do_fluxcal", type=int, default=1, help="switch;")
-        parser.add_argument("--bitmask", type=int, default=1)
-        parser.add_argument("--super_pixel_size", type=int, default=8)
-        parser.add_argument("--nside_full", type=int, nargs=2, default=[2048, 2048])
+def preprocess_config_parser():
+    parser = ArgumentParser()
 
-        # data store
-        parser.add_argument("--pixelstorefile", type=str, default=None)
-        parser.add_argument("--metastorefile", type=str, default=None)
+    # image store creation
+    parser.add_argument("--do_fluxcal", type=int, default=1, help="switch;")
+    parser.add_argument("--bitmask", type=int, default=1)
+    parser.add_argument("--super_pixel_size", type=int, default=8)
+    parser.add_argument("--nside_full", type=int, nargs=2, default=[2048, 2048])
 
-    # data tweaks
-    parser.add_argument("--max_snr", type=float, default=0)
-    parser.add_argument("--tweak_background", type=str, default=None,
-                        help="Name of keyword in header giving background values to subtract from pixel data")
+    # data store
+    parser.add_argument("--pixelstorefile", type=str, default=None)
+    parser.add_argument("--metastorefile", type=str, default=None)
 
     return parser
 
 
 def default_config_file(filename="", **kwargs):
-    parser = config_parser(**kwargs)
+    parser = main_config_parser(**kwargs)
     config = parser.parse_args()
     import yaml
     configtext = yaml.dumps(vars(config))
@@ -166,7 +188,3 @@ def update_config(config, args):
             pass
 
     return config
-
-
-if __name__ == "__main__":
-    pass

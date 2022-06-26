@@ -796,7 +796,7 @@ def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 
 
 
 def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
-                n_sig_flux=5., dra=None, ddec=None, n_pix=2, pixscale=0.03,
+                n_sig_flux=5., dpos=None, n_pix=2, pixscale=0.03,
                 sqrtq_range=(0.4, 1.0), pa_range=(-0.6 * np.pi, 0.6 * np.pi),
                 rhalf_range=(0.03, 0.3), sersic_range=(1., 5.)):
     """Make a catalog of upper and lower bounds for the parameters of each
@@ -823,11 +823,8 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
     n_sig_flux : float (optional)
         The number of flux sigmas to set for the prior width
 
-    dra : ndarray of shape (n_source,) or (1,) (optional)
-        The delta in RA degrees to use for the prior width
-
-    ddec : ndarray of shape (n_source,) or (1,) (optional)
-        The delta in Dec degrees to use for the prior width
+    dpos : ndarry of shape (2,) or (2, n_source)
+        The half-width of the positional prior in ra and dec, in arcsec
 
     n_pix : float (optional)
         The number of pixels to use for a prior width in RA and Dec
@@ -837,11 +834,11 @@ def make_bounds(active, filternames, shapenames=Galaxy.SHAPE_COLS, unccat=None,
     """
 
     pm1 = np.array([-1., 1.])
+    if dpos is None:
+        dpos = np.ones(2) * n_pix * pixscale
 
-    if dra is None:
-        dra = n_pix * pixscale / 3600. / np.cos(np.deg2rad(active["dec"]))
-    if ddec is None:
-        ddec = np.array([n_pix * pixscale / 3600.])
+    dra = dpos[0] / 3600. / np.cos(np.deg2rad(active["dec"]))
+    ddec = np.array([dpos[1] / 3600.])
 
     # Make empty bounds catalog
     colnames = filternames + shapenames

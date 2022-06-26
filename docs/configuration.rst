@@ -8,7 +8,7 @@ which is in yaml format.  Here we give an example configuration file with
 descriptions of each parameter.
 
 Note that any parameter can generally be overridden at run time with a command
-line argument. Forcepho will try to automatially expand shell variables.  See
+line argument. Also, forcepho will try to automatially expand shell variables.  See
 :py:meth:`forcepho.utils.read_config` for details.
 
 Switches are generally represented with 0 (False, off) and 1 (True, on)
@@ -35,8 +35,8 @@ for each of these bands.
 Input data locations
 --------------------
 
-First we have the locations of the initialization catalog (``raw_catalog``) as
-well as the Gaussian mixture files.
+First we have the locations of the initialization peak catalog (``raw_catalog``)
+as well as the Gaussian mixture files.
 
 .. code-block:: yaml
 
@@ -44,24 +44,10 @@ well as the Gaussian mixture files.
         $PROJECT_DIR/data/catalogs/initial_peak_catalog.fits
     big_catalog:
 
-    store_directory:
-        $PROJECT_DIR/data/stores
     splinedatafile:
         $PROJECT_DIR/data/stores/sersic_mog_model.smooth=0.0150.h5
     psfstorefile:
-        psf_jwst_ng4.h5
-
-Then, use something like the following for the efficient StorePatch data interface:
-
-.. code-block:: yaml
-
-    pixelstorefile:
-      pixels_deepfield.h5
-    metastorefile:
-      meta_deepfield.json
-
-Replace these filenames with the result of your image pre-processing, and make
-sure those files are present (or soft-linked in) ``store_directory``.
+        $PROJECT_DIR/data/psfs/psf_jwst_ng4.h5
 
 For the simpler direct FITS file interface, use the following for the list of files to include:
 
@@ -74,6 +60,19 @@ For the simpler direct FITS file interface, use the following for the list of fi
      - band2_exp0.fits
 
 They must be in order by band, but otherwise the filenames are arbitrary.
+
+
+For the efficient StorePatch data interface, use something like the following
+
+.. code-block:: yaml
+
+    pixelstorefile:
+      $PROJECT_DIR/data/stores/pixels_deepfield.h5
+    metastorefile:
+      $PROJECT_DIR/data/stores/meta_deepfield.json
+
+Replace these filenames with the result of your image pre-processing, and make
+sure those files are present (or soft-linked) at the stated locations.
 
 
 Output locations
