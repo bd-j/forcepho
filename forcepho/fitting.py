@@ -12,7 +12,7 @@ from functools import partial as argfix
 import numpy as np
 
 from .model import ConstrainedTransformedPosterior as Posterior
-from .utils import make_statscat, make_chaincat, extract_block_diag
+from .utils import make_statscat, make_chaincat, get_sample_cat, extract_block_diag
 from .region import CircularRegion
 
 
@@ -163,15 +163,7 @@ class Result(object):
             The parameters of each source at the specified iteration of the
             chain, as a structured array.
         """
-        #dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
-        #sample = np.zeros(self.n_active, dtype=dtype_sample)
-        sample = self.active.copy()
-        for d in sample.dtype.names:
-            if d in self.chaincat.dtype.names:
-                try:
-                    sample[d] = self.chaincat[d][:, iteration]
-                except(IndexError):
-                    sample[d] = self.chaincat[d]
+        sample = get_sample_cat(self.chaincat, iteration, self.active)
         return sample
 
     def get_map(self, structured=False):

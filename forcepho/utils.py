@@ -17,7 +17,7 @@ from .config import read_config
 __all__ = ["Logger", "NumpyEncoder", "write_to_disk",
            "read_config",
            "extract_block_diag",
-           "make_statscat", "make_chaincat",
+           "make_statscat", "make_chaincat", "get_sample_cat",
            "write_residuals", "make_imset", "sky_to_pix",
            "isophotal_radius", "kron_radius"]
 
@@ -48,7 +48,6 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, type):
             return str(obj)
         return json.JSONEncoder.default(self, obj)
-
 
 
 def extract_block_diag(a, n, k=0):
@@ -109,7 +108,14 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     assert (n_source == len(active))
 
     # --- generate dtype ---
-    colnames = [b.decode("utf") for b in bands] + [s.decode("utf") for s in shapes]
+    try:
+        colnames = [b.decode("utf") for b in bands]
+    except(AttributeError):
+        colnames = list(bands)
+    try:
+        colnames += [s.decode("utf") for s in shapes]
+    except(AttributeError):
+        colnames += list(shapes)
     cols = [("source_index", np.int32)] + [(c, np.float64, (n_iter,))
                                            for c in colnames]
     dtype = np.dtype(cols)
@@ -126,6 +132,33 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     cat["dec"] += ref[1]
 
     return cat
+
+
+def get_sample_cat(chaincat, iteration, active):
+    """Get a sample of the scene parameters from the chain, as a structured
+    arrays with one row for each source.
+
+    Parameters
+    ----------
+    iteration : int
+        The iteration of the chain for which to produce a catalog.
+
+    Returns
+    -------
+    sample : structured ndarray of shape (n_active,)
+        The parameters of each source at the specified iteration of the
+        chain, as a structured array.
+    """
+    #dtype_sample = np.dtype([desc[:2] for desc in self.chaincat.dtype.descr])
+    #sample = np.zeros(self.n_active, dtype=dtype_sample)
+    sample = active.copy()
+    for d in sample.dtype.names:
+        if d in chaincat.dtype.names:
+            try:
+                sample[d] = chaincat[d][:, iteration]
+            except(IndexError):
+                sample[d] = chaincat[d]
+    return sample
 
 
 def write_to_disk(out, outroot, model, config, residual=None):
