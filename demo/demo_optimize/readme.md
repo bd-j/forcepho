@@ -1,8 +1,8 @@
 # Demo: Optimization
 
-Generate a galsim image with specific parameters and fit it with forcepho, first
-running a round of optimization.  Note that the linear optimization of fluxes is
-currently only possible when using the GPU.
+Generate a galsim image with specific parameters and fit it with forcepho using
+HMC sampling, after first running a round of optimization.  Note that the linear
+optimization of fluxes is currently only possible when using the GPU.
 
 ## setup
 

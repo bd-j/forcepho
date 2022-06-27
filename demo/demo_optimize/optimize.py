@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""Script to conduct frocepho sampling after an iontital optimization.
+"""
+
 import os, sys, glob, shutil
 import argparse, logging
 import numpy as np
@@ -8,7 +11,7 @@ import json, yaml
 
 from astropy.io import fits
 
-from forcepho.patches import FITSPatch, CPUPatchMixin
+from forcepho.patches import FITSPatch, CPUPatchMixin, GPUPatchMixin
 from forcepho.superscene import LinkedSuperScene, flux_bounds
 from forcepho.utils import NumpyEncoder, write_to_disk, make_chaincat, get_sample_cat
 from forcepho.fitting import run_lmc, run_opt, optimize_fluxes
