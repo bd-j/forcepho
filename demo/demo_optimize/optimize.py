@@ -186,6 +186,8 @@ if __name__ == "__main__":
             active[b] = f
         scratchpad.active_postlinear = active.copy()
         scratchpad.bounds_postlinear = bounds.copy()
+        patcher.scene.set_scene(active)
+        scratchpad.q_postlinear = patcher.scene.get_all_source_params().copy()
 
     # ----------------
     # --- sampling ---

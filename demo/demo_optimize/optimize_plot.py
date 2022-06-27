@@ -86,8 +86,8 @@ if __name__ == "__main__":
     scatter(np.atleast_2d(samples.q_initial).T, caxes, color="k", label="Truth", **skwargs)
     scatter(np.atleast_2d(samples.q_start).T, caxes, color="firebrick", label="Random Start", **skwargs)
     scatter(np.atleast_2d(samples.q_postop).T, caxes, color="orange", label="Post-optimization", **skwargs)
-    if np.any(samples.q_sampling != samples.q_postop):
-        scatter(np.atleast_2d(samples.q_sampling).T, caxes, color="green", label="Post-linear flux optimization", **skwargs)
+    if hasattr(samples, "q_postlinear"):
+        scatter(np.atleast_2d(samples.q_postlinear).T, caxes, color="green", label="Post-linear flux optimization", **skwargs)
     scatter(np.atleast_2d(q_map).T, caxes, color="darkslateblue", label="MAP sample", **skwargs)
     for i in range(len(caxes)):
         r = caxes[-1,i].get_xlim()
