@@ -17,7 +17,7 @@ ln -s ../data/sersic_splinedata_large.h5 sersic_splinedata_large.h5
 Generate image, fit it, and plot corner with key parameter values marked.
 ```sh
 python optimize.py --sersic 1.6 --rhalf 0.08 --snr 100 --add_noise 0
-python optimize_plot.py tests/sersic1.6_rhalf0.080_snr100_noise0/sersic1.6_rhalf0.080_snr100_noise0
+python optimize_plot.py output/sersic1.6_rhalf0.080_snr100_noise0/sersic1.6_rhalf0.080_snr100_noise0
 ```
 
 ![Posterior with parameter locations after different optimization and sampling phases](./demo_optimize.png)

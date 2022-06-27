@@ -210,6 +210,7 @@ if __name__ == "__main__":
     for k, v in vars(scratchpad).items():
         setattr(out, k, v)
     write_to_disk(out, outroot, model, config)
+    print(f"Wrote output to {outroot}*")
     sceneDB.checkin_region(final, fixed, config.sampling_draws,
                            block_covs=covs, taskID=0)
     sceneDB.writeout()
