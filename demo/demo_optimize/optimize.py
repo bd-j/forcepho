@@ -174,7 +174,7 @@ if __name__ == "__main__":
     # Do linear flux optimization?
     if config.linear_optimize:
         assert HASGPU
-        result = optimize_fluxes(patcher, q_start, return_all=True)
+        result = optimize_fluxes(patcher, q, return_all=True)
         fluxes, precisions = result[:2]
         # update flux values and bounds based on precision matrix.
         for i, b in enumerate(patcher.bandlist):
