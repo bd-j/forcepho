@@ -36,14 +36,14 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
         # get the input
         with fits.open(exp) as hdul:
             sci = hdul[0].data.astype(np.float32)
-            wht = 1 / (hdul[1].data)**2
+            wht = 1 / (hdul[1].data)**2  # inverse variance
             hdr = hdul[1].header
             wcs_in = stwcs.wcsutil.HSTWCS(hdul, wcskey=' ')
 
         #wht = wht / np.median(wht)
         #wht_in = (np.sqrt(wht) * wt_scale).astype(np.float32)
         #wht_in = np.ones_like(sci)
-        wht_in  = (wht * wt_scale).astype(np.float32)
+        wht_in = (wht * wt_scale).astype(np.float32)
 
         # set up the output
         wht_out = np.zeros(wcs_out.array_shape, dtype=np.float32)
@@ -58,7 +58,7 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
 
         # write the drizzled single file output
         out = exp.replace("dither", "drz_dither")
-        write_fits_to(out, sci_out, 1 / np.sqrt(wht_out/wt_scale), hdr_out, config)
+        write_fits_to(out, sci_out.T, (1 / np.sqrt(wht_out/wt_scale)).T, hdr_out)
 
         # accumulate in the final image
         w_single = wht_out / wt_scale
@@ -69,7 +69,7 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
 
     # write the mosaic
     out = os.path.join(os.path.dirname(exp), "mosaic.fits")
-    write_fits_to(sci_final, 1 / np.sqrt(wht_final), hdr_out, bands, scene=scene)
+    write_fits_to(out, sci_final.T, 1 / np.sqrt(wht_final.T), hdr_out, bands, scene=scene)
 
 
 if __name__ == "__main__":

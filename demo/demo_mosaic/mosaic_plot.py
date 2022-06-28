@@ -22,8 +22,8 @@ if __name__ == "__main__":
 
     show = ["CLEAR", "rhalf", "sersic"]
 
-    sd = Samples("output/v1/patches/patch_dithers_samples.h5")
-    sm = Samples("output/v1/patches/patch_mosaic_samples.h5")
+    sd = Samples("output/dither/dither_samples.h5")
+    sm = Samples("output/mosaic/mosaic_samples.h5")
 
     shape = len(show)*len(sd.active), -1
     xxd = np.array([sd.chaincat[c] for c in show]).reshape(shape)

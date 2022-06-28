@@ -2,7 +2,14 @@
 
 In this demo we fit two nearby sources in a series of dithered exposures, in the
 drizzled mosaic made from those dithers, or in a direct image with comparable
-S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and `stsci` python packages to make the mosaic (https://github.com/spacetelescope/drizzlepac/blob/master/README.md).
+S/N and pixel scale to the mosaic.  Note that you must install `drizzlepac` and
+`stsci` python packages to make the mosaic
+(https://github.com/spacetelescope/drizzlepac/blob/master/README.md); this is
+most easily done with pip.
+
+Note that the PSF of the mosaic is different than that of the dithers or the
+'deep' image due to the drizzling process, and this is not taken into account in
+the fitting of the mosaic.
 
 ```sh
 # get some common info
@@ -17,11 +24,11 @@ python mosaic_combine_dithers.py --pixfrac 0.8
 python mosaic_make_dithers.py --snr 45 --n_dither 1 --basename deep --add_noise 0
 
 # fit the mosaic
-python mosaic_fit.py --image_basename ./data/mosaic
+python mosaic_fit.py --image_basename ./data/mosaic --outdir ./output/mosaic
 # fit the dithers
-python mosaic_fit.py --image_basename ./data/dither
+python mosaic_fit.py --image_basename ./data/dither --outdir ./output/dither
 # fit the deep image
-python mosaic_fit.py --image_basename ./data/deep
+python mosaic_fit.py --image_basename ./data/deep --outdir ./output/deep
 
 # plot corner plot comparisons
 python mosaic_plot.py
@@ -30,7 +37,7 @@ python mosaic_plot.py
 ## `mosaic_make_dithers.py`
 
 This script uses GalSim to make (noisy) images of two galaxies in a single band,
-with subpixel offsets corresponding to dithers. The PSF is modeled as a single,
+with sub-pixel offsets corresponding to dithers. The PSF is modeled as a single,
 symmetric Gaussian. The noise is modeled as draws from an iid Gaussian in each
 pixel. Adjustable parameters in this script include the fluxes, half-light radii
 and Sersic parameters of each galaxy, as well as the separation between the
@@ -49,13 +56,13 @@ final FITS files have the following data model:
 In addition the header contains information about the WCS, the filter, and the S/N.
 
 The dither pattern is a 9-point pattern taken from NIRCAM documentation, and
-appropriate fro rteconstructing properly sampled iumages from subsampled images
-usin drizzle.
+appropriate fro reconstructing properly sampled images from subsampled images
+using `drizzle`.
 
 ## `mosaic_combine_dithers.py`
 
 This script uses `drizzlepac` from STScI to combine the dithers produced by
-`mosaic_make_dithers.py` into a single mosiac.  Adjustable parameters include `pixfrac`
+`mosaic_make_dithers.py` into a single mosaic.  Adjustable parameters include `pixfrac`
 
 ## `mosaic_fit.py`
 
@@ -72,5 +79,5 @@ dithered exposures takes considerably longer.
 
 ## `mosaic_plot.py`
 
-This script shows corner plot for the fluxes and other selct parameters of the
+This script shows corner plot for the fluxes and other select parameters of the
 two sources from fits to both kinds of data.

@@ -7,11 +7,12 @@ dependencies:
   - ipython  # optional
   - matplotlib  # optional
   - pyyaml
+  - pybind11
   # Scientific computing
   - numpy>=1.14,<1.22
   - scipy>=1.1.0
   - h5py
-  - numba>=0.43.0
+  - numba>=0.51.0
   # Astro
   - astropy
   - regions

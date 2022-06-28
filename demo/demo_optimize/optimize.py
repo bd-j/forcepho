@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Script to conduct frocepho sampling after an iontital optimization.
+"""Script to conduct frocepho sampling after an initial optimization.
 """
 
 import os, sys, glob, shutil
