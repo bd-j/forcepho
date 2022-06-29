@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
 #SBATCH --gres=gpu:1
 #SBATCH --mem-per-cpu=1000
-#SBATCH --time=3:00:00                    # Time limit hrs:min:sec
+#SBATCH --time=1:30:00                    # Time limit hrs:min:sec
 #SBATCH --output=logs/ftestpsf_%A_%a.log  # Standard output and error log
 #SBATCH --error=logs/ftestpsf_%A_%a.log   # Standard output and error log
 pwd -P; hostname; date

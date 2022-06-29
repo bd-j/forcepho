@@ -1,6 +1,8 @@
 # JWST PSFs
 
-Taken from jwst docs at X on Y.  Current PSFs correspond to the OVERSAMP images
+Taken from jwst docs at https://stsci.app.box.com/v/jwst-simulated-psf-library on 10/2021. Linked from https://www.stsci.edu/jwst/science-planning/proposal-planning-toolbox/psf-simulation-tool and dated 08/2019
+
+Current PSFs correspond to the OVERSAMP images
 
 ## From accompanying readme:
 

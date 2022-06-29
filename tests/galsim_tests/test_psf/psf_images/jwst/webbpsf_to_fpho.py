@@ -8,7 +8,8 @@ from astropy.io import fits
 
 
 JWST_BANDS = ["F070W", "F090W", "F115W", "F150W", "F200W",
-              "F277W", "F335M", "F356W", "F410M", "F444W"]
+              "F277W", "F335M", "F356W", "F410M", "F444W",
+              "F182M", "F210M", "F430M", "F460M", "F480M"]
 
 
 if __name__ == "__main__":
