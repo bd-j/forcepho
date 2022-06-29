@@ -133,7 +133,7 @@ def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
     return cat
 
 
-def compare_parameters(scat, tcat, parname,
+def compare_parameters(scat, tcat, parname, add_jitter=True,
                        point_type="median", colorby="fwhm", splitby="snr",
                        as_delta=False, dfax=None, onlymax=True):
 

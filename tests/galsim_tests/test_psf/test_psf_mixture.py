@@ -249,7 +249,11 @@ if __name__ == "__main__":
 
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "rhalf")]
     for show, by in comp:
-        fig, axes, cb = compare_parameters(scat, tcat, show, colorby=by)
+        fig, axes = pl.subplots(2, 1, sharex=True)
+        fig, ax, cb = compare_parameters(scat, tcat, show, dfax=(fig, axes[0]),
+                                         splitby=None, colorby=by)
+        fig, ax, cb = compare_parameters(scat, tcat, show, dfax=(fig, axes[1]),
+                                         as_delta=True, splitby=None, colorby=by)
         fig.colorbar(cb, label=by, ax=axes, orientation="vertical")
         fig.suptitle(config.bandname)
         fig.savefig(os.path.join(config.banddir, f"{config.bandname.lower()}_{show}_comparison.pdf"))
