@@ -243,7 +243,8 @@ if __name__ == "__main__":
 
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "fwhm")]
     for show, by in comp:
-        fig, axes = compare_parameters(scat, tcat, show, colorby=by)
+        fig, axes, cb = compare_parameters(scat, tcat, show, colorby=by)
+        fig.colorbar(cb, label=by, ax=axes, orientation="vertical")
         fig.savefig(os.path.join(config.dir, f"{show}_comparison.pdf"))
         pl.close(fig)
 

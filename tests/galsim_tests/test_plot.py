@@ -133,34 +133,55 @@ def make_catalog(tagnames, n_full=0, bands=["CLEAR"]):
     return cat
 
 
-def compare_parameters(scat, tcat, parname, point_type="median",
-                       colorby="fwhm", splitby="snr", onlymax=True):
+def compare_parameters(scat, tcat, parname,
+                       point_type="median", colorby="fwhm", splitby="snr",
+                       as_delta=False, dfax=None, onlymax=True):
 
-    splits = np.unique(tcat[splitby])
     colors = np.unique(tcat[colorby])
+    if splitby:
+        splits = np.unique(tcat[splitby])
+    else:
+        splits = [slice(None)]
 
     # HACK
     if onlymax:
         splits = [splits[-1]]
 
-    # xcoordinate
-    x = tcat[parname].copy()
-    xr = x.min()*0.9, x.max()*1.1
+    # --- xcoordinate ---
+    xtrue = tcat[parname].copy()
+    #xr = x.min()*0.9, x.max()*1.1
+    xr = xtrue.min(), xtrue.max()
     dx = np.diff(xr)
-    jitter = np.random.uniform(-dx*0.02, dx*0.02, len(x))
-    x = x + jitter
-    line = np.linspace(*xr)
+    if add_jitter:
+        jitter = np.random.uniform(-dx*0.02, dx*0.02, len(xtrue))
+        x = xtrue + jitter
+        xr = x.min(), x.max()
+    else:
+        x = xtrue
+    linex = np.linspace(*xr)
 
+    # --- y-coordinate ---
     yy = scat[parname]
     y = np.percentile(yy, [16, 50, 84], axis=-1)
     if point_type == "map":
         ind_ml = np.argmax(scat["lnp"], axis=-1)
         ymap = yy[np.arange(len(yy)), ind_ml]
         y[1, :] = ymap
+    if as_delta:
+        y = y - xtrue
+        liney = np.zeros_like(linex)
+    else:
+        liney = linex
 
-    dfig, daxes = pl.subplots(len(splits), 1, sharex=True,
-                              figsize=(8, 1+3*len(splits)))
+    # --- Fig and axes ---
+    if dfax is None:
+        dfig, daxes = pl.subplots(len(splits), 1, sharex=True,
+                                  figsize=(8, 1+3*len(splits)))
+    else:
+        dfig, daxes = dfax
     daxes = np.atleast_1d(daxes)
+
+    # --- loop over splits ---
     for i, s in enumerate(splits):
         ax = daxes[i]
         sel = (scat["id"] >= 0) & (tcat[splitby] == s)
@@ -171,11 +192,14 @@ def compare_parameters(scat, tcat, parname, point_type="median",
         ax.plot(line, line, "k:")
         ax.text(0.8, 0.2, f"{splitby.upper()}={s}", transform=ax.transAxes)
 
-    dfig.colorbar(cb, label=colorby, orientation="vertical", ax=daxes)
-    [ax.set_ylabel(f"{parname} (forcepho)") for ax in daxes.flat]
+    #dfig.colorbar(cb, label=colorby, orientation="vertical", ax=daxes)
+    if as_delta:
+        [ax.set_ylabel(f"$\Delta${parname} (output-input)") for ax in daxes.flat]
+    else:
+        [ax.set_ylabel(f"{parname} (output)") for ax in daxes.flat]
     daxes.flat[-1].set_xlabel(f"{parname} (input)")
 
-    return dfig, daxes
+    return dfig, daxes, cb
 
 
 def compare_apflux(scat, tcat, band=["CLEAR"], colorby="fwhm"):

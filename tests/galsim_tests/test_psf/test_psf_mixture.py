@@ -249,7 +249,8 @@ if __name__ == "__main__":
 
     comp = [("rhalf", "sersic"), ("sersic", "rhalf"), ("q", "rhalf")]
     for show, by in comp:
-        fig, axes = compare_parameters(scat, tcat, show, colorby=by)
+        fig, axes, cb = compare_parameters(scat, tcat, show, colorby=by)
+        fig.colorbar(cb, label=by, ax=axes, orientation="vertical")
         fig.suptitle(config.bandname)
         fig.savefig(os.path.join(config.banddir, f"{config.bandname.lower()}_{show}_comparison.pdf"))
         pl.close(fig)
