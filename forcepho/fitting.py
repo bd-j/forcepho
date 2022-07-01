@@ -296,6 +296,8 @@ def run_lmc(model, q, n_draws, adapt=False, full=False, weight=10,
     stats : list of dicts
         Statistics for each sample
     """
+    import warnings
+    warnings.filterwarnings('ignore', '.*log1p.*', )
 
     from littlemcmc.sampling import _sample as sample_one
     from littlemcmc import NUTS

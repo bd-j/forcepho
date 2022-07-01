@@ -41,6 +41,18 @@ module load Anaconda3/5.0.1-fasrc01 # HeLmod w/o hdf5, matplotlib
 source activate force
 ```
 
+to update
+```bash
+git pull
+module purge
+module load intel/19.0.5-fasrc01
+module load cuda/11.4.2-fasrc01 hdf5/1.10.5-fasrc01
+module load Anaconda3/5.0.1-fasrc01
+source activate force
+python -m pip install .
+```
+
+
 ### lux
 
 install requires a Miniconda download
