@@ -74,7 +74,7 @@ data, and constructs an object that can compute posterior probabilities:
     ```
 
 4. Within the loop we will either do optimization or HMC sampling, and then check
-   the scene back in. Here we do sampling using littlemcmc:
+   the scene back in. Here we do sampling using `littlemcmc`:
 
     ```python
         # run HMC, with warmup
@@ -105,7 +105,7 @@ data, and constructs an object that can compute posterior probabilities:
 All Steps
 ----------
 
-Stepping back a bit, one might want to do an intial round of optimization of the
+Stepping back a bit, one might want to do an initial round of optimization of the
 entire catalog, and then use that as initialization for a sampling phase.  The
 steps to do such a full run might look like the following
 
