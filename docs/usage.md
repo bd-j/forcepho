@@ -102,8 +102,12 @@ data, and constructs an object that can compute posterior probabilities:
     ```
 
 
-Steps
------
+All Steps
+----------
+
+Stepping back a bit, one might want to do an intial round of optimization of the
+entire catalog, and then use that as initialization for a sampling phase.  The
+steps to do such a full run might look like the following
 
 1. Create PSF mixtures for mosaic and/or individual exposures
 
@@ -115,21 +119,19 @@ Steps
 3. Make catalog of initial peaks in forcepho format
 
    The initial peaks to be fit must be supplied in a FITS binary table in the
-   appropriate format.  See inputs.rst for details of this format. 
+   appropriate format. See ./inputs.rst for details of this format.
 
 4. Background subtraction & optimization loop
 
    * Optimize sources in the catalog (`optimize.py`) using mosaic data with a
      S/N cap.
 
-   * Fit for a residual background (`background.py`) in the mosaic. If
+   * (optional) Fit for a residual background (`background.py`) in the mosaic. If
      significant, put resulting tweak values in config file.
 
-   * Re-optimize bright sources?
+   * (optional) Look for objects missing in the initial catalog.
 
-   * Look for objects missing in the initial catalog?
-
-   * Re-optimize sources in the small catalog (`optimize.py`) based on mosaic.
+   * (optional) Re-optimize sources in the catalog (`optimize.py`) based on mosaic.
 
    * Replace initialization catalog with the optimization results, including
      flux uncertainty estimates  This is done with
@@ -137,6 +139,6 @@ Steps
      postprocess.py --root output/<run_name> --catname postop_catalog.fits --mode postop
      ```
 
-5. Sample posterior for source properties.
+5. Sample posterior for source properties (`sampling.py`).
 
 6. Post-process to create residual images (if available), show chains, etc...
