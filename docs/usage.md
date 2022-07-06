@@ -1,81 +1,142 @@
 Basic Usage
 ===========
 
-How to use `fpho` with your images:
+How to use `fpho` with your images.
 
+Getting ready
+-------------
 First, you will need collect the appropriate imaging data, PSFs, and identify a
-an initial list or catalog of 'peaks' to be fit. A pre-processing script will
-generally be required to convert the imaging data into a format useable by
-forcepho (a pixel-data store and meta-data store). This pre-processing script
-can convert from multi-extension FITS, multiple files indicating flax and
-uncertainty, or other formats into an `ImageSet`.  See ./inputs.md for details
+an initial list or catalog of 'peaks' to be fit. A pre-processing script may be
+used to convert the imaging data into an efficient format useable by forcepho (a
+pixel-data store and meta-data store). See ./inputs.rst for details
 
 Second, you will need to generate a *configuration file* with information about
 data input and output locations and details for the fitting process.  See
-./configuration.md for details
+./configuration.rst for details
+
+A Gaussian mixture approximation to each relevant PSF must be generated, using
+tools provided with forcepho.  These are stored in an HDF5 file, in data groups
+keyed by ``FILTER``.
 
 Then, the following steps will lead to output that can be post-processed.
-See ./output.md for detals on post-processing
+See ./output.md for details on post-processing
+
+
+Basic Fitting
+-------------
+
+The basic procedure requires several ingredients to be instantiated using the
+information above. Examples are given below for the simple FITS file interface
+with CPU Kernel.
+
+1. A `SuperScene` that holds global parameter state and parameter bounds, and
+   can be used to check out sub-scenes.
+
+    ```python
+    sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
+                               statefile=os.path.join(config.outdir, "final_scene.fits"),
+                               roi=cat["roi"],
+                               bounds_kwargs=bounds_kwargs,
+                               target_niter=config.sampling_draws)
+    ```
+
+2. A `Patcher` object that organizes image pixel data and image meta data.
+
+    ```python
+    class Patcher(FITSPatch, CPUPatchMixin):
+          pass
+
+    patcher = Patcher(fitsfiles=config.image_names,
+                      psfstore=config.psfstore,
+                      splinedata=config.splinedatafile,
+                      sci_ext=1,
+                      unc_ext=2,
+                      return_residual=True)
+    ```
+
+3. Then a loop can start that checks out sub-scenes, finds the relevant pixel
+data, and constructs an object that can compute posterior probabilities:
+
+    ```python
+    patchID = 0
+    # Draw scenes until all sources have gotten target number of iterations of HMC
+    while sceneDB.undone:
+        # Draw the sub-scene and associated information
+        # A seed of -1 will choose an available scene at random
+        region, active, fixed = sceneDB.checkout_region(seed_index=-1)
+        bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
+
+        # Collect the pixel data and meta-data
+        patcher.build_patch(region, None, allbands=bands)
+        # Transfer data to device, subtract fixed sources, set up parameter transforms
+        model, q = patcher.prepare_model(active=active, fixed=fixed,
+                                        bounds=bounds, shapes=sceneDB.shape_cols)
+    ```
+
+4. Within the loop we will either do optimization or HMC sampling, and then check
+   the scene back in. Here we do sampling using littlemcmc:
+
+    ```python
+        # run HMC, with warmup
+        out, step, stats = run_lmc(model, q.copy(),
+                                  n_draws=config.sampling_draws,
+                                  warmup=config.warmup,
+                                  z_cov=cov, full=True,
+                                  weight=max(10, active["n_iter"].min()),
+                                  discard_tuned_samples=True,
+                                  max_treedepth=config.max_treedepth,
+                                  progressbar=config.progressbar)
+
+        # Add additional information to the output
+        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
+                              step=step, stats=stats, patchID=patchID)
+        # Write results to disk
+        write_to_disk(out, config.outroot, model, config)
+        # Check in the scene with new parameter values
+        sceneDB.checkin_region(final, fixed, config.sampling_draws,
+                              block_covs=covs, taskID=0)
+        # write current global parameter state to disk as a failsafe
+        sceneDB.writeout()
+        # increment patch number
+        patchID += 1
+    ```
 
 
 Steps
 -----
-(to be consolidated)
 
 1. Create PSF mixtures for mosaic and/or individual exposures
 
-2. Pre-Process (`preprocess.py`)
+2. (optional) Pre-Process (`preprocess.py`)
 
    This creates the HDF5 storage files for pixel and meta-data.
    If slopes are present, make separate stores for mosaic and slope pixels.
 
-3. Big sources
+3. Make catalog of initial peaks in forcepho format
 
-   * Pre-process bright mosaic pixels (including a S/N cap)
+   The initial peaks to be fit must be supplied in a FITS binary table in the
+   appropriate format.  See inputs.rst for details of this format. 
 
-   * Find and catalog bright sources in the mosaic (`bright.py`)
+4. Background subtraction & optimization loop
 
-   * Optimize/fit bright sources to the bright object pixel store using big
-     sersics (x4 or x5 the normal rhalf grid)
+   * Optimize sources in the catalog (`optimize.py`) using mosaic data with a
+     S/N cap.
 
-   * [?] Identify the _very_ big and bright objects (based on rhalf_opt > rhalf_max_normal)
+   * Fit for a residual background (`background.py`) in the mosaic. If
+     significant, put resulting tweak values in config file.
 
-   * [?] Generate and subtract the v-big object model from the original mosaic
-         and exposure stores. Or, have some way to subtract them in an initial
-         setup of the patch (`JadesPatch.subtract_fixed`)
-
-   * [?] Down-weight pixels in the centers of v-big and/or bright objects based
-         on residual significance. This means inflating errors within isophotes
-         such that |chi| ~ 1 or 2)
-
-   * Replace initialization sources _within_ bright object ROIs (i.e. isophotes)
-     with bright objects themselves (part of 4.)
-
-4. Create initial catalog (`smallcat.py`)
-
-   Based on the input detection catalog, replacing sources in the big/bright object
-   ROIs with the those objects, and optionally restricting to a region on the
-   sky.  Makes some small tweaks to the detection catalog values (e.g. reversing
-   sign of PA). Use the result as `raw_catalog` in the config file.
-
-5. Background subtraction & optimization loop
-
-   * Optimize sources in the small catalog (`optimize.py`) based on mosaic.
-
-   * Fit for a residual background (`background.py`) in the mosaic.
-     If significant, put resulting tweak values in config file.
-
-   * Re-optimize bright sources? (step 3)
+   * Re-optimize bright sources?
 
    * Look for objects missing in the initial catalog?
 
    * Re-optimize sources in the small catalog (`optimize.py`) based on mosaic.
-    
-   * Replace initialization catalog with the optimization results.  This is done with
+
+   * Replace initialization catalog with the optimization results, including
+     flux uncertainty estimates  This is done with
      ```sh
      postprocess.py --root output/<run_name> --catname postop_catalog.fits --mode postop
      ```
 
-6. Sample posterior for source properties.
+5. Sample posterior for source properties.
 
-7. Post-process to create residual images (if available), show chains, etc...
+6. Post-process to create residual images (if available), show chains, etc...

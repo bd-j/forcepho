@@ -101,7 +101,9 @@ def fit_image(config):
     sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
                                statefile=os.path.join(config.outdir, "final_scene.fits"),
                                roi=cat["rhalf"] * 5,
-                               bounds_kwargs=dict(n_pix=1.5, rhalf_range=(0.03, 1.0), sersic_range=(0.8, 5.0)),
+                               bounds_kwargs=dict(n_pix=1.5,
+                                                  rhalf_range=(0.03, 1.0),
+                                                  sersic_range=(0.8, 6.0)),
                                target_niter=config.sampling_draws)
 
     # load the image data

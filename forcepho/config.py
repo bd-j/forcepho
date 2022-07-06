@@ -73,6 +73,7 @@ def main_config_parser(FITS=True):
     parser.add_argument("--warmup", type=int, nargs="*", default=[256])
     parser.add_argument("--max_treedepth", type=int, default=9)
     parser.add_argument("--full_cov", type=int, default=1, help="switch;")
+    parser.add_argument("--progressbar", type=int, default=0, help="switch;")
 
     # -------
     # dis-patching

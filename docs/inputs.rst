@@ -27,12 +27,15 @@ use the :py:class:`forcepho.patches.FITSPatch` class.
 
 The supplied FITS images must provide background-subtracted, photometrically
 calibrated fluxes (i.e. in units of nJy/pixel) in the first extension and
-associated uncertainty (:math:`=\sqrt{\rm variance}`) images in the second extension.
-Masked pixels can be given inifinte or negative uncertainty values.
+associated uncertainty (:math:`=\sqrt{\rm variance}`) images in the second
+extension. Masked or invalid pixels can be given inifinte or negative
+uncertainty values.
 
 There must be a valid WCS in the header of each image, and each image must
 contain a ``"FILTER"`` keyword giving the name of the *band*
 
+This corresponds approximately to the data model for ``crf.fits`` or
+``calints.fits`` data products of the jwst stage 2 pipeline processing.
 
 Image Stores
 ^^^^^^^^^^^^

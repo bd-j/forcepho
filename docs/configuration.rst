@@ -8,8 +8,8 @@ which is in yaml format.  Here we give an example configuration file with
 descriptions of each parameter.
 
 Note that any parameter can generally be overridden at run time with a command
-line argument. Also, forcepho will try to automatially expand shell variables.  See
-:py:meth:`forcepho.utils.read_config` for details.
+line argument. Also, forcepho will try to automatially expand shell variables.
+See :py:meth:`forcepho.config.read_config` for details.
 
 Switches are generally represented with 0 (False, off) and 1 (True, on)
 
