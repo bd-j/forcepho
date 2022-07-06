@@ -34,7 +34,6 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     "sphinx.ext.intersphinx",
-    #'myst_parser',
     "myst_nb",
     'sphinx.ext.napoleon',
     'numpydoc'
@@ -45,13 +44,24 @@ myst_enable_extensions = ["dollarmath", "colon_fence"]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+# General information about the project.
+project = 'forcepho'
+copyright = '2018-2022, Benjamin Johnson and Contributors'
+author = 'Benjamin Johnson'
 
+# The version info for the project you're documenting, acts as replacement for
+# |version| and |release|, also used in various other places throughout the
+# built documents.
+# The short X.Y version.
+version = '0.6'
+
+language = None
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+autodoc_mock_imports = []
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+#pygments_style = 'sphinx'
+# If true, `todo` and `todoList` produce output, else they produce nothing.
+todo_include_todos = False
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -59,8 +69,8 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_book_theme'
 html_title = "forcepho"
+html_theme = 'sphinx_book_theme'
 html_copy_source = True
 html_show_sourcelink = True
 html_theme_options = {"path_to_docs": "docs",

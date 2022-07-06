@@ -4,6 +4,6 @@ numba >= 0.43.0
 h5py >= 2.8.0
 astropy
 pyyaml
-sphinx-book-theme @ git+https://github.com/dfm/sphinx-book-theme.git@fix-outdir
+sphinx-book-theme
 myst-nb
 numpydoc
