@@ -118,7 +118,6 @@ class SuperScene:
         self.bounds_catalog = make_bounds(self.sourcecat, self.bands,
                                           shapenames=self.shape_cols,
                                           **bounds_kwargs)
-        check_bounds(self.sourcecat, self.bounds_catalog)
 
         # make initial covariance matrices (identities)
         n_param = len(self.parameter_columns)
@@ -127,6 +126,9 @@ class SuperScene:
         # Logs
         self.sourcelog = {}
         self.patchlog = []
+
+    def check_bounds(self):
+        check_bounds(self.sourcecat, self.bounds_catalog)
 
     def set_catalog(self, sourcecat):
         """Set the sourcecat attribute to the given catalog, doing some checks
@@ -950,8 +952,10 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
         hi = flux + noise
 
         lo[flux <= fmin] = np.minimum(lo[flux <= fmin], -fmin)
+        lo[~np.isfinite(lo)] = 0
         #hi = np.hypot(hi, fmin)
         hi = np.maximum(hi, fmin)
+        hi[~np.isfinite(hi)] = np.nanmax(hi)
 
     return lo, hi
 
@@ -968,7 +972,7 @@ def adjust_bounds(sceneDB, bands, config):
             upper = sceneDB.bounds_catalog[b][:, 1]
             new_upper = np.maximum(upper, sceneDB.sourcecat[b] * config.maxfluxfactor)
             sceneDB.bounds_catalog[b][:, 1] = new_upper
-    check_bounds(sceneDB.sourcecat, sceneDB.bounds_catalog)
+    sceneDB.check_bounds()
     return sceneDB
 
 
