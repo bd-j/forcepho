@@ -461,7 +461,7 @@ class Source:
         """
         [setattr(self, p, row[p]) for p in self.SHAPE_COLS]
         [setattr(self, p, row[p]) for p in extra_parameters]
-        if filternames:
+        if filternames is not None:
             self.filternames = filternames
             self.flux = np.zeros(self.n_bands)
         for j, b in enumerate(self.filternames):
@@ -531,7 +531,7 @@ class Galaxy(Source):
     def __init__(self, filters=['band'], filternames=None, radii=None,
                  free_sersic=True, splinedata=None, spline_smoothing=None,
                  spline_type="rect"):
-        if filternames:
+        if filternames is not None:
             self.filternames = filternames
         else:
             self.filternames = filters
@@ -679,6 +679,39 @@ class Galaxy(Source):
         # n_gauss array of da/drh
         return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
                                     for spline in self.splines]))
+
+    def profile(self, r, band=None, epsilon=2.5e-3):
+        """Compute the circularized surface brightness profile.
+
+        Parameters
+        ----------
+        r : ndarray of shape (nr,)
+            The radii at which surface brightnesses are to be computed. Units of
+            arcsec.
+
+        band : string, optional
+            The name of the filter for the flux value to normalize the profile.
+            If not given the profile will be normalized to a total flux of 1.
+
+        epsilon : float
+            A small smoothing to apply to the mixture component radii, to handle
+            delta function components.
+
+        Returns
+        -------
+        mu : ndarray of shape (nr,)
+            The surface brightness of the profile at the given radii.  Units of
+            flux/arcsec^2.
+        """
+        sradii = np.hypot(self.radii, epsilon)
+        ys = self.amplitudes * gauss(r, np.zeros(len(sradii)), sradii)
+        y = ys.sum(axis=-1)
+        if band is not None:
+            f = self.flux[self.filter_index(band)]
+        else:
+            f = 1.0
+
+        return f * y
 
 
 class Star(Source):
@@ -1009,3 +1042,13 @@ def dummy_spline(x, y, dx=0, dy=0):
         return 0.
     else:
         return 1.
+
+
+def gauss(x, mu, sigma, ndim=2):
+    sigma, mu = np.atleast_1d(sigma), np.atleast_1d(mu)
+    C = (np.eye(ndim) * sigma[:, None, None])**2
+    lndet2piC = np.log(np.linalg.det(2*np.pi*C))
+
+    chi = ((x[None, :] - mu[:, None]) / sigma[:, None])
+    y = np.exp(-0.5 * (chi.T**2 + lndet2piC))
+    return y
