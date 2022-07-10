@@ -166,8 +166,10 @@ def radial_plot(image, model, times_r=True):
         factor = 1
 
     ax = axes[1]
-    ax.plot(r, factor * (model-image.data), ".", color="firebrick", rasterized=True, label=r"(model - data) $\times \, r$")
-    ax.axhline(image.data.max() * 0.01, linestyle=":", color="k", label=r"1% of max pixel")
+    ax.plot(r, factor * (model-image.data), ".", color="firebrick",
+            rasterized=True, label=r"(model - data) $\times \, r$")
+    ax.axhline(image.data.max() * 0.01, linestyle=":", color="k",
+               label=r"1% of max pixel")
     ax.axhline(0, linestyle="--", color="k")
     ax.legend()
 
