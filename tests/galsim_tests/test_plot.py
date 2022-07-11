@@ -190,7 +190,8 @@ def compare_parameters(scat, tcat, parname, add_jitter=True,
         cb = ax.scatter(x[sel], y[1, sel], c=tcat[colorby][sel], alpha=0.75,
                         vmin=colors.min(), vmax=colors.max())
         ax.plot(linex, liney, "k:")
-        ax.text(0.8, 0.2, f"{splitby.upper()}={s}", transform=ax.transAxes)
+        if splitby is not None:
+            ax.text(0.8, 0.2, f"{splitby.upper()}={s}", transform=ax.transAxes)
 
     #dfig.colorbar(cb, label=colorby, orientation="vertical", ax=daxes)
     if as_delta:

@@ -215,6 +215,8 @@ if __name__ == "__main__":
         # --- Make the data ---
         if not os.path.exists(config.image_name):
             make_image(config)
+        else:
+            continue
 
         # --------------------
         # --- Fit the data ---
