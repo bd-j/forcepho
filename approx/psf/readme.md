@@ -14,6 +14,12 @@ This tool requires an input PSF image.  This image can be oversampled (i.e. have
 multiple pixels per final science image pixel) to aid in the characterization of
 (mildly) undersampled high frequency structure.
 
+You need to install `galsim` and numpyro to use this tool.
+```
+conda install -c conda-forge galsim
+pip install numpyro
+```
+
 Usage
 -----
 

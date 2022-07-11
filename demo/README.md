@@ -8,7 +8,8 @@ installation of `galsim` to make mock images and `astro-prospector` for
 plotting, e.g.
 
 ```bash
-conda install galsim
+conda install -c conda-forge galsim
+pip install astro-sedpy
 pip install astro-prospector
 ```
 
