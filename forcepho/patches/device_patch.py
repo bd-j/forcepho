@@ -83,24 +83,16 @@ class DevicePatchMixin:
         """This method does several things:
         1) Free existing meta-data arrays on the device, and send new
             (assumed already packed) metadata arrays to device,
-            replacing the associated CUDA pointers;
-        2) Swap the CUDA pointers for the data and the residual;
+            replacing the associated pointers;
+        2) Swap the device-side pointers for the data and the residual;
         3) Free the existing device-side patch_struct;
-        4) Refill the patch_struct array of CUDA pointers and values,
+        4) Refill the patch_struct array of pointers and values,
             and send to device
 
-        After this call the GPU uses the former "residual" vector as the "data"
+        After this call the device uses the former "residual" vector as the
+        "data".
         """
-        assert "residual" in self.device_ptrs, "Must instantiate the Patch with `return_residual=True`"
-        # replace gpu meta data pointers with currently packed meta
-        self.replace_device_meta_ptrs()
-        # Swap Cuda pointers for data and residual
-        self.device_ptrs["data"], self.device_ptrs["residual"] = self.device_ptrs["residual"], self.device_ptrs["data"]
-        # Pack pointers into structure and send structure to device
-        _ = self.send_patchstruct_to_device()
-        self._dirty_data = True
-
-        return self.device_patch
+        raise NotImplementedError
 
     def replace_device_meta_ptrs(self):
         raise NotImplementedError
@@ -167,7 +159,7 @@ class DevicePatchMixin:
 
         assert len(scenes) > 0, "No scenes to prepare!"
 
-        # to communicate with the GPU
+        # to communicate with the device
         proposer = self.get_proposer()
 
         # Pack first scene and send it with pixel data
@@ -182,22 +174,11 @@ class DevicePatchMixin:
             out = proposer.evaluate_proposal(proposal, patch=self)
             # pack this scene
             self.pack_meta(scene)
-            # replace data on device with residual
+            # replace on-device data with on-device residual
             # replace meta of previous block with this block
+            # on-device residual is now garbage
+            # original data is gone!
             self.swap_on_device()
-            # data array on GPU no longer matches self.data
-            self._dirty_data = True
-
-        if swap_local:
-            # replace the CPU side pixel data array with the final residual
-            # after subtracting all blocks except the last.  This makes
-            # 'send_to_gpu' safe to use without overwriting all the source
-            # subtraction we've done to this point.
-            # However, this means original data requires a new `build_patch` call.
-            # TODO: do we need to use data[:] here?
-            self.data = self.retrieve_array("data")
-            self._dirty_data = False
-            raise NotImplementedError("Don't do this!")
 
         return proposer, scenes[-1]
 
@@ -343,6 +324,29 @@ class GPUPatchMixin(DevicePatchMixin):
         self.device_patch = cuda.to_device(patch_struct)
         return self.device_patch
 
+    def swap_on_device(self):
+        """This method does several things:
+        1) Free existing meta-data arrays on the device, and send new
+            (assumed already packed) metadata arrays to device,
+            replacing the associated CUDA pointers;
+        2) Swap the CUDA pointers for the data and the residual;
+        3) Free the existing device-side patch_struct;
+        4) Refill the patch_struct array of CUDA pointers and values,
+            and send to device
+
+        After this call the GPU uses the former "residual" vector as the "data"
+        """
+        assert "residual" in self.device_ptrs, "Must instantiate the Patch with `return_residual=True`"
+        # replace gpu meta data pointers with currently packed meta
+        self.replace_device_meta_ptrs()
+        # Swap Cuda pointers for data and residual
+        self.device_ptrs["data"], self.device_ptrs["residual"] = self.device_ptrs["residual"], self.device_ptrs["data"]
+        # Pack pointers into structure and send structure to device
+        _ = self.send_patchstruct_to_device()
+        self._dirty_data = True
+
+        return self.device_patch
+
     def retrieve_array(self, arrname="residual"):
         """Retrieve a pixel array from the GPU
         """
@@ -442,7 +446,7 @@ class CPUPatchMixin(DevicePatchMixin):
         # TODO: is this the right place for this?
         self.residual = np.zeros_like(self.data)
 
-        # Create dictionary of pointers to relevant arrays
+        # Create dictionary 'device_ptrs' of pointers to relevant arrays
         for arrname in self.patch_struct_dtype.names:
             try:
                 arr = getattr(self, arrname)
@@ -450,12 +454,10 @@ class CPUPatchMixin(DevicePatchMixin):
                 if arr_dt == self.ptr_dtype:
                     ptr, rof = arr.__array_interface__['data']
                     self.device_ptrs[arrname] = ptr
-                    #bf = memoryview(arr).tobytes()
-                    #self.buffer_sizes[arrname] = len(bf)
             except AttributeError:
                 if arrname != 'residual':
                     raise
-        # fill patchstruct with the pointers, get a pointer to the patchstruct
+        # fill 'patchstruct' with the pointers, get a pointer to the patchstruct
         self.device_patch = self.send_patchstruct_to_device()
         return self.device_patch
 
@@ -468,6 +470,7 @@ class CPUPatchMixin(DevicePatchMixin):
             arr_dt = self.patch_struct_dtype[arrname]
             if arr_dt == self.ptr_dtype:
                 ptr, rof = arr.__array_interface__['data']
+                # TODO: should we free data asociated with the existing ptr?
                 self.device_ptrs[arrname] = ptr
 
     def send_patchstruct_to_device(self):
@@ -480,24 +483,54 @@ class CPUPatchMixin(DevicePatchMixin):
         """
         # Get a singlet of the custom dtype
         patch_struct = np.zeros(1, dtype=self.patch_struct_dtype)[0]
+
         for arrname in self.patch_struct_dtype.names:
             arr_dt = self.patch_struct_dtype[arrname]
             if arr_dt == self.ptr_dtype:
+                # Array?  assign pointer
                 patch_struct[arrname] = self.device_ptrs[arrname]
             else:
+                # Value? Assign directly
                 patch_struct[arrname] = getattr(self, arrname)
 
+        # get a ptr to the patchstruct (of pointers)
         self.patch_struct = patch_struct
         self.patchstruct_ptr, rof = patch_struct.__array_interface__['data']
         self.device_patch = self.ptr_dtype(self.patchstruct_ptr)
         return self.device_patch
 
-    def retrieve_array(self, arrname="residual"):
-        """Retrieve a pixel array from the CPU
+    def swap_on_device(self):
+        """This method does several things:
+        1) Free existing meta-data arrays on the device, and send new
+            (assumed already packed) metadata arrays to device,
+            replacing the associated pointers;
+        2) Swap the device-side pointers for the data and the residual;
+        3) Swap the data and residual attribute references;
+        3) Free the existing device-side patch_struct;
+        4) Refill the patch_struct array of pointers and values,
+            and send to device
+
+        After this call the device uses the former "residual" vector as the "data".
         """
-        # FIXME: this does not work if the data/residual pointers have been swapped
-        # May need to override swap_on_device to also swap the attribute references
+        assert "residual" in self.device_ptrs, "Must instantiate the Patch with `return_residual=True`"
+        # replace device meta data pointers with currently packed meta
+        self.replace_device_meta_ptrs()
+        # Swap pointers for data and residual
+        # kernel should now operate on what was once the residual
+        self.device_ptrs["data"], self.device_ptrs["residual"] = self.device_ptrs["residual"], self.device_ptrs["data"]
+        # swap attribute references too!
+        self.data, self.residual = self.residual, self.data
+        # Pack pointers into structure and send structure to device
+        _ = self.send_patchstruct_to_device()
+        #self._dirty_data = True
+
+        return self.device_patch
+
+    def retrieve_array(self, arrname="residual"):
+        """Retrieve a copy of pixel array from the CPU
+        """
+        # we just return a copy of the array
         flatdata = getattr(self, arrname)
         #shape=self.xpix.shape, dtype=self.pix_dtype)
 
-        return flatdata
+        return flatdata.copy()

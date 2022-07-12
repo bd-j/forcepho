@@ -699,41 +699,6 @@ def optimize_fluxes(patcher, active, return_all=False):
         return fluxes, precisions
 
 
-def deprecated_design_matrix(patcher, active, fixed=None, shape_cols=[]):
-    """Create the design matrices for linear least squares.  Superceded by
-    :py:meth:`DevicePatchMixin.design_matrix()`.
-
-    Returns
-    -------
-    Xes : list of ndarrays
-       List of design matrices, each of shape (n_active, n_pix_band),
-       Giving the model flux image of a given source for total flux = 1
-
-    fixedX : list of ndarrays
-       List of flux images of the fixed sources in each band.
-    """
-    Xes = [np.zeros((len(active), n)) for n in patcher.band_N_pix]
-
-    patcher._dirty_data = False # reset since we don't care about the GPU side data array anymore
-    if fixed is not None:
-        model, q = patcher.prepare_model(fixed=fixed, active=fixed[-1:], shapes=shape_cols)
-        m = patcher.data - model.residuals(q, unpack=False)
-        fixedX = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
-        patcher._dirty_data = False  # reset since we don't care about the GPU side data array anymore
-    else:
-        fixedX = None
-
-    for i, source in enumerate(active):
-        model, q = patcher.prepare_model(active=np.atleast_1d(source), shapes=shape_cols)
-        m = patcher.data - model.residuals(q, unpack=False)
-        msplit = np.split(m, np.cumsum(patcher.band_N_pix[:-1]))
-        for j, b in enumerate(patcher.bandlist):
-            Xes[j][i, :] = msplit[j] / source[b]
-        patcher._dirty_data = False # reset since we don't care about the GPU side data array anymore
-
-    return Xes, fixedX
-
-
 if __name__ == "__main__":
 
     from scipy.stats import norm

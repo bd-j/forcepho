@@ -25,7 +25,7 @@ __all__ = ["Residuals", "Samples",
            "postop_catalog", "postsample_catalog",
            "flux_unc_linear", "make_errorbars",
            "cat_to_reg", "write_sourcereg", "write_patchreg",
-           "write_images",
+           "write_images", "show_exp", "populate_image"
            "residual_pdf", "chain_pdf"]
 
 
@@ -48,20 +48,8 @@ class Residuals:
         xpix, ypix = self.handle[exp]["xpix"][:], self.handle[exp]["ypix"][:]
         data = self.handle[exp][value][:]
 
-        g = (xpix >= 0) & (ypix >= 0)
-        xpix = xpix[g]
-        ypix = ypix[g]
-        data = data[g]
+        im, lo, hi = populate_image(xpix, ypix, data)
 
-        lo = np.array((xpix.min(), ypix.min())) - 0.5
-        hi = np.array((xpix.max(), ypix.max())) + 0.5
-        size = hi - lo
-        im = np.zeros(size.astype(int)) + np.nan
-
-        x = (xpix-lo[0]).astype(int)
-        y = (ypix-lo[1]).astype(int)
-        # This is the correct ordering of xpix, ypix subscripts
-        im[x, y] = data
         return im, lo, hi
 
     def show(self, e=0, exp="", axes=[], **plot_kwargs):
@@ -648,6 +636,23 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     standard astro format (x increasing left to right, y increasing bottom to
     top)
     """
+    im, lo, hi = populate_image(xpix, ypix, data)
+
+    ax.imshow(im.T, origin="lower",
+              extent=(lo[0], hi[0], lo[1], hi[1]),
+              **imshow_kwargs)
+    return ax
+
+
+def populate_image(xpix, ypix, data):
+    """Convenience utility to reshape outputs for plotting
+    """
+
+    g = (xpix >= 0) & (ypix >= 0)
+    xpix = xpix[g]
+    ypix = ypix[g]
+    data = data[g]
+
     lo = np.array((xpix.min(), ypix.min())) - 0.5
     hi = np.array((xpix.max(), ypix.max())) + 0.5
     size = hi - lo
@@ -656,12 +661,8 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     x = (xpix-lo[0]).astype(int)
     y = (ypix-lo[1]).astype(int)
     # This is the correct ordering of xpix, ypix subscripts
-    im[x, y] = value
-
-    ax.imshow(im.T, origin="lower",
-              extent=(lo[0], hi[0], lo[1], hi[1]),
-              **imshow_kwargs)
-    return ax
+    im[x, y] = data
+    return im, lo, hi
 
 
 def show_precision(s, i, ax, nsigma=3, snr_max=10):
