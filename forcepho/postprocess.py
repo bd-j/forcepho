@@ -25,7 +25,7 @@ __all__ = ["Residuals", "Samples",
            "postop_catalog", "postsample_catalog",
            "flux_unc_linear", "make_errorbars",
            "cat_to_reg", "write_sourcereg", "write_patchreg",
-           "write_images", "show_exp", "populate_image"
+           "write_images", "show_exp", "populate_image",
            "residual_pdf", "chain_pdf"]
 
 
@@ -636,7 +636,7 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     standard astro format (x increasing left to right, y increasing bottom to
     top)
     """
-    im, lo, hi = populate_image(xpix, ypix, data)
+    im, lo, hi = populate_image(xpix, ypix, value)
 
     ax.imshow(im.T, origin="lower",
               extent=(lo[0], hi[0], lo[1], hi[1]),
