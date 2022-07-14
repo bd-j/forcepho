@@ -210,7 +210,7 @@ class DevicePatchMixin:
         ys = np.split(y, np.cumsum(self.band_N_pix[:-1]))
 
         Xes = [np.zeros((len(active), n)) for n in self.band_N_pix]
-        scenes = [self.set_scene(np.atleast_1d(a), **scene_kwargs)
+        scenes = [self.set_scene([a], **scene_kwargs)
                   for a in active]
 
         # to communicate with the GPU
