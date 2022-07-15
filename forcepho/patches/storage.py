@@ -358,6 +358,42 @@ class MetaStore:
 
         return headers
 
+    def find_exposures(self, sky, bandlist, wcs_origin=0):
+        """Find all exposures in the specified bands that cover the given sky
+        position
+        """
+        bra, bdec = sky
+        epaths, bands = [], []
+        for band in bandlist:
+            if band not in self.wcs.keys():
+                continue
+            for expID in self.wcs[band].keys():
+                #print(expID)
+                epath = "{}/{}".format(band, expID)
+                wcs = self.wcs[band][expID]
+                hdr = self.headers[band][expID]
+                imsize = hdr["NAXIS1"], hdr["NAXIS2"]
+                # Check region bounding box has a corner in the exposure.
+                # NOTE: If bounding box entirely contains image this might fail
+                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
+                inim = np.any((bx > 0) & (bx < imsize[0]) &
+                              (by > 0) & (by < imsize[1]))
+                if inim:
+                    epaths.append(expID)
+                    bands.append(band)
+        return epaths, bands
+
+    def to_table(self, keys=None):
+        """Write key exposure info to a FITS binary table
+        """
+        info = [('filename', 'S30'),
+                ('visit_id', 'S30'), ('visit_type', 'S30'), ('obs_label', 'S30'),
+                ('sca_id', '>i8'), ('exp_num', '>i8'),
+                ('date', 'S30'), ('date-obs', 'S30'), ('time-obs', 'S30'), ('expstart', '>f8'),
+                ('filter', 'S30'), ('exptime', '>f8'),
+                ('ra', '>f8'), ('dec', '>f8'), ('pa', '>f8')]
+        raise NotImplementedError
+
 
 class PSFStore:
     """Assumes existence of a file with the following structure
