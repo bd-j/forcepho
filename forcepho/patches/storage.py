@@ -383,16 +383,48 @@ class MetaStore:
                     bands.append(band)
         return epaths, bands
 
-    def to_table(self, keys=None):
+    def to_table(self, tablename, info=None, **kwargs):
         """Write key exposure info to a FITS binary table
         """
-        info = [('filename', 'S30'),
-                ('visit_id', 'S30'), ('visit_type', 'S30'), ('obs_label', 'S30'),
-                ('sca_id', '>i8'), ('exp_num', '>i8'),
-                ('date', 'S30'), ('date-obs', 'S30'), ('time-obs', 'S30'), ('expstart', '>f8'),
-                ('filter', 'S30'), ('exptime', '>f8'),
-                ('ra', '>f8'), ('dec', '>f8'), ('pa', '>f8')]
-        raise NotImplementedError
+        jwtypes = {"<U40": ["filename", "cal_ver", "prd_ver",
+                            "visit_id", "obs_id", "obslabel",
+                            "program", "observatn", "visit", "visit_grp",
+                            "seq_id", "exposure",
+                            "date-obs", "time-obs", "expstart",
+                            "detector", "module", "filter", "readpatt"],
+                   "<i4": ["sca_num", "expcount"],
+                   "<f8": ["effexptm", "ra", "dec", "pa_aper"]}
+
+        # make the array
+        cols = []
+        for typ, names in jwtypes.items():
+            for n in names:
+                cols.append((n, typ))
+        dt = np.dtype(cols)
+
+        # fill the array
+        arr = np.zeros(self.nexp, dtype=dt)
+        i = 0
+        for b in list(self.headers.keys()):
+            for e, hdr in self.headers[b].items():
+                for c in arr.dtype.names:
+                    try:
+                        arr[i][c] = hdr[c.upper()]
+                    except:
+                        pass
+                arr[i]["ra"] = hdr["CRVAL1"]
+                arr[i]["dec"] = hdr["CRVAL2"]
+                i += 1
+
+        fits.writeto(tablename, arr, **kwargs)
+
+    @property
+    def nexp(self):
+        _nexp = 0
+        bands = list(self.headers.keys())
+        for b in bands:
+            _nexp += len(self.headers[b].keys())
+        return _nexp
 
 
 class PSFStore:

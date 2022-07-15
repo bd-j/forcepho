@@ -75,7 +75,7 @@ To update
 ```bash
 git pull
 module purge
-module load cuda10.2 hdf5/1.10.6 openmpi
+module load cuda10.2 hdf5/1.10.6 openmpi slurm
 source activate force
 python -m pip install .
 ```

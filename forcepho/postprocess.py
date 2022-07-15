@@ -57,8 +57,12 @@ class Residuals:
             exp = self.exposures[e]
         xpix, ypix = self.handle[exp]["xpix"][:], self.handle[exp]["ypix"][:]
         data = self.handle[exp]["data"][:]
+        ierr = self.handle[exp]["ierr"][:]
         resid = self.handle[exp]["residual"][:]
         model = data - resid
+        chi = data * ierr
+        resid[ierr==0] = np.nan
+        chi[ierr==0] = np.nan
 
         # keep the scales the same
         kwargs = dict(vmin=min(data.min(), model.min(), resid.min()),
