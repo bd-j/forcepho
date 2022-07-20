@@ -125,6 +125,20 @@ class Samples(Result):
     def __init__(self, filename):
         super(Samples, self).__init__(filename)
 
+    def summary_dtype(self, npoint=0):
+        bands, shapes, n_sample = list(self.bands), list(self.shape_cols), self.n_sample
+        params = bands + shapes
+        icols = [("id", "<f8"), ("source_index", "<i4"), ("wall", "<f4"),
+                ("lnp_best", "<f8")] #("filename")]
+
+        if npoint:
+            n_sample = npoint
+        else:
+            icols += [("lnp", "<f8", n_sample)]
+
+        new = np.dtype(icols + [(c, float, n_sample) for c in params])
+        return new
+
 
 def run_metadata(root):
     """
@@ -348,7 +362,6 @@ def make_errorbars(samplecat, percentiles=[16, 50, 84]):
     if type(samplecat) is str:
         cat = np.array(fits.getdata(samplecat))
         hdr = fits.getheader(samplecat)
-        hdr["PCTS"] = ",".join([str(p) for p in percentiles])
         bands = hdr["FILTERS"].split(",")
     else:
         cat = samplecat
@@ -369,6 +382,7 @@ def make_errorbars(samplecat, percentiles=[16, 50, 84]):
         else:
             ecat[col] = cat[col]
 
+    hdr["PCTS"] = ",".join([str(p) for p in percentiles])
     hdr["SMPLCOLS"] = ",".join(scol)
 
     return ecat, hdr

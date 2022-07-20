@@ -210,6 +210,7 @@ def write_residuals(patcher, filename, residuals=None):
 
     with h5py.File(filename, "w") as out:
         out.create_dataset("epaths", data=np.array(epaths, dtype="S"))
+        out.create_dataset("ebands", data=np.array(patcher.bands, dtype="S"))
         #out.create_dataset("exposure_start", data=patcher.exposure_start)
         out.create_dataset("reference_coordinates", data=patcher.patch_reference_coordinates)
         #out.create_dataset("active", data=)
