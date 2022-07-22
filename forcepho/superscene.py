@@ -960,24 +960,38 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
     return lo, hi
 
 
-def adjust_bounds(sceneDB, bands, config, active=None):
+def adjust_bounds(sceneDB, bands, config,
+                  active=None, eps=0.001,
+                  minflux=None, maxfluxfactor=None):
     if type(sceneDB) is np.ndarray:
         bcat = sceneDB
         scat = active
     else:
         bcat = sceneDB.bounds_catalog
         scat = sceneDB.source_catalog
+
+    if minflux is None:
+        minflux = config.minflux
+    if maxfluxfactor is None:
+        maxfluxfactor = config.maxfluxfactor
     # --- Adjust initial bounds ---
-    if config.minflux is not None:
+    if minflux is not None:
         # set lower bound for the flux that is <= minflux
         for b in bands:
             lower = bcat[b][:, 0]
-            bcat[b][:, 0] = np.minimum(lower, config.minflux)
-    if config.maxfluxfactor > 0:
+            bcat[b][:, 0] = np.minimum(lower, minflux)
+    if maxfluxfactor > 0:
         for b in bands:
             upper = bcat[b][:, 1]
-            new_upper = np.maximum(upper, scat[b] * config.maxfluxfactor)
+            new_upper = np.maximum(upper, scat[b] * maxfluxfactor)
             bcat[b][:, 1] = new_upper
+    # --- adjust fluxes to be within bands ---
+    if active is not None:
+        for b in bands:
+            active[b][:] = np.clip(active[b][:],
+                                   bcat[b][:, 0] + eps,
+                                   bcat[b][:, 0] - eps)
+
     if type(sceneDB) is not np.ndarray:
         sceneDB.check_bounds()
     return sceneDB
