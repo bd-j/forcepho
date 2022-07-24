@@ -552,7 +552,7 @@ def run_dynesty(model, q, lower=0, upper=1.0, nlive=50):
                                            bound="multi", method="rwalk", bootstrap=0)
     t0 = time.time()
     sampler.run_nested(nlive_init=int(nlive/2), nlive_batch=int(nlive),
-                       wt_kwargs={'pfrac': 1.0}, stop_kwargs={"post_thresh":0.2})
+                       wt_kwargs={'pfrac': 1.0}, stop_kwargs={"post_thresh": 0.2})
     tsample = time.time() - t0
 
     dresults = sampler.results
@@ -567,85 +567,6 @@ def run_dynesty(model, q, lower=0, upper=1.0, nlive=50):
     result.upper = upper
 
     return result, dresults
-
-
-def run_hmc(model, q, scales=1.0, nwarm=0, niter=500, length=20,
-            lower=-np.inf, upper=np.inf):
-
-    from hmc import BasicHMC
-
-    model.lower = lower
-    model.upper = upper
-    sampler = BasicHMC(model, verbose=False)
-    sampler.ndim = len(q)
-    sampler.set_mass_matrix(1 / scales**2)
-
-    result = Result()
-    eps = sampler.find_reasonable_stepsize(q * 1.0)
-    use_eps = sampler.step_size * 2
-    result.step_size = np.copy(use_eps)
-    result.metric = scales**2
-
-    if nwarm > 0:
-        out = sampler.sample(q, iterations=nwarm, mass_matrix=1 / scales**2,
-                             epsilon=use_eps, length=length,
-                             sigma_length=int(length / 4),
-                             store_trajectories=True)
-        pos, prob, grad = out
-        use_eps = sampler.find_reasonable_stepsize(pos)
-        result.step_size = np.copy(use_eps)
-        ncwarm = np.copy(model.ncall)
-        model.ncall = 0
-
-    out = sampler.sample(pos, iterations=niter, mass_matrix=1 / scales**2,
-                         epsilon=use_eps, length=length,
-                         sigma_length=int(length / 4),
-                         store_trajectories=True)
-    pos, prob, grad = out
-
-    result.ndim = sampler.ndim
-    result.starting_position = q.copy()
-    result.chain = sampler.chain.copy()
-    result.lnp = sampler.lnp.copy()
-    result.lower = lower
-    result.upper = upper
-    result.trajectories = sampler.trajectories
-    result.accepted = sampler.accepted
-    result.ncall = (ncwarm, np.copy(model.ncall))
-
-    return result
-
-
-def run_hemcee(model, q, scales=1.0, nwarm=2000, niter=1000):
-    """Deprecated, hemcee is broken
-    """
-    from hemcee import NoUTurnSampler
-    from hemcee.metric import DiagonalMetric
-
-    metric = DiagonalMetric(scales**2)
-    sampler = NoUTurnSampler(model.lnprob, model.lnprob_grad, metric=metric)
-
-    t = time.time()
-    pos, lnp0 = sampler.run_warmup(q, nwarm)
-    twarm = time.time() - t
-    ncwarm = np.copy(model.ncall)
-    model.ncall = 0
-    t = time.time()
-    chain, lnp = sampler.run_mcmc(pos, niter)
-    tsample = time.time() - t
-    ncsample = np.copy(model.ncall)
-
-    result = Result()
-    result.ndim = len(q)
-    result.starting_position = q.copy()
-    result.chain = chain
-    result.lnp = lnp
-    result.ncall = (ncwarm, ncsample)
-    result.wall_time = (twarm, tsample)
-    result.metric_variance = np.copy(metric.variance)
-    result.step_size = sampler.step_size.get_step_size()
-
-    return result
 
 
 def optimize_one_band(X, w, y, fixedX=0):

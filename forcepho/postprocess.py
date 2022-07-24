@@ -659,7 +659,7 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     ax.imshow(im.T, origin="lower",
               extent=(lo[0], hi[0], lo[1], hi[1]),
               **imshow_kwargs)
-    return ax
+    return im
 
 
 def populate_image(xpix, ypix, data):
