@@ -87,6 +87,33 @@ class Residuals:
 
         return axes
 
+    def write_cutouts(self, bands, cutdir=".", target="cool",
+                      as_fits=True, **imkwargs):
+
+        raise NotImplementedError
+
+        count = {b: 1 for b in bands}
+        for exp in self.exposures:
+            #imlabel = "_".join(os.path.basename(exp).split("_")[1:4])
+            #name = exp.replace("/home/bjohnso6/smacs/pho/output/",
+            #                "/Users/bjohnson/Projects/smacs/pho/output/gpu/")
+            #hdr = fits.getheader(name)
+            band = hdr["FILTER"]
+            det = hdr["DETECTOR"]
+            e = hdr["EXPOSURE"]
+            kinds = ["data", "model", "residual"]
+            for i, k in enumerate(kinds):
+                arr, lo, hi = self.make_exp(exp=exp, value=k)
+                num = count[band]
+                out = f"{cutdir}/{target}_{band}_{num}_{kinds[i]}"
+                if as_fits:
+                    fits.writeto(f"{out}.fits", arr, overwrite=True, header=hdr)
+                else:
+                    pl.imsave(f"{out}.png", arr, **imkwargs)
+            count[band] += 1
+
+        return count
+
     def sky_to_pix(self, ra, dec, e=0, exp=""):
         if not exp:
             exp = self.exposures[e]
