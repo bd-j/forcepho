@@ -237,6 +237,22 @@ class DevicePatchMixin:
 
         return Xes, ys
 
+    def render(self, catalog, splinedata=None):
+        """Convenience method that allows one to render a particular scene
+        represented as rows of a structured array, and return images
+        """
+        proposer = self.get_proposer()
+        scene = self.set_scene(catalog, splinedata=splinedata)
+        self.pack_meta(scene)
+
+        proposal = scenes.get_proposal()
+        orig, self.return_residual = self.return_residual, True
+        ret = proposer.evaluate_proposal(proposal, patch=self, unpack=True)
+        self.return_residual = True
+        chi2, chi2_derivs, residuals = ret
+        image = -residuals
+        return image
+
 
 class GPUPatchMixin(DevicePatchMixin):
 

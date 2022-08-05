@@ -721,6 +721,53 @@ def show_precision(s, i, ax, nsigma=3, snr_max=10):
     ax.fill_between(flux[oo], (flux - nsigma * sigma)[oo], (flux + nsigma * sigma)[oo], alpha=0.5)
 
 
+def combined_rhalf(samples, stamp, band, sources=slice(None), step=5):
+
+    stop = samples.chain.shape[0]
+    start = stop - samples.n_sample
+
+    rhalf = []
+
+    inds = range(start, stop, step)
+    for i in inds:
+        cat = samples.get_sample_cat(i)
+        im, scene = forcepho_slow_model(cat[sources], stamp, band)
+        x, y = (stamp.xpix * im).sum() / im.sum(), (stamp.ypix * im).sum() / im.sum()
+        r = np.hypot(stamp.xpix - x, stamp.ypix - y).flatten()
+        f = im.flatten()
+        oo = np.argsort(r)
+        fo = np.cumsum(f[oo]) / im.sum()
+        rhalf.append(np.interp(0.5, fo, r[oo]))
+
+    return np.array(rhalf)
+
+
+def forcepho_slow_model(cat, stamp, band, psf=None,
+                        splinedata="../data/stores/sersic_splinedata_large.h5"):
+
+    if psf is None:
+        psf = PointSpreadFunction()
+    stamp.psf = psf
+    #stamp.psf.covariances = 4
+
+    im = np.zeros([stamp.nx, stamp.ny])
+    scene = []
+
+    for catrow in cat:
+        galaxy = Galaxy(splinedata=splinedata)
+        #print(catrow[band])
+        galaxy.from_catalog_row(catrow, filternames=[band])
+        scene.append(galaxy)
+        #print(galaxy.ra, galaxy.dec)
+        #print(stamp.sky_to_pix(np.array([galaxy.ra, galaxy.dec])))
+
+        i, g = stamp.render(galaxy, compute_deriv=False)
+        #print(i.max())
+        im += i.reshape(stamp.nx, stamp.ny)
+
+    return im, scene
+
+
 if __name__ == "__main__":
 
     modes = ["images", "patches", "catalog", "chains", "postop"]
