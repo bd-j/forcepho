@@ -261,9 +261,9 @@ def do_child(comm, config=None):
 
     # --- What are we doing? ---
     #if config.mode == "optimization":
-    #    work = optimization_task
+    #    work = optimize
     #elif config.mode == "sampling":
-    #    work = sampling_task
+    #    work = sample
     #else:
     work = dummy_work
 
@@ -279,9 +279,19 @@ def do_child(comm, config=None):
             logger.info(f"Child {rank} shutting down.")
             break
 
-        answer = work(patcher, task, config, logger)
+        scene = task["region"], task["active"], task["fixed"], task["bounds"]
+        fit, scene, model = work(patcher, scene, config, logger)
+
+        # shape output
+        region, active, fixed, bounds = scene
+        out, step, stats = fit
+        final, covs = out.fill(region, active, fixed, model, bounds=bounds,
+                               step=step, stats=stats, patchID=0)
+
+        # --- write to disk? ---
 
         # --- blocking send to parent, free GPU memory ---
+        answer = dict(out=out, covs=covs, final=final)
         comm.send(answer, parent, status.tag)
         logger.info(f"Child {rank} sent answer for task id {status.tag}")
 

@@ -19,14 +19,14 @@ from .utils import isophotal_radius
 from .fitting import Result
 from .superscene import flux_bounds
 
-
 __all__ = ["Residuals", "Samples",
            "run_metadata",
            "postop_catalog", "postsample_catalog",
            "flux_unc_linear", "make_errorbars",
            "cat_to_reg", "write_sourcereg", "write_patchreg",
            "write_images", "show_exp", "populate_image",
-           "residual_pdf", "chain_pdf"]
+           "residual_pdf", "chain_pdf",
+           "combined_rhalf"]
 
 
 class Residuals:
@@ -744,6 +744,9 @@ def combined_rhalf(samples, stamp, band, sources=slice(None), step=5):
 
 def forcepho_slow_model(cat, stamp, band, psf=None,
                         splinedata="../data/stores/sersic_splinedata_large.h5"):
+
+    from .sources import Galaxy
+    from .slow.psf import PointSpreadFunction
 
     if psf is None:
         psf = PointSpreadFunction()

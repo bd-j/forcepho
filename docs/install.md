@@ -55,38 +55,67 @@ python -m pip install .
 
 ### lux
 
-install requires a Miniconda download
+install is easiest with a Miniconda download
 
 ```bash
-module load cuda10.2 hdf5/1.10.6 gcc openmpi git slurm
+module load cuda11.2 hdf5/1.10.6 gcc openmpi git slurm
 conda env create -f environment.yml
 source activate force
 python -m pip install .
 ```
 
-For slurm scripts just do
+Note that to install mpi4py you should use pip (not conda) and you may have to
+hide a linker that comes with miniconda
+
+```bash
+mv $HOME/miniconda3/envs/force/compiler_compat/ld $HOME/miniconda3/envs/force/compiler_compat/ld_old
+python -m pip install --no-cache-dir mpi4py
+```
+
+For running slurm scripts just have this in the jobfile:
+
 ```bash
 module purge
-module load cuda10.2 hdf5/1.10.6 openmpi
+module load cuda11.2 hdf5/1.10.6 openmpi
 source activate force
 ```
 
-To update
+To update forcepho:
+
 ```bash
 git pull
 module purge
-module load cuda10.2 hdf5/1.10.6 openmpi slurm
+module load cuda11.2 hdf5/1.10.6 openmpi slurm
 source activate force
 python -m pip install .
 ```
 
-### GPU details
+## GPU details
 
-MPS and Profiling
+### lux
+
+The user can start an MPS server
+
+```bash
+# Start MPS Daemon on both GPUs on this node
+export CUDA_VISIBLE_DEVICES=0,1 # Select both GPUS
+export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps # Select a location that’s accessible to the given $UID
+export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log # Select a location that’s accessible to the given $UID
+nvidia-cuda-mps-control -d # Start the daemon.
+
+```
+
+### cannon
 
 From the odyssey docs: While on GPU node, you can run `nvidia-smi` to get information about the assigned GPU
 
-Not sure if it's necessary or how to enable MPS server.  On ascent one does
+Not sure if it's necessary or how to enable MPS server.
+
+### ascent/summit
+
+MPS and Profiling
+
+On ascent one enables MPS with
 
 ```bash
 -alloc_flags "gpumps"
