@@ -13,18 +13,17 @@ import json
 from astropy.io import fits
 import h5py
 
-from .utils import read_config, sky_to_pix
-from .patches.storage import MetaStore
-from .utils import isophotal_radius
 from .fitting import Result
+from .utils import sky_to_pix, populate_image, isophotal_radius
+from .patches.storage import MetaStore
 from .superscene import flux_bounds
 
 __all__ = ["Residuals", "Samples",
            "run_metadata",
            "postop_catalog", "postsample_catalog",
-           "flux_unc_linear", "make_errorbars",
-           "cat_to_reg", "write_sourcereg", "write_patchreg",
-           "write_images", "show_exp", "populate_image",
+           "make_errorbars", "flux_unc_linear",
+           "write_sourcereg", "write_patchreg",
+           "write_images", "show_exp",
            "residual_pdf", "chain_pdf",
            "combined_rhalf"]
 
@@ -61,8 +60,8 @@ class Residuals:
         resid = self.handle[exp]["residual"][:]
         model = data - resid
         chi = data * ierr
-        resid[ierr==0] = np.nan
-        chi[ierr==0] = np.nan
+        resid[ierr == 0] = np.nan
+        chi[ierr == 0] = np.nan
 
         # keep the scales the same
         kwargs = dict(vmin=min(data.min(), model.min(), resid.min()),
@@ -218,7 +217,6 @@ def postop_catalog(root, bands=None, catname=None):
     samples = Samples(f"{root}/patches/patch0_samples.h5")
     if catname is None:
         config = json.loads(samples.config)
-        #config = read_config(config)
         raw = config["raw_catalog"]
         catname = raw.replace(".fits", "_postop.fits")
     if bands is None:
@@ -458,64 +456,8 @@ def check_multipatch(root, n_sample=256):
     return stats
 
 
-def make_regions(cat, roi=None, ellipse=False):
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from regions import EllipseSkyRegion, Regions
-
-    if roi is None:
-        roi = cat["rhalf"]
-
-    regs = []
-    for i, row in enumerate(cat):
-        center_sky = SkyCoord(row["ra"], row["dec"], unit='deg', frame='fk5')
-
-        if ellipse:
-            sqrtq = row["q"]
-            pa = np.rad2deg(-row["pa"])
-            #pa = np.rad2deg(row["pa"])
-        else:
-            sqrtq = 1
-            pa = 0.0
-        a = roi[i] / sqrtq
-        b = sqrtq * roi[i]
-        reg = EllipseSkyRegion(center=center_sky, height=b * u.arcsec,
-                               width=a * u.arcsec, angle=pa * u.deg)
-        regs.append(reg)
-
-    return Regions(regs)
-
-
-def cat_to_reg(cat, slist="", showid=False, default_color="green",
-               valid=None, roi=None, ellipse=False):
-    """Make a ds9 region file from a catalog.
-    """
-    if type(cat) is str:
-        from astropy.io import fits
-        cat = fits.getdata(cat)
-
-    regions = make_regions(cat, roi=roi, ellipse=ellipse)
-
-    if valid is None:
-        valid = np.ones(len(cat), dtype=bool)
-    for i, r in enumerate(regions):
-        if valid[i]:
-            r.visual["color"] = default_color
-        else:
-            r.visual["color"] = "red"
-
-    if showid:
-        for i, r in enumerate(regions):
-            r.meta["text"] = f"{cat[i]['id']}"
-
-    if slist:
-        regions.write(slist, format="ds9", overwrite=True)
-
-    return regions
-
-
 def write_sourcereg(root, slist="sources.reg", showid=False,
-                    isophote=("F160W", 0.1/(0.06**2))):
+                    isophote=None):
     """
     Parameters
     ----------
@@ -528,27 +470,31 @@ def write_sourcereg(root, slist="sources.reg", showid=False,
     rfile = f"{root}/image/{slist}"
 
     cat = fits.getdata(f)
-    valid = cat["n_iter"] > 0
     if isophote is not None:
-        roi = isophotal_radius(isophote[1], cat[isophote[0]], cat["rhalf"], sersic=cat["sersic"])
+        roi = isophotal_radius(isophote[1], cat[isophote[0]],
+                               cat["rhalf"], sersic=cat["sersic"])
         roi[np.isnan(roi)] = cat["rhalf"][np.isnan(roi)]
     else:
         roi = cat["rhalf"]
-    regions = cat_to_reg(cat, slist=rfile, showid=showid, roi=roi, ellipse=True, valid=valid)
+    regions = cat_to_reg(cat, roi=roi, ellipse=True)
+    regions.write(slist, format="ds9", overwrite=True)
+
     return regions
 
 
-def write_patchreg(root, plist="patches.reg"):
-    files = glob.glob(f"{root}/patches/*samples.h5")
-    assert len(files) > 0
-    patches = range(len(files))
+def write_patchreg(patchlist, plist="./patches.reg"):
+    """
+    patchlist : list of str
+        The names of the _samples.h5 files constituting the patches
+    """
+    patchlist.sort()
 
-    with open(f"{root}/image/{plist}", "w") as out:
+    with open(plist, "w") as out:
         out.write("global color=blue\n")
         fmt = 'fk5;circle({}d,{}d,{}d) # text="{}"\n'
-        for p in patches:
-            s = Samples(f"{root}/patches/patch{p}_samples.h5")
-            out.write(fmt.format(s.region.ra, s.region.dec, s.region.radius, p))
+        for i, p in enumerate(patchlist):
+            s = Samples(p)
+            out.write(fmt.format(s.region.ra, s.region.dec, s.region.radius, i))
 
 
 def write_images(root, subdir="image", metafile=None, show_model=False, show_chi=False):
@@ -689,27 +635,6 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     return im
 
 
-def populate_image(xpix, ypix, data):
-    """Convenience utility to reshape outputs for plotting
-    """
-
-    g = (xpix >= 0) & (ypix >= 0)
-    xpix = xpix[g]
-    ypix = ypix[g]
-    data = data[g]
-
-    lo = np.array((xpix.min(), ypix.min())) - 0.5
-    hi = np.array((xpix.max(), ypix.max())) + 0.5
-    size = hi - lo
-    im = np.zeros(size.astype(int)) + np.nan
-
-    x = (xpix-lo[0]).astype(int)
-    y = (ypix-lo[1]).astype(int)
-    # This is the correct ordering of xpix, ypix subscripts
-    im[x, y] = data
-    return im, lo, hi
-
-
 def show_precision(s, i, ax, nsigma=3, snr_max=10):
     from forcepho.superscene import flux_bounds
     flux = s.final[s.bands[i]]
@@ -744,6 +669,10 @@ def combined_rhalf(samples, stamp, band, sources=slice(None), step=5):
 
 def forcepho_slow_model(cat, stamp, band, psf=None,
                         splinedata="../data/stores/sersic_splinedata_large.h5"):
+
+    """Render a scene (given as a fpho catalog) onto a stamp using the slow
+    code.  This can be useful to render scenes with idealized (narrow) PSFs.
+    """
 
     from .sources import Galaxy
     from .slow.psf import PointSpreadFunction

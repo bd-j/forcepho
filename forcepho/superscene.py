@@ -19,7 +19,6 @@ from astropy.coordinates import SkyCoord
 
 from .region import CircularRegion
 from .sources import Galaxy
-from .utils import read_config
 
 
 __all__ = ["REQUIRED_COLUMNS",
