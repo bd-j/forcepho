@@ -3,6 +3,7 @@
 """io.py - utilities for writing patch & chain data to disk
 """
 
+import numpy as np
 import json
 import h5py
 

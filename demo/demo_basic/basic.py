@@ -66,6 +66,8 @@ if __name__ == "__main__":
                        rhalf=config.rhalf, sersic=config.sersic, pa=0.0)
     # Render the scene in galsim, including PSF
     psf = get_galsim_psf(scale, sigma_psf=sigma)
+    if os.path.exists(config.psfstore):
+        os.remove(config.psfstore)
     make_psfstore(config.psfstore, band, sigma, nradii=9)
     im = galsim_model(scene, stamp, psf=psf)
 

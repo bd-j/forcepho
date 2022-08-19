@@ -103,6 +103,7 @@ if __name__ == "__main__":
     tdir = sys.argv[1]
     patchname = f"{tdir}_samples.h5"
     dirname = os.path.dirname(patchname)
+    dirname = "."
     tag = os.path.basename(patchname).replace(".h5", "")
     title = tag.replace("_", ", ")
 

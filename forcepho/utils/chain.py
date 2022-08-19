@@ -69,7 +69,11 @@ def combine_chains(chaincat, bands, groups={}):
 
     hdr = {}
     scat = chaincat
-    ocat = np.zeros(len(groups), dtype=scat.dtype)
+    dtype = scat.dtype
+    #for desc in dtype:
+    #    if desc[0] == "id":
+    #        desc[1] = "<U30"
+    ocat = np.zeros(len(groups), dtype=dtype)
 
     mid = scat["id"].tolist()
     for i, (g, sub) in enumerate(groups.items()):
@@ -81,7 +85,7 @@ def combine_chains(chaincat, bands, groups={}):
             chain = scat[inds][b].sum(axis=0)
             ocat[i][b] = chain
         for c in ["ra", "dec"]:
-            # straight mean, nto a barycenter
+            # straight mean, not a barycenter
             chain = scat[inds][c].mean(axis=0)
             ocat[i][c] = chain
 
