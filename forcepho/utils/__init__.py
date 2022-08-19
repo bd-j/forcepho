@@ -8,6 +8,7 @@ from .chain import *
 from .ds9 import *
 from .io import *
 from .profile import *
+from .catalog import *
 
 
 class Logger:
