@@ -7,7 +7,7 @@ import numpy as np
 from ..sources import Galaxy
 
 
-__all__ = ["make_statscat", "make_chaincat", "get_sample_cat", "combine_chains"]
+__all__ = ["make_statscat", "make_chaincat", "get_sample_cat"]
 
 
 def make_statscat(stats, step):
@@ -59,37 +59,6 @@ def make_chaincat(chain, bands, active, ref, shapes=Galaxy.SHAPE_COLS):
     cat["dec"] += ref[1]
 
     return cat
-
-
-def combine_chains(chaincat, bands, groups={}):
-    """Take a chain cat and a dictionary specifieying sources to be combined,
-    and combine the fluxes for the chains.
-    """
-    raise NotImplementedError
-
-    hdr = {}
-    scat = chaincat
-    dtype = scat.dtype
-    #for desc in dtype:
-    #    if desc[0] == "id":
-    #        desc[1] = "<U30"
-    ocat = np.zeros(len(groups), dtype=dtype)
-
-    mid = scat["id"].tolist()
-    for i, (g, sub) in enumerate(groups.items()):
-        ocat[i]["id"] = float(g)
-        hdr[f"G{g}"] = ",".join(sub)
-        ids = [float(f"{g}{s}") for s in sub]
-        inds = [mid.index(i) for i in ids]
-        for b in bands:
-            chain = scat[inds][b].sum(axis=0)
-            ocat[i][b] = chain
-        for c in ["ra", "dec"]:
-            # straight mean, not a barycenter
-            chain = scat[inds][c].mean(axis=0)
-            ocat[i][c] = chain
-
-    return ocat, hdr
 
 
 def get_sample_cat(chaincat, iteration, active):

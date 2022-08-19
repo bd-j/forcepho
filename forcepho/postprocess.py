@@ -353,66 +353,6 @@ def flux_unc_linear(root, snr_max=1000):
     return unc
 
 
-def make_errorbars(samplecat, percentiles=[16, 50, 84]):
-    """Make percentile based assymetric errorbars.
-
-    Example shows how to plot asymmetric 1-sigma-ish errorbars:
-
-    >>> scat = "path/to/postsample/catalog.fits"
-    >>> ecat, hdr = make_errorbars(scat, percentiles=[16, 50, 84])
-    >>> ecols = hdr["SMPLCOLS"].split(",")
-    >>> colname = "rhalf"
-    >>> y = ecat[colname][:,1]
-    >>> e = np.diff(ecat[colname], axis=-1).T
-    >>> ax.errorbar(y, y, e, linestyle="", marker="o", ecolor="k")
-
-    Parameters
-    ----------
-    samplecat : string or structured ndarray
-        Name of fits file contining result of
-        :py:func:`forcepho.postprocess.postsample_catalog()`
-
-    percentiles : list of floats in the interval (0, 100)
-        The percentiles to compute
-
-    Returns
-    -------
-    errorcat : structured ndarray
-        Catalog of percentile values for each parameter.  These are given
-        in the same order as the list in the `percentiles` keyword.
-
-    hdr : dictionary or FITSHeader
-        information about the errorbars.
-    """
-    if type(samplecat) is str:
-        cat = np.array(fits.getdata(samplecat))
-        hdr = fits.getheader(samplecat)
-        bands = hdr["FILTERS"].split(",")
-    else:
-        cat = samplecat
-        hdr = dict(PCTS=",".join([str(p) for p in percentiles]))
-
-    desc, scol = [], []
-    for d in cat.dtype.descr:
-        if len(d) == 3:
-            scol.append(d[0])
-            desc.append((d[0], d[1], len(percentiles)))
-        else:
-            desc.append(d)
-    ecat = np.zeros(len(cat), dtype=np.dtype(desc))
-    for col in ecat.dtype.names:
-        if col in scol:
-            pct = np.percentile(cat[col], q=percentiles, axis=-1)
-            ecat[col] = pct.T
-        else:
-            ecat[col] = cat[col]
-
-    hdr["PCTS"] = ",".join([str(p) for p in percentiles])
-    hdr["SMPLCOLS"] = ",".join(scol)
-
-    return ecat, hdr
-
-
 def find_multipatch(root):
     """Load all the sourceIDs, patchIDs, and chains for sources that appeared in
     multiple patches.
