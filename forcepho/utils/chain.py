@@ -7,7 +7,7 @@ import numpy as np
 from ..sources import Galaxy
 
 
-__all__ = ["make_statscat", "make_chaincat", "get_sample_cat"]
+__all__ = ["make_statscat", "make_chaincat", "get_sample_cat", "combine_chains"]
 
 
 def make_statscat(stats, step):
