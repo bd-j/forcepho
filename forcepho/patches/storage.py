@@ -28,9 +28,15 @@ PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 PSF_DTYPE = np.dtype([(c, np.float32) for c in PSF_COLS] + [("sersic_bin", np.int32)])
 
 
-def header_to_id(hdr, name):
+def header_to_id(hdr, name, framedir=None):
     band = hdr["FILTER"]
     expID = os.path.basename(name).replace(".fits", "")
+    if framedir:
+        assert framedir in os.path.dirname(name)
+        rpath = os.path.dirname(name).replace(framedir, "")
+        if rpath[0] == "/":
+            rpath = rpath[1:]
+        expID = os.path.join(rpath, expID)
     return band, expID
 
 
