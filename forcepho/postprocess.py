@@ -39,6 +39,7 @@ class Residuals:
         self.filename = filename
         self.handle = h5py.File(self.filename, "r")
         self.exposures = [e.decode("utf-8") for e in self.handle["epaths"][:]]
+        self.ebands = [e.decode("utf-8") for e in self.handle["ebands"][:]]
         self.reference_coordinates = self.handle["reference_coordinates"][:]
 
     def make_exp(self, e=0, exp=None, value="data"):

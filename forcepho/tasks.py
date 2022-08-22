@@ -40,7 +40,7 @@ def optimize(patcher, scene, config, logger,
     logger.info("BFGS optimization")
     model.sampling = False
     opt, scires = run_opt(model, q.copy(), jac=True, gtol=config.gtol)
-    out, step, stats = opt, None, None
+    out, step, stats = opt, None, scires
     model.sampling = True
     if config.add_barriers:
         model._lnpriorfn = None

@@ -25,6 +25,7 @@ def write_table(out, cats, extnames=[], **header):
 
 SHAPES = ["ra", "dec", "pa", "q", "sersic", "rhalf"]
 
+
 def out_dtype(npoint=0, shapes=SHAPES, bands=[]):
     params = bands + shapes
     icols = [("id", "U30"), ("source_index", "<i4"), ("wall", "<f4"),

@@ -119,6 +119,13 @@ def default_config_file(filename="", **kwargs):
 
 
 def parse_all(parser, argv):
+    """Parse options coming from parser defaults, a configuration file, and the
+    command line.  Order of presedence is:
+
+    1. parser defaults
+    2. yaml config file
+    3. command line arguments *that are different than the parser default*
+    """
     # default argument values
     defargs = parser.parse_args([])
 
