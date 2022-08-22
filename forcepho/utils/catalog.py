@@ -4,8 +4,12 @@ import os
 import numpy as np
 from astropy.io import fits
 
-__all__ = ["write_table", "out_dtype", "combine_chains",
+__all__ = ["write_table", "out_dtype", "append_catalogs",
+           "combine_chains",
            "pctile_cat"]
+
+
+SHAPES = ["ra", "dec", "pa", "q", "sersic", "rhalf"]
 
 
 def write_table(out, cats, extnames=[], **header):
@@ -23,9 +27,6 @@ def write_table(out, cats, extnames=[], **header):
     return full
 
 
-SHAPES = ["ra", "dec", "pa", "q", "sersic", "rhalf"]
-
-
 def out_dtype(npoint=0, shapes=SHAPES, bands=[]):
     params = bands + shapes
     icols = [("id", "U30"), ("source_index", "<i4"), ("wall", "<f4"),
@@ -34,6 +35,25 @@ def out_dtype(npoint=0, shapes=SHAPES, bands=[]):
         icols += [("lnp", "<f8", npoint)]
     new = np.dtype(icols + [(c, float, npoint) for c in params])
     return new
+
+
+def append_catalogs(infilenames, out):
+    xtensions = ["MOMENT", "SAMPLES", "BEST", "PERCENTILES"]
+
+    catlists = [[] for i in range(len(xtensions))]
+    for f in infilenames:
+        with fits.open(f) as hdul:
+            for i, ext in enumerate(xtensions):
+                try:
+                    catlists[i].append(hdul[ext].data.copy())
+                except(KeyError):
+                    catlists[i].append(hdul[i].data.copy())
+            hdr = hdul[1].header
+
+    cats = [np.concatenate(catlist)
+            for catlist in catlists]
+
+    write_table(out, cats, extnames=xtensions, **hdr)
 
 
 def combine_chains(chaincat, bands, groups={}):
