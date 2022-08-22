@@ -3,7 +3,7 @@
 """ tasks.py - Thin wrappers on optimization and sampling methods to allow more
 flexibility when accomplishing tasks in a parallelized mode.
 """
-
+import argparse
 import numpy as np
 
 from .fitting import run_lmc, run_opt, optimize_fluxes
