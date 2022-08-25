@@ -31,7 +31,7 @@ def cat_to_regions(cat, roi=None, ellipse=True, showid=True):
 
         if ellipse:
             sqrtq = row["q"]
-            pa = np.rad2deg(-row["pa"])
+            pa = 90.0 - np.rad2deg(row["pa"])
         else:
             sqrtq = 1
             pa = 0.0
