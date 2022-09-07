@@ -552,7 +552,7 @@ class LinkedSuperScene(SuperScene):
                 #seed = self.original[s]
                 #center = self.sky_to_scene(seed["ra"], seed["dec"])
                 center = self.scene_coordinates[s]
-                branches = self.find_overlaps(center, self.roi[s])
+                branches = self.find_overlaps(center, self.roi[s], seed_index=s)
                 buds = []
                 [buds.append(b) for b in branches if b not in leaves]
                 leaves += buds
@@ -586,7 +586,6 @@ class LinkedSuperScene(SuperScene):
             The catalog of the fixed sources in the scene.
         """
         seed = self.original[seed_index]
-        #center = self.sky_to_scene(seed["ra"], seed["dec"])
         center = self.scene_coordinates[seed_index]
         candidates = self.find_overlaps(center, self.boundary_radius, sort=True)
         # check for active sources; if any exist, return None
@@ -595,7 +594,7 @@ class LinkedSuperScene(SuperScene):
 
         # Get actives by adding sources and their associations
         active_inds = []
-        for s in [seed_index] + candidates.tolist():
+        for s in candidates.tolist():
             if s in active_inds:
                 continue
             n_avail = self.maxactive - len(active_inds)
@@ -675,8 +674,8 @@ class LinkedSuperScene(SuperScene):
 
         return region, self.sourcecat[active_inds], fixed
 
-    def find_overlaps(self, center, radius, sort=False):
-        """Find overlapping sources *not including at the provided center*
+    def find_overlaps(self, center, radius, seed_index=-1, sort=False):
+        """Find overlapping sources *not including the seed source*
         Uses a metric based on |x_i - x_j|/|R_i + R_j|
 
         Parameters
@@ -687,6 +686,10 @@ class LinkedSuperScene(SuperScene):
 
         radius : float
             Radius of influence of the `center`
+
+        seed_index : int, optional
+            If supplied, this gives the index of the starting source, which will
+            be excluded while allowing other sources at the same location.
 
         sort : bool, optional
             Whether to sort the output in increasing order of the metric
@@ -700,7 +703,7 @@ class LinkedSuperScene(SuperScene):
         kinds = self.kdt.query_ball_point(center, radius + self.boundary_radius)
         d = self.scene_coordinates[kinds] - center
         metric = np.hypot(*d.T) / (radius + self.roi[kinds])
-        overlaps = (metric < 1) & (metric > 0)
+        overlaps = (metric < 1) & (metric >= 0) & (kinds != seed_index)
         if sort:
             order = np.argsort(metric[overlaps])
         else:
@@ -764,7 +767,7 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
 def rectify_catalog(sourcecatfile, rhalf_range=(0.051, 0.29), sqrtq_range=(0.2, 0.99),
                     sersic_range=(1.01, 4.99), pa_range=(-2.0, 2.0),
                     rotate=False, reverse=False, shapenames=Galaxy.SHAPE_COLS):
-    if type(sourcecatfile) is str:
+    if isinstance(sourcecatfile, str):
         cat = fits.getdata(sourcecatfile)
         header = fits.getheader(sourcecatfile)
     else:
