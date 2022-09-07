@@ -52,6 +52,9 @@ class SuperScene:
     further checkouts, until they are checked back in, with new parameters
     """
 
+    sourcecat = None
+    n_sources = 0
+
     def __init__(self, sourcecat=None, bands=None,
                  statefile="superscene.fits",                       # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
@@ -76,12 +79,12 @@ class SuperScene:
         self.minradius = minradius
         self.maxactive = maxactive_per_patch
         self.boundary_radius = boundary_radius
-        self.nscale = 3
+        self.nscale = nscale
 
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, extype, value, traceback):
         self.writeout()
 
     def writeout(self, filename=None):
@@ -104,6 +107,10 @@ class SuperScene:
     @property
     def parameter_columns(self):
         return self.bands + self.shape_cols
+
+    @property
+    def cat_dtype(self):
+        return self.sourcecat.dtype
 
     def ingest(self, sourcecat, **bounds_kwargs):
         """Set the catalog, make bounds array, and initialize covariance matricices
@@ -140,13 +147,12 @@ class SuperScene:
             the column names must include several specific column types.
         """
         for c in REQUIRED_COLUMNS:
-            assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
+            assert c in sourcecat.dtype.names, f"required column {c} is not present."
         for c in self.bands:
-            assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
+            assert c in sourcecat.dtype.names, f"required column {c} is not present."
 
         self.sourcecat = sourcecat
         self.n_sources = len(self.sourcecat)
-        self.cat_dtype = self.sourcecat.dtype
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
         self.sourcecat["is_valid"][:] = True
         self.sourcecat["is_active"][:] = False
@@ -217,8 +223,7 @@ class SuperScene:
         except(AttributeError):
             x, y = self.sky_to_scene(self.sourcecat["ra"],
                                      self.sourcecat["dec"])
-            self.scene_x, self.scene_y = x, y
-            self._scene_coordinates = np.array([self.scene_x, self.scene_y]).T
+            self._scene_coordinates = np.array([x, y]).T
             return self._scene_coordinates
 
     def checkout_region(self, seed_index=-1):
@@ -296,8 +301,8 @@ class SuperScene:
         # Find where the sources are that are being checked in
         try:
             active_inds = active["source_index"].astype(int)
-        except(KeyError):
-            raise
+        except(KeyError) as e:
+            raise e
         if fixed is not None:
             fixed_inds = fixed["source_index"].astype(int)
         else:
@@ -467,7 +472,7 @@ class SuperScene:
         w = (~self.sourcecat["is_valid"]).astype(np.float)
         # multiply by exponential
         n = np.abs(self.sourcecat["n_iter"])
-        mu = min(n.min(), self.target_niter)
+        #mu = min(n.min(), self.target_niter)
         sigma = 20
         w *= np.exp((n.mean() - n) / sigma)
         return w / w.sum()
@@ -518,7 +523,6 @@ class LinkedSuperScene(SuperScene):
                 self.roi = self.sourcecat["rhalf"]
             except(AttributeError):
                 print("No ROI defined for sources")
-                pass
         else:
             self.roi = roi
 
@@ -745,7 +749,6 @@ def sourcecat_dtype(source_type=np.float64, bands=[]):
     """Get a numpy.dtype object that describes the structured array
     that will hold the source parameters
     """
-    nband = len(bands)
     tags = ["id", "source_index", "is_active", "is_valid",
             "n_iter", "n_patch"]
 
@@ -962,7 +965,7 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
 def adjust_bounds(sceneDB, bands, config,
                   active=None, eps=0.001,
                   minflux=None, maxfluxfactor=None):
-    if type(sceneDB) is np.ndarray:
+    if isinstance(sceneDB, np.ndarray):
         bcat = sceneDB
         scat = active
     else:
@@ -991,7 +994,7 @@ def adjust_bounds(sceneDB, bands, config,
                                    bcat[b][:, 0] + eps,
                                    bcat[b][:, 0] - eps)
 
-    if type(sceneDB) is not np.ndarray:
+    if not isinstance(sceneDB, np.ndarray):
         sceneDB.check_bounds()
     return sceneDB
 
