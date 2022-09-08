@@ -703,7 +703,7 @@ class LinkedSuperScene(SuperScene):
         kinds = self.kdt.query_ball_point(center, radius + self.boundary_radius)
         d = self.scene_coordinates[kinds] - center
         metric = np.hypot(*d.T) / (radius + self.roi[kinds])
-        overlaps = (metric < 1) & (metric >= 0) & (kinds != seed_index)
+        overlaps = (metric < 1) & (metric >= 0) & (np.array(kinds) != seed_index)
         if sort:
             order = np.argsort(metric[overlaps])
         else:
