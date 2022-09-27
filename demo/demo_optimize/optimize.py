@@ -75,6 +75,7 @@ if __name__ == "__main__":
     # --- Filenames and loacations ---
     config.tag = make_tag(config)
     os.makedirs(config.outdir, exist_ok=True)
+    os.makedirs(os.path.join(config.outdir, config.tag), exist_ok=True)
     outroot = os.path.join(config.outdir, config.tag, config.tag)
     config.psfstore = f"{outroot}_psf.h5"
     config.image_name = f"{outroot}_data.fits"
