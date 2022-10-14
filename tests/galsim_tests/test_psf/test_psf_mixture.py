@@ -255,9 +255,9 @@ if __name__ == "__main__":
     for show, by in comp:
         fig, axes = pl.subplots(2, 1, sharex=True)
         fig, ax, cb = compare_parameters(scat, tcat, show, dfax=(fig, axes[0]),
-                                         splitby=None, colorby=by)
+                                         splitby="snr", colorby=by)
         fig, ax, cb = compare_parameters(scat, tcat, show, dfax=(fig, axes[1]),
-                                         as_delta=True, splitby=None, colorby=by)
+                                         as_delta=True, splitby="snr", colorby=by)
         fig.colorbar(cb, label=by, ax=axes, orientation="vertical")
         fig.suptitle(config.bandname)
         fig.savefig(os.path.join(config.banddir, f"{config.bandname.lower()}_{show}_comparison.pdf"))
