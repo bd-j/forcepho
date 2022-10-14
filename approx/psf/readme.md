@@ -17,7 +17,8 @@ multiple pixels per final science image pixel) to aid in the characterization of
 You need to install `galsim` and numpyro to use this tool.
 ```
 conda install -c conda-forge galsim
-pip install numpyro
+pip install  -c conda-forge numpyro
+pip install arviz
 ```
 
 Usage
