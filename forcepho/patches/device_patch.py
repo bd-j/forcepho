@@ -245,13 +245,16 @@ class DevicePatchMixin:
         scene = self.set_scene(catalog, splinedata=splinedata)
         self.pack_meta(scene)
 
-        proposal = scenes.get_proposal()
+        proposal = scene.get_proposal()
         orig, self.return_residual = self.return_residual, True
         ret = proposer.evaluate_proposal(proposal, patch=self, unpack=True)
         self.return_residual = True
         chi2, chi2_derivs, residuals = ret
         image = -residuals
         return image
+
+    def free(self):
+        pass
 
 
 class GPUPatchMixin(DevicePatchMixin):
