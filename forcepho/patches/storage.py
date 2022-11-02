@@ -191,17 +191,17 @@ class PixelStore:
             # images are the same size
             raise ValueError("Image is not the expected size")
         superpixels = self.superpixelize(im, ierr)
-        msg = "There were non-finite pixels in exposure {}".format(expID)
+        msg = f"There were non-finite pixels in exposure {expID}"
         assert np.all(np.isfinite(superpixels)), msg
 
         # --- Put into the HDF5 file; note this opens and closes the file ---
         with h5py.File(self.h5file, "r+") as h5:
-            path = "{}/{}".format(band, expID)
+            path = f"{band}/{expID}"
             try:
                 exp = h5.create_group(path)
             except(ValueError):
                 del h5[path]
-                print("deleted existing data for {}".format(path))
+                print(f"deleted existing data for {path}")
                 exp = h5.create_group(path)
             pdat = exp.create_dataset("data", data=superpixels)
             pdat.attrs["counts_to_flux"] = fluxconv
@@ -296,15 +296,21 @@ class MetaStore:
     def __init__(self, metastorefile=None):
         if not metastorefile:
             self.headers = {}
+            self.gwcs_tree = {}
         else:
             self.headers = self.read_from_file(metastorefile)
             self.populate_wcs()
+            gwcs_file = metastorefile.replace(".json", ".asdf")
+            if os.path.exists(gwcs_file):
+                import asdf
+                self.gwcs_file = asdf.open(gwcs_file)
+                self.gwcs = self.gwcs.tree
 
     def populate_wcs(self):
         self.wcs = {}
-        for band in self.headers.keys():
+        for band, exps in self.headers.items():
             self.wcs[band] = {}
-            for expID, hdr in self.headers[band].items():
+            for expID, hdr in exps.items():
                 w = WCS(hdr)
                 # remove extraneous axes
                 if w.naxis == 3:
@@ -329,6 +335,10 @@ class MetaStore:
         if band not in self.headers:
             self.headers[band] = {}
         self.headers[band][expID] = hdr
+        if hasattr(imset, "gwcs"):
+            if band not in self.gwcs_tree:
+                self.gwcs_tree[band] = {}
+            self.gwcs_tree[band][expID] = imset.gwcs
 
     def write_to_file(self, filename):
         """Convert the FITS headers in the dictionary to strings, and dump the
@@ -340,14 +350,19 @@ class MetaStore:
             The name of the file for the metadata.  Will be overwritten if it
             already exists
         """
+        assert "json" in filename
         import json
         hstrings = {}
-        for band in self.headers.keys():
+        for band, exps in self.headers.items():
             hstrings[band] = {}
-            for expID, hdr in list(self.headers[band].items()):
+            for expID, hdr in exps.items():
                 hstrings[band][expID] = hdr.tostring()
         with open(filename, "w") as f:
             json.dump(hstrings, f)
+        if len(self.gwcs_tree) > 0:
+            import asdf
+            gwcs_file = asdf.AsdfFile(self.gwcs_tree)
+            gwcs_file.write_to(filename.replace(".json", ".asdf"))
 
     def read_from_file(self, filename):
         """Read a json serialized dictionary of string headers
@@ -371,17 +386,19 @@ class MetaStore:
         bra, bdec = sky
         epaths, bands = [], []
         for band in bandlist:
-            if band not in self.wcs.keys():
+            if band not in self.headers:
                 continue
-            for expID in self.wcs[band].keys():
-                #print(expID)
-                epath = "{}/{}".format(band, expID)
-                wcs = self.wcs[band][expID]
+            for expID in self.headers[band].keys():
                 hdr = self.headers[band][expID]
                 imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                 # Check region bounding box has a corner in the exposure.
                 # NOTE: If bounding box entirely contains image this might fail
-                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
+                try:
+                    gwcs = self.gwcs[band][expID]
+                    bx, by = gwcs.backward_transform(bra, bdec)
+                except(KeyError):
+                    wcs = self.wcs[band][expID]
+                    bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
                 inim = np.any((bx > 0) & (bx < imsize[0]) &
                               (by > 0) & (by < imsize[1]))
                 if inim:
@@ -467,7 +484,7 @@ class PSFStore:
         #assert pars.dtype.descr
         return pars
 
-    def get_local_psf(self, band="F090W", source=None, wcs=None):
+    def get_local_psf(self, band="F090W", source=None, wcs=None, gwcs=None):
         """
         Returns
         --------
@@ -476,8 +493,10 @@ class PSFStore:
         (amp, xcen, ycen, Cxx, Cyy Cxy, sersic_radius_index)
         There are npsf_per_source rows in this array.
         """
-        if wcs:
+        if wcs is not None:
             xy = wcs.all_world2pix(source.ra, source.dec)
+        elif gwcs is not None:
+            xy = gwcs.backward_transform(source.ra, source.dec)
         else:
             xy = None
         psf = self.lookup(band, xy=xy)
