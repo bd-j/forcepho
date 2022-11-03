@@ -4,6 +4,5 @@ numba >= 0.43.0
 h5py >= 2.8.0
 astropy
 pyyaml
-asdf
 pybind11 >= 2.8.0
 littlemcmc == 0.2.0

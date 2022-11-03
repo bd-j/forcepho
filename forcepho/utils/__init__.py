@@ -4,7 +4,7 @@ import time
 import json
 import numpy as np
 
-from .wcs import FWCS
+from .wcs import *
 from .chain import *
 from .ds9 import *
 from .io import *
@@ -100,35 +100,3 @@ def populate_image(xpix, ypix, data):
     # This is the correct ordering of xpix, ypix subscripts
     im[x, y] = data
     return im, lo, hi
-
-
-def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
-    """
-    Parameters
-    ----------
-    ra : float (degrees)
-
-    dec : float (degrees)
-
-    exp : dict-like
-        Must have the keys `crpix`, `crval`, and `CW` encoding the astrometry
-
-    ref_coords : ndarray of shape (2,)
-        The reference coordinates (ra, dec) for the supplied astrometry
-    """
-    # honestly this should query the full WCS using
-    # get_local_linear for each ra,dec pair
-    crval = exp["crval"][:]
-    crpix = exp["crpix"][:]
-    CW = exp["CW"][:]
-
-    i = 0
-    if len(CW) != len(ra):
-        CW = CW[i]
-        crval = crval[i]
-        crpix = crpix[i]
-
-    sky = np.array([ra, dec]).T - (crval + ref_coords)
-    pix = np.matmul(CW, sky[:, :, None])[..., 0] + crpix
-
-    return pix

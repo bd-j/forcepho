@@ -7,7 +7,7 @@ import numpy as np
 from astropy.wcs import WCS as AWCS
 from astropy.io import fits
 
-__all__ = ["FWCS"]
+__all__ = ["FWCS", "scale_at_sky", "sky_to_pix"]
 
 
 class FWCS:
@@ -120,3 +120,35 @@ def scale_at_sky(sky, wcs, dpix=1.0, origin=0, make_approx=False):
     else:
         fwcs = FWCS(wcs)
     return fwcs.scale_at_sky(sky, dpix=dpix, origin=origin, make_approx=make_approx)
+
+
+def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
+    """
+    Parameters
+    ----------
+    ra : float (degrees)
+
+    dec : float (degrees)
+
+    exp : dict-like
+        Must have the keys `crpix`, `crval`, and `CW` encoding the astrometry
+
+    ref_coords : ndarray of shape (2,)
+        The reference coordinates (ra, dec) for the supplied astrometry
+    """
+    # honestly this should query the full WCS using
+    # get_local_linear for each ra,dec pair
+    crval = exp["crval"][:]
+    crpix = exp["crpix"][:]
+    CW = exp["CW"][:]
+
+    i = 0
+    if len(CW) != len(ra):
+        CW = CW[i]
+        crval = crval[i]
+        crpix = crpix[i]
+
+    sky = np.array([ra, dec]).T - (crval + ref_coords)
+    pix = np.matmul(CW, sky[:, :, None])[..., 0] + crpix
+
+    return pix

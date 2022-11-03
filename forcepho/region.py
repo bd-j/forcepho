@@ -110,7 +110,6 @@ class CircularRegion(Region):
         # Get the center and radius in pixel coodrinates
         # This is a bit hacky (assumes square pixels)
         # could also use the wcs.pixel_scale_matrix determinant to get pixels per degree.
-
         xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
         xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
         r2 = (xc - xr)**2 + (yc - yr)**2
@@ -186,7 +185,6 @@ class RectangularRegion(Region):
              least one corner within the Region
         """
         # Get the corners in ra, dec coodrinates
-
         ra, dec = wcs.all_pix2world(xcorners, ycorners, origin)
         valid = ((ra > self.ra_min) & (ra < self.ra_max) &
                  (dec > self.dec_min) & (dec < self.dec_max))

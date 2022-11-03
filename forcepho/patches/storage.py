@@ -13,6 +13,11 @@ from astropy.io import fits
 
 from ..utils.wcs import FWCS
 
+# astropy is very noisy
+import warnings
+from astropy.utils.exceptions import AstropyWarning
+warnings.filterwarnings('ignore', category=AstropyWarning, append=True)
+
 
 __all__ = ["PixelStore", "MetaStore", "PSFStore",
            "ImageNameSet", "ImageSet",
@@ -359,7 +364,7 @@ class MetaStore:
             The name of the file for the metadata.  Will be overwritten if it
             already exists
         """
-        assert "json" in filename
+        assert ".json" in filename
         import json
         hstrings = {}
         for band, exps in self.headers.items():
