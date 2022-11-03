@@ -56,10 +56,7 @@ class Region:
         # Compute image bounding box, and check if bounding boxes overlap
         pcorners = np.array([[0, imsize[0], imsize[0], 0],
                             [0, 0, imsize[1], imsize[1]]])
-        if isinstance(wcs, WCS):
-            ira, idec = wcs.all_pix2world(pcorners[0], pcorners[1], 1)
-        else:
-            ira, idec = wcs.forward_transform(pcorners[0], pcorners[1])
+        ira, idec = wcs.all_pix2world(pcorners[0], pcorners[1], 1)
         im_bb = RectangularRegion(ira.min(), ira.max(), idec.min(), idec.max())
         overlap = polygons_overlap(self, im_bb)
 
@@ -100,7 +97,7 @@ class CircularRegion(Region):
             the full pixel x coordinates of the corners of superpixels.
         ycorners : (nsuper, nsuper, 4) ndarray
             the full pixel `y` coordinates of the corners of superpixels.
-        wcs: astropy.wcs.WCS object
+        wcs: .utils.wcs.FWCS or astropy.wcs.WCS object
             header of the image including wcs information for the exposure in
             which to find pixels.
 
@@ -113,12 +110,9 @@ class CircularRegion(Region):
         # Get the center and radius in pixel coodrinates
         # This is a bit hacky (assumes square pixels)
         # could also use the wcs.pixel_scale_matrix determinant to get pixels per degree.
-        if isinstance(wcs, WCS):
-            xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
-            xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
-        else:
-            xc, yc = wcs.backward_transform(self.ra, self.dec)
-            xr, yr = wcs.backward_transform(self.ra, self.dec + self.radius)
+
+        xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
+        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
         r2 = (xc - xr)**2 + (yc - yr)**2
         d2 = (xc - xcorners)**2 + (yc - ycorners)**2
         inreg = np.any(d2 < r2, axis=-1)
@@ -192,10 +186,8 @@ class RectangularRegion(Region):
              least one corner within the Region
         """
         # Get the corners in ra, dec coodrinates
-        if isinstance(wcs, WCS):
-            ra, dec = wcs.all_pix2world(xcorners, ycorners, origin)
-        else:
-            ra, dec = wcs.forward_transform(xcorners, ycorners)
+
+        ra, dec = wcs.all_pix2world(xcorners, ycorners, origin)
         valid = ((ra > self.ra_min) & (ra < self.ra_max) &
                  (dec > self.dec_min) & (dec < self.dec_max))
         inreg = np.any(valid, axis=-1)

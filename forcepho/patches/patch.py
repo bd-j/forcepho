@@ -10,10 +10,9 @@ import numpy as np
 
 from ..sources import Scene, Galaxy
 from .storage import PSF_COLS, PSFStore
+from ..utils import scale_at_sky
 
-
-__all__ = ["PatchBase", "Patch",
-           "scale_at_sky"]
+__all__ = ["PatchBase", "Patch"]
 
 # FIXME: make logic for scene setting and zerocoords more robust.
 
@@ -499,62 +498,3 @@ class Patch(PatchBase):
         """
         arr = getattr(self, attr)
         return np.split(arr, np.cumsum(self.band_N_pix[:-1]))
-
-
-def scale_at_sky(sky, wcs, dpix=1.0, origin=1, make_approx=False):
-    """Get the local linear approximation of the scale and CW matrix at the
-    celestial position given by `sky`.  This is a simple numerical calculation
-
-    Parameters
-    ---------
-    sky : iterable, length 2
-        The RA and Dec coordinates in units of degrees at which to compute the
-        linear approximation
-
-    wcs : astropy.wcs.WCS() instance
-        The wcs to which you want a local linear approximation
-
-    dpix : optional, float, default; 1.0
-        The number of pixels to offset to compute the local linear approx
-
-    origin : optional, default; 1
-        The astropy wcs `origin` keyword
-
-    Returns
-    --------
-    CW_mat : ndarray of shape (2, 2)
-        The matrix such that (dx, dy) = CW_mat \dot (dra, ddec) where dx, dy
-        are expressed in pixels and dra, ddec are exressed in degrees
-
-    D_mat : ndarray of shape (2, 2)
-        The matrix giving pixels per second of arc in RA and DEC.  Equivalent
-        to the matrix inverse of 3600 times wcs.pixel_scale_matrix() if there are
-        no distortions.
-    """
-    ra, dec = sky
-    # get dsky for step dx, dy = dpix
-    if wcs.has_distortion or make_approx:
-        pos0_sky = np.array([ra, dec])
-        pos0_pix = wcs.all_world2pix([pos0_sky], origin)[0]
-        pos1_pix = pos0_pix + np.array([dpix, 0.0])
-        pos2_pix = pos0_pix + np.array([0.0, dpix])
-        pos1_sky = wcs.all_pix2world([pos1_pix], origin)[0]
-        pos2_sky = wcs.all_pix2world([pos2_pix], origin)[0]
-
-        # compute dpix_dsky matrix
-        P = np.eye(2) * dpix
-        St = np.array([pos1_sky - pos0_sky, pos2_sky - pos0_sky])
-        CW_mat = np.linalg.solve(St, P).T
-
-        # compute D matrix
-        Winv = np.eye(2)
-        Winv[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**(-1)
-        D_mat = 1.0 / 3600.0 * np.matmul(CW_mat, Winv)
-
-    else:
-        W = np.eye(2)
-        W[0, 0] = np.cos(np.deg2rad(dec))
-        D_mat = np.linalg.inv(wcs.pixel_scale_matrix * 3600.0)
-        CW_mat = np.matmul(D_mat * 3600.0, W)
-
-    return CW_mat, D_mat

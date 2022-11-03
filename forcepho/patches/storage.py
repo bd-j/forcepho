@@ -10,7 +10,8 @@ from collections import namedtuple
 import numpy as np
 import h5py
 from astropy.io import fits
-from astropy.wcs import WCS
+
+from ..utils.wcs import FWCS
 
 
 __all__ = ["PixelStore", "MetaStore", "PSFStore",
@@ -296,25 +297,33 @@ class MetaStore:
     def __init__(self, metastorefile=None):
         if not metastorefile:
             self.headers = {}
-            self.gwcs_tree = {}
+            self.tree = {}
         else:
             self.headers = self.read_from_file(metastorefile)
-            self.populate_wcs()
             gwcs_file = metastorefile.replace(".json", ".asdf")
-            if os.path.exists(gwcs_file):
-                import asdf
-                self.gwcs_file = asdf.open(gwcs_file)
-                self.gwcs = self.gwcs.tree
+            if not os.path.exists(gwcs_file):
+                gwcs_file = None
 
-    def populate_wcs(self):
+            self.populate_wcs(gwcs_file=gwcs_file)
+
+    def populate_wcs(self, gwcs_file=None):
+        """Fill the dict of dict with FWCS instances (based on either normal
+        astropy WCS objects or gWCS instances)
+        """
+        if gwcs_file is not None:
+            import asdf
+            self.tree = asdf.open(gwcs_file).tree
         self.wcs = {}
         for band, exps in self.headers.items():
             self.wcs[band] = {}
             for expID, hdr in exps.items():
-                w = WCS(hdr)
-                # remove extraneous axes
-                if w.naxis == 3:
-                    w = w.dropaxis(2)
+                try:
+                    w = FWCS(self.tree[band][expID])
+                except(KeyError):
+                    w = FWCS(hdr)
+                    # remove extraneous axes
+                    if w.wcsobj.naxis == 3:
+                        w.wcsobj = w.wcsobj.dropaxis(2)
                 self.wcs[band][expID] = w
 
     def add_exposure(self, imset):
@@ -336,9 +345,9 @@ class MetaStore:
             self.headers[band] = {}
         self.headers[band][expID] = hdr
         if hasattr(imset, "gwcs"):
-            if band not in self.gwcs_tree:
-                self.gwcs_tree[band] = {}
-            self.gwcs_tree[band][expID] = imset.gwcs
+            if band not in self.tree:
+                self.tree[band] = {}
+            self.tree[band][expID] = imset.gwcs
 
     def write_to_file(self, filename):
         """Convert the FITS headers in the dictionary to strings, and dump the
@@ -359,9 +368,9 @@ class MetaStore:
                 hstrings[band][expID] = hdr.tostring()
         with open(filename, "w") as f:
             json.dump(hstrings, f)
-        if len(self.gwcs_tree) > 0:
+        if len(self.tree) > 0:
             import asdf
-            gwcs_file = asdf.AsdfFile(self.gwcs_tree)
+            gwcs_file = asdf.AsdfFile(self.tree)
             gwcs_file.write_to(filename.replace(".json", ".asdf"))
 
     def read_from_file(self, filename):
@@ -393,12 +402,9 @@ class MetaStore:
                 imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                 # Check region bounding box has a corner in the exposure.
                 # NOTE: If bounding box entirely contains image this might fail
-                try:
-                    gwcs = self.gwcs[band][expID]
-                    bx, by = gwcs.backward_transform(bra, bdec)
-                except(KeyError):
-                    wcs = self.wcs[band][expID]
-                    bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
+                wcs = self.wcs[band][expID]
+                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
+
                 inim = np.any((bx > 0) & (bx < imsize[0]) &
                               (by > 0) & (by < imsize[1]))
                 if inim:
@@ -484,7 +490,7 @@ class PSFStore:
         #assert pars.dtype.descr
         return pars
 
-    def get_local_psf(self, band="F090W", source=None, wcs=None, gwcs=None):
+    def get_local_psf(self, band="F090W", source=None, wcs=None):
         """
         Returns
         --------
@@ -495,8 +501,6 @@ class PSFStore:
         """
         if wcs is not None:
             xy = wcs.all_world2pix(source.ra, source.dec)
-        elif gwcs is not None:
-            xy = gwcs.backward_transform(source.ra, source.dec)
         else:
             xy = None
         psf = self.lookup(band, xy=xy)
