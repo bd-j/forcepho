@@ -659,14 +659,22 @@ class Galaxy(Source):
         (dependent on self.n and self.r).  Placeholder code gives them all
         equal amplitudes.
         """
-        return np.squeeze(np.array([spline(self.sersic, self.rhalf)
-                                    for spline in self.splines]))
+        if self.sersic < self.sersic_range[0]:
+            ind = np.argmin(np.abs(self.rhalf - self.radii))
+            amp = np.zeros(len(self.radii))
+            amp[ind] = 1
+        else:
+            amp = np.squeeze(np.array([spline(self.sersic, self.rhalf)
+                                       for spline in self.splines]))
+        return amp
 
     @property
     def damplitude_dsersic(self):
         """Code here for getting amplitude derivatives from a splined look-up
         table (dependent on self.n and self.r)
         """
+        if self.sersic < self.sersic_range[0]:
+            return np.zeros(len(self.radii))
         # n_gauss array of da/dsersic
         return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
                                     for spline in self.splines]))
@@ -676,6 +684,8 @@ class Galaxy(Source):
         """Code here for getting amplitude derivatives from a splined look-up
         table (dependent on self.n and self.r)
         """
+        if self.sersic < self.sersic_range[0]:
+            return np.zeros(len(self.radii))
         # n_gauss array of da/drh
         return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
                                     for spline in self.splines]))
