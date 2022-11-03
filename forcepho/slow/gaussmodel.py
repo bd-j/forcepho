@@ -7,18 +7,19 @@ gradient calculation.  numba is used to speed up some of the loops.
 """
 
 import numpy as np
-import numba
-from numba.experimental import jitclass
+#import numba
+#from numba.experimental import jitclass
 
 __all__ = ["ImageGaussian", "GaussianImageGalaxy",
            "convert_to_gaussians", "get_gaussian_gradients",
            "compute_gaussian"]
 
-image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'],
-                                     [numba.float64, ]*6)) + [('derivs', numba.float64[:, :])]
+
+#image_gaussian_numba_spec = list(zip(['amp', 'xcen', 'ycen', 'fxx', 'fxy', 'fyy'],
+#                                     [numba.float64, ]*6)) + [('derivs', numba.float64[:, :])]
 
 
-@jitclass(image_gaussian_numba_spec)
+#@jitclass(image_gaussian_numba_spec)
 class ImageGaussian(object):
     """This is description of one Gaussian, in pixel locations, as well as the
     derivatives of this Gaussian wrt to the Scene model parameters.
@@ -146,7 +147,7 @@ def convert_to_gaussians(source, stamp, compute_deriv=False):
     return gig
 
 
-@numba.njit
+#@numba.njit
 def _convert_to_gaussians(source_n_gauss, stamp_psf_n_gauss, scovar, pcovar,
                           smean, samps, pmeans, pamps, flux):
     """This is a helper function to `convert_to_gaussians` that wraps the
@@ -268,7 +269,7 @@ def get_gaussian_gradients(source, stamp, gig):
     return gig
 
 
-@numba.njit
+#@numba.njit
 def _get_gaussian_gradients(source_n_gauss, stamp_psf_n_gauss, scovars, pcovar,
                             samps, pamps, flux, G, T,
                             dT_dq, dT_dpa, da_dn, da_dr, CW):
@@ -346,7 +347,7 @@ def compute_gaussian(*args, **kwargs):
         return C
 
 
-@numba.njit
+#@numba.njit
 def _compute_gaussian(g, xpix, ypix, second_order=True, compute_deriv=True,
                       use_det=False, oversample=False):
     """Calculate the counts and gradient for one pixel, one gaussian.  This
@@ -530,15 +531,14 @@ def compute_gig(gig, xpix, ypix, compute_deriv=True, **compute_keywords):
     return image, gradients
 
 
-@numba.njit
+#@numba.njit
 def scale_matrix(q):
     """q = sqrt(b/a)
     """
     return np.array([[1./q, 0],
                      [0., q]])
 
-
-@numba.njit
+#@numba.njit
 def rotation_matrix(theta):
     """theta: position angle in radians
     """
@@ -546,14 +546,14 @@ def rotation_matrix(theta):
                      [np.sin(theta), np.cos(theta)]])
 
 
-@numba.njit
+#@numba.njit
 def scale_matrix_deriv(q):
     """q = sqrt(b/a)
     """
     return np.array([[-1./q**2, 0], [0., 1]])
 
 
-@numba.njit
+#@numba.njit
 def rotation_matrix_deriv(theta):
     """theta: position angle in radians
     """
@@ -561,7 +561,7 @@ def rotation_matrix_deriv(theta):
                      [np.cos(theta), -np.sin(theta)]])
 
 
-@numba.njit
+#@numba.njit
 def fast_inv_2x2(A):
     """Fast inverse for a 2x2 matrix
 
@@ -580,7 +580,7 @@ def fast_inv_2x2(A):
     return inv
 
 
-@numba.njit
+#@numba.njit
 def fast_det_2x2(A):
     """Fast determinant for a 2x2 matrix.
 
@@ -592,7 +592,7 @@ def fast_det_2x2(A):
     return A[0, 0]*A[1, 1] - A[1, 0]*A[0, 1]
 
 
-@numba.njit
+#@numba.njit
 def fast_trace_2x2(A):
     """Fast trace for a 2x2 matrix.
 
@@ -604,7 +604,7 @@ def fast_trace_2x2(A):
     return A[0, 0] + A[1, 1]
 
 
-@numba.njit
+#@numba.njit
 def fast_dot_dot_2x2(a, b, c):
     """Fast dot of three 2x2 matrices.
 
@@ -622,9 +622,9 @@ def fast_dot_dot_2x2(a, b, c):
                      (a[1,0]*b[0,0] + a[1,1]*b[1,0])*c[0,1] + (a[1,0]*b[0,1] + a[1,1]*b[1,1])*c[1,1]]])
 
 
-@numba.guvectorize([(numba.float64[:,:],numba.float64[:,:],numba.float64[:,:],numba.float64[:,:]),
-                    (numba.float32[:,:],numba.float32[:,:],numba.float32[:,:],numba.float32[:,:])],
-                   '(n,n),(n,n),(n,n)->(n,n)', nopython=True)
+#@numba.guvectorize([(numba.float64[:,:],numba.float64[:,:],numba.float64[:,:],numba.float64[:,:]),
+#                    (numba.float32[:,:],numba.float32[:,:],numba.float32[:,:],numba.float32[:,:])],
+#                   '(n,n),(n,n),(n,n)->(n,n)', nopython=True)
 def fast_matmul_matmul_2x2(A, B, C, res):
     """Fast matmul(A, matmul(B,C)) for 2x2 matrices. Obeys np.matmul
     broadcasting semantics as long as the last two dimensions are shape (2,2).
@@ -642,4 +642,5 @@ def fast_matmul_matmul_2x2(A, B, C, res):
     >>> np.allclose(fast_matmul_matmul_2x2(C,B,A), np.matmul(C, np.matmul(B,A)))
     True
     """
-    res[:] = fast_dot_dot_2x2(A, B, C)
+    #res[:] = fast_dot_dot_2x2(A, B, C)
+    return np.matmul(A, np.matmul(B, C))
