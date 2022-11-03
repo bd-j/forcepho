@@ -47,7 +47,8 @@ class FWCS:
         if self.is_normal:
             return self.wcsobj.all_world2pix(ra, dec, origin)
         else:
-            return self.wcsobj.backward_transform(ra, dec) + origin
+            x, y = self.wcsobj.backward_transform(ra, dec)
+            return x + origin, y + origin
 
     def from_image(self, imname, extension=1):
         try:
@@ -89,11 +90,11 @@ class FWCS:
         # get dsky for step dx, dy = dpix
         if self.has_distortion or make_approx:
             pos0_sky = np.array([ra, dec])
-            pos0_pix = self.all_world2pix([pos0_sky], origin)[0]
+            pos0_pix = self.all_world2pix(*pos0_sky, origin)[0]
             pos1_pix = pos0_pix + np.array([dpix, 0.0])
             pos2_pix = pos0_pix + np.array([0.0, dpix])
-            pos1_sky = self.all_pix2world([pos1_pix], origin)[0]
-            pos2_sky = self.all_pix2world([pos2_pix], origin)[0]
+            pos1_sky = self.all_pix2world(*pos1_pix, origin)[0]
+            pos2_sky = self.all_pix2world(*pos2_pix, origin)[0]
 
             # compute dpix_dsky matrix
             P = np.eye(2) * dpix
