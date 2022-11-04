@@ -305,11 +305,11 @@ class MetaStore:
             self.tree = {}
         else:
             self.headers = self.read_from_file(metastorefile)
-            gwcs_file = metastorefile.replace(".json", ".asdf")
+            self.gwcs_file = metastorefile.replace(".json", ".asdf")
             if not os.path.exists(gwcs_file):
-                gwcs_file = None
+                self.gwcs_file = None
 
-            self.populate_wcs(gwcs_file=gwcs_file)
+            self.populate_wcs(gwcs_file=self.gwcs_file)
 
     def populate_wcs(self, gwcs_file=None):
         """Fill the dict of dict with FWCS instances (based on either normal

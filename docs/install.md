@@ -85,7 +85,7 @@ To update forcepho:
 ```bash
 git pull
 module purge
-module load cuda11.2 hdf5/1.10.6 openmpi slurm
+module load cuda11.2 hdf5/1.10.6 openmpi slurm git
 source activate force
 python -m pip install .
 ```
