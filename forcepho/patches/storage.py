@@ -299,7 +299,7 @@ class MetaStore:
     wcs : dict
         Dictionary of wcs objects, keyed by band and expID
     """
-    def __init__(self, metastorefile=None, no_gwcs=True):
+    def __init__(self, metastorefile=None, no_gwcs=False):
         self.headers = {}
         self.tree = {}
         if metastorefile is not None:
