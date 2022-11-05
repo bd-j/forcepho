@@ -39,16 +39,18 @@ class FWCS:
 
     def all_pix2world(self, x, y, origin=0):
         if self.is_normal:
-            return self.wcsobj.all_pix2world(x, y, origin)
+            ra, dec = self.wcsobj.all_pix2world(x, y, origin, ra_dec_order=True)
         else:
-            return self.wcsobj.forward_transform(x - origin, y - origin)
+            ra, dec = self.wcsobj.forward_transform(x - origin, y - origin)
+        return np.array([ra, dec])
 
     def all_world2pix(self, ra, dec, origin=0):
         if self.is_normal:
-            return self.wcsobj.all_world2pix(ra, dec, origin)
+            x, y = self.wcsobj.all_world2pix(ra, dec, origin, ra_dec_order=True)
         else:
             x, y = self.wcsobj.backward_transform(ra, dec)
-            return x + origin, y + origin
+            x, y = x + origin, y + origin
+        return np.array([x, y])
 
     def from_image(self, imname, extension=1):
         try:
@@ -90,11 +92,11 @@ class FWCS:
         # get dsky for step dx, dy = dpix
         if self.has_distortion or make_approx:
             pos0_sky = np.array([ra, dec])
-            pos0_pix = self.all_world2pix(*pos0_sky, origin)[0]
+            pos0_pix = self.all_world2pix(*pos0_sky, origin)
             pos1_pix = pos0_pix + np.array([dpix, 0.0])
             pos2_pix = pos0_pix + np.array([0.0, dpix])
-            pos1_sky = self.all_pix2world(*pos1_pix, origin)[0]
-            pos2_sky = self.all_pix2world(*pos2_pix, origin)[0]
+            pos1_sky = self.all_pix2world(*pos1_pix, origin)
+            pos2_sky = self.all_pix2world(*pos2_pix, origin)
 
             # compute dpix_dsky matrix
             P = np.eye(2) * dpix
@@ -138,7 +140,7 @@ def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
         The reference coordinates (ra, dec) for the supplied astrometry
     """
     # honestly this should query the full WCS using
-    # get_local_linear for each ra,dec pair
+    # scale_at_sky for each ra,dec pair
     crval = exp["crval"][:]
     crpix = exp["crpix"][:]
     CW = exp["CW"][:]

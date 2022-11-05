@@ -299,14 +299,13 @@ class MetaStore:
     wcs : dict
         Dictionary of wcs objects, keyed by band and expID
     """
-    def __init__(self, metastorefile=None):
-        if not metastorefile:
-            self.headers = {}
-            self.tree = {}
-        else:
+    def __init__(self, metastorefile=None, no_gwcs=True):
+        self.headers = {}
+        self.tree = {}
+        if metastorefile is not None:
             self.headers = self.read_from_file(metastorefile)
             self.gwcs_file = metastorefile.replace(".json", ".asdf")
-            if not os.path.exists(gwcs_file):
+            if (not os.path.exists(self.gwcs_file)) or no_gwcs:
                 self.gwcs_file = None
 
             self.populate_wcs(gwcs_file=self.gwcs_file)
