@@ -171,7 +171,7 @@ class Result(object):
 
         Returns
         -------
-        ymap : ndarray of shape (1, n_dim) by default or structured ndararry of length (1,)
+        ymap : ndarray of shape (1, n_dim) by default or structured ndararry of length (n_active,)
         """
         lnp = self.stats["model_logp"]
         ind_ml = np.argmax(lnp)
