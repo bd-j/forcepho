@@ -556,20 +556,20 @@ class Galaxy(Source):
         from .proposal import source_struct_dtype
         self.proposal_struct = np.empty(1, dtype=source_struct_dtype)
 
-    def set_params(self, theta, filtername=None):
+    def set_params(self, parvector, filtername=None):
         """Set the parameters (flux(es), ra, dec, q, pa, n_sersic, r_h) from a
-        theta array.  Assumes that the order of parameters in the theta vector
-        is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
+        parvector array.  Assumes that the order of parameters in the parameter
+        vector is [flux1, flux2...fluxN, ra, dec, q, pa, sersic, rhalf]
 
         Parameters
         ----------
-        theta : Sequence of length `n_bands+npos+nshape` or `1+npos+nshape`
+        parvector : Sequence of length `n_bands+npos+nshape` or `1+npos+nshape`
             The source parameter values that are to be set.
 
         filtername : string or None (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            If supplied, the parameter vector is assumed to be 7-element (flux_i,
             ra, dec, q, pa) where flux_i is the source flux through the filter
-            given by `filtername`.  If `None` then the theta vector is assumed
+            given by `filtername`.  If `None` then the parameter vector is assumed
             to be of length `self.n_bands + 6`, where the first `n_bands`
             elements correspond to the fluxes.
         """
@@ -581,15 +581,15 @@ class Galaxy(Source):
             nflux = self.n_bands
             flux_inds = slice(None)
         msg = "The length of the parameter vector is not appropriate for this source"
-        assert len(theta) == nflux + self.npos + self.nshape, msg
-        self.flux[flux_inds] = theta[:nflux]
-        self.ra  = theta[nflux]
-        self.dec = theta[nflux + 1]
-        self.q   = theta[nflux + 2]
-        self.pa  = theta[nflux + 3]
+        assert len(parvector) == nflux + self.npos + self.nshape, msg
+        self.flux[flux_inds] = parvector[:nflux]
+        self.ra  = parvector[nflux]
+        self.dec = parvector[nflux + 1]
+        self.q   = parvector[nflux + 2]
+        self.pa  = parvector[nflux + 3]
         if self.nshape > 2:
-            self.sersic = theta[nflux + 4]
-            self.rhalf = theta[nflux + 5]
+            self.sersic = parvector[nflux + 4]
+            self.rhalf = parvector[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -663,6 +663,9 @@ class Galaxy(Source):
             ind = np.argmin(np.abs(self.rhalf - self.radii))
             amp = np.zeros(len(self.radii))
             amp[ind] = 1
+        elif self.rhalf < 0:
+            amp = np.zeros(len(self.radii))
+            amp[0] = 1.0
         else:
             amp = np.squeeze(np.array([spline(self.sersic, self.rhalf)
                                        for spline in self.splines]))
@@ -673,7 +676,7 @@ class Galaxy(Source):
         """Code here for getting amplitude derivatives from a splined look-up
         table (dependent on self.n and self.r)
         """
-        if self.sersic < self.sersic_range[0]:
+        if (self.sersic < self.sersic_range[0]) or (self.rhalf < 0):
             return np.zeros(len(self.radii))
         # n_gauss array of da/dsersic
         return np.squeeze(np.array([spline(self.sersic, self.rhalf, dx=1)
@@ -684,7 +687,7 @@ class Galaxy(Source):
         """Code here for getting amplitude derivatives from a splined look-up
         table (dependent on self.n and self.r)
         """
-        if self.sersic < self.sersic_range[0]:
+        if (self.sersic < self.sersic_range[0]) or (self.rhalf < 0):
             return np.zeros(len(self.radii))
         # n_gauss array of da/drh
         return np.squeeze(np.array([spline(self.sersic, self.rhalf, dy=1)
@@ -739,20 +742,20 @@ class Star(Source):
     npos = 2
     nshape = 0
 
-    def set_params(self, theta, filtername=None):
-        """Set the parameters (flux(es), ra, dec) from a theta array.  Assumes
-        that the order of parameters in the theta vector is [flux1,
+    def set_params(self, parvector, filtername=None):
+        """Set the parameters (flux(es), ra, dec) from a parameter array.
+        Assumes that the order of parameters in the parameter vector is [flux1,
         flux2...fluxN, ra, dec]
 
         Parameters
         ----------
-        theta : sequence of length 3 or `n_bands + 2`
+        parvector : sequence of length 3 or `n_bands + 2`
             The source parameter values that are to be set.
 
         filtername : None or string (optional, default: None)
-            If supplied, the theta vector is assumed to be 3-element (flux_i,
+            If supplied, the parameter vector is assumed to be 3-element (flux_i,
             ra, dec) where flux_i is the source flux through the filter given by
-            `filtername`.  If `None` then the theta vector is assumed to be of
+            `filtername`.  If `None` then the parameter vector is assumed to be of
             length `Source().n_bands + 2`, where the first `n_bands` elements
             correspond to the fluxes.
         """
@@ -763,10 +766,10 @@ class Star(Source):
             nflux = self.n_bands
             flux_inds = slice(None)
         msg = "The length of the parameter vector is not appropriate for this source"
-        assert len(theta) == nflux + 2, msg
-        self.flux[flux_inds] = theta[:nflux]
-        self.ra = theta[nflux]
-        self.dec = theta[nflux + 1]
+        assert len(parvector) == nflux + 2, msg
+        self.flux[flux_inds] = parvector[:nflux]
+        self.ra = parvector[nflux]
+        self.dec = parvector[nflux + 1]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -810,20 +813,20 @@ class SimpleGalaxy(Source):
     npos = 2
     nshape = 2
 
-    def set_params(self, theta, filtername=None):
-        """Set the parameters (flux(es), ra, dec, q, pa) from a theta array.
-        Assumes that the order of parameters in the theta vector is [flux1,
+    def set_params(self, parvector, filtername=None):
+        """Set the parameters (flux(es), ra, dec, q, pa) from a parameter array.
+        Assumes that the order of parameters in the parameter vector is [flux1,
         flux2...fluxN, ra, dec, q, pa]
 
         Parameters
         ----------
-        theta : sequence of length `5` or `n_bands + 4`
+        parvector : sequence of length `5` or `n_bands + 4`
             The source parameter values that are to be set.
 
         filtername : string, optional, (default: None)
-            If supplied, the theta vector is assumed to be 5-element (fluxI,
+            If supplied, the parameter vector is assumed to be 5-element (fluxI,
             ra, dec, q, pa) where fluxI is the source flux through the filter
-            given by `filtername`.  If `None` then the theta vector is assumed
+            given by `filtername`.  If `None` then the parameter vector is assumed
             to be of length `Source().n_bands + 4`, where the first `n_bands`
             elements correspond to the fluxes.
         """
@@ -834,12 +837,12 @@ class SimpleGalaxy(Source):
             nflux = self.n_bands
             flux_inds = slice(None)
         msg = "The length of the parameter vector is not appropriate for this source"
-        assert len(theta) == nflux + 4, msg
-        self.flux[flux_inds] = theta[:nflux]
-        self.ra  = theta[nflux]
-        self.dec = theta[nflux + 1]
-        self.q   = theta[nflux + 2]
-        self.pa  = theta[nflux + 3]
+        assert len(parvector) == nflux + 4, msg
+        self.flux[flux_inds] = parvector[:nflux]
+        self.ra  = parvector[nflux]
+        self.dec = parvector[nflux + 1]
+        self.q   = parvector[nflux + 2]
+        self.pa  = parvector[nflux + 3]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
@@ -892,22 +895,22 @@ class ConformalShearGalaxy(Galaxy):
     sersic = 0.   # sersic index
     rhalf = 0.       # half light radius
 
-    def set_params(self, theta, filtername=None):
+    def set_params(self, parvector, filtername=None):
         """Set the parameters (flux(es), ra, dec, ep, ec, n_sersic, r_h) from a
-        theta array.  Assumes that the order of parameters in the theta vector
+        parvector array.  Assumes that the order of parameters in the  parvector
         is [flux1, flux2...fluxN, ra, dec, ep, ec, sersic, rhalf]
 
         Parameters
         ----------
-        theta :
+        parvector :
             The source parameter values that are to be set.  Sequence of length
             either `n_bands + npos + nshape` (if `filtername` is `None`) or `1 +
             npos + nshape` (if a filter is specified)
 
         filtername : string or None (optional, default: None)
-            If supplied, the theta vector is assumed to be 7-element (flux_i,
+            If supplied, the parameter vector is assumed to be 7-element (flux_i,
             ra, dec, ep, ec) where flux_i is the source flux through the filter
-            given by `filtername`.  If `None` then the theta vector is assumed
+            given by `filtername`.  If `None` then the parameter vector is assumed
             to be of length `self.n_bands + 6`, where the first `n_bands` elements
             correspond to the fluxes.
         """
@@ -918,15 +921,15 @@ class ConformalShearGalaxy(Galaxy):
             nflux = self.n_bands
             flux_inds = slice(None)
         msg = "The length of the parameter vector is not appropriate for this source"
-        assert len(theta) == nflux + self.npos + self.nshape, msg
-        self.flux[flux_inds] = theta[:nflux]
-        self.ra  = theta[nflux]
-        self.dec = theta[nflux + 1]
-        self.ep   = theta[nflux + 2]
-        self.ec  = theta[nflux + 3]
+        assert len(parvector) == nflux + self.npos + self.nshape, msg
+        self.flux[flux_inds] = parvector[:nflux]
+        self.ra  = parvector[nflux]
+        self.dec = parvector[nflux + 1]
+        self.ep   = parvector[nflux + 2]
+        self.ec  = parvector[nflux + 3]
         if self.nshape > 2:
-            self.sersic = theta[nflux + 4]
-            self.rhalf = theta[nflux + 5]
+            self.sersic = parvector[nflux + 4]
+            self.rhalf = parvector[nflux + 5]
 
     def get_param_vector(self, filtername=None):
         """Get the relevant source parameters as a simple 1-D ndarray.
