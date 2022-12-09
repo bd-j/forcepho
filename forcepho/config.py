@@ -17,65 +17,93 @@ def main_config_parser(FITS=True):
     parser = ArgumentParser()
 
     # -------
-    # output
-    parser.add_argument("--outbase", type=str, default="output/",
-                        help="Path to directory that will contain patch output directories and state info")
-    parser.add_argument("--write_residuals", type=int, default=1, help="switch;")
-
-    # -------
-    # input peak & big-object lists
-    parser.add_argument("--peak_catalog", type=str, default="")
-    parser.add_argument("--big_catalog", type=str, default=None)
-    parser.add_argument("--bandlist", type=str, nargs="*", default=["F200W"])
-
-    # -------
-    # mixtures
-    parser.add_argument("--splinedatafile", type=str, default="")
-    parser.add_argument("--psfstorefile", type=str, default="")
-
-    # -------
-    # pixel data locations
-    if FITS:
-        # FITS filenames
-        parser.add_argument("--fitsfiles", type=str, nargs="*", default=[])
-    else:
-        # data store
-        parser.add_argument("--pixelstorefile", type=str, default=None)
-        parser.add_argument("--metastorefile", type=str, default=None)
-
-    # -------
-    # pixel data tweaks
-    parser.add_argument("--max_snr", type=float, default=0)
-    parser.add_argument("--tweak_background", type=str, default=None,
-                        help="Name of keyword in header giving background values to subtract from pixel data")
-
-    # -------
     # basic data types
     parser.add_argument("--pix_dtype", type=str, default="float32")
     parser.add_argument("--meta_dtype", type=str, default="float32")
 
     # -------
+    # output
+    parser.add_argument("--outbase", type=str, default="output/",
+                        help=("Path to directory that will contain patch output "
+                              "directories and state info"))
+    parser.add_argument("--write_residuals", type=int, default=1,
+                        help=("switch; turns on/off the writing of residual "
+                              "pixel data from the last sample for each patch."))
+    # -------
+    # input peak & big-object lists
+    parser.add_argument("--peak_catalog", type=str, default="",
+                        help=("Path to the fpho formatted peak catalog giving the location "
+                              "and initial parameter guesses of Sersic profiles to fit."))
+    parser.add_argument("--big_catalog", type=str, default=None,
+                        help="Deprecated")
+    parser.add_argument("--bandlist", type=str, nargs="*", default=["F200W"])
+
+    # -------
+    # mixtures
+    parser.add_argument("--splinedatafile", type=str, default="",
+                        help="Path to Sersic mixture Gaussian amplitude lookup table.")
+    parser.add_argument("--psfstorefile", type=str, default="",
+                        help="Path to the file continaing the PSF approximations.")
+
+    # -------
+    # pixel data locations
+    if FITS:
+        # FITS filenames
+        parser.add_argument("--fitsfiles", type=str, nargs="*", default=[],
+                            help=("list of paths to the FITS image data to fit to. "
+                            "Often overridden internally."))
+    else:
+        # data store
+        parser.add_argument("--pixelstorefile", type=str, default=None)
+        parser.add_argument("--metastorefile", type=str, default=None,
+                            help="Path to the json file containing metadata for the images.")
+
+    # -------
+    # pixel data tweaks
+    parser.add_argument("--max_snr", type=float, default=0,
+                        help="Add a per-pixel extra model uncertainty to cap the S/N at this value.")
+    parser.add_argument("--tweak_background", type=str, default=None,
+                        help=("Name of keyword in header giving background values to subtract "
+                              "from pixel data."))
+
+    # -------
     # bounds
-    parser.add_argument("--sqrtq_range", type=float, nargs=2, default=[0.4, 1], help="sqrt(b/a)")
-    parser.add_argument("--pa_range", type=float, nargs=2, default=[-2, 2], help="radians")
-    parser.add_argument("--rhalf_range", type=float, default=[0.03, 1.0], help="arcsec")
-    parser.add_argument("--sersic_range", type=float, default=[0.8, 6.0])
-    parser.add_argument("--dpos", type=float, nargs=2, default=[0.06, 0.06], help="arcsec")
+    parser.add_argument("--sqrtq_range", type=float, nargs=2, default=[0.4, 1],
+                        help="sqrt(b/a)")
+    parser.add_argument("--pa_range", type=float, nargs=2, default=[-2, 2],
+                        help="radians")
+    parser.add_argument("--rhalf_range", type=float, nargs=2, default=[0.03, 1.0],
+                        help="arcsec")
+    parser.add_argument("--sersic_range", type=float, nargs=2, default=[0.8, 6.0])
+    parser.add_argument("--dpos", type=float, nargs=2, default=[0.06, 0.06],
+                        help="arcsec")
 
     # -------
     # optimization
-    parser.add_argument("--use_gradients", type=int, default=1, help="switch;")
-    parser.add_argument("--linear_optimize", type=int, default=0, help="switch;")
-    parser.add_argument("--gtol", type=float, default=1e-5)
-    parser.add_argument("--add_barriers", type=int, default=0, help="switch;")
+    parser.add_argument("--use_gradients", type=int, default=1,
+                        help="switch; turns on/off the use of analytic gradients in optimization")
+    parser.add_argument("--linear_optimize", type=int, default=0,
+                        help=("switch; turns on/off the use of a linear flux optimization "
+                              "conditional on the shapes determined during optimization."))
+    parser.add_argument("--gtol", type=float, default=1e-5,
+                        help="Argument for scipy optimizers.")
+    parser.add_argument("--add_barriers", type=int, default=0,
+                        help="switch; turn on/off the use of e^Beta barriers when optimizing.")
 
     # -------
     # sampling
-    parser.add_argument("--sampling_draws", type=int, default=256)
-    parser.add_argument("--warmup", type=int, nargs="*", default=[256])
-    parser.add_argument("--max_treedepth", type=int, default=9)
-    parser.add_argument("--full_cov", type=int, default=1, help="switch;")
-    parser.add_argument("--progressbar", type=int, default=0, help="switch;")
+    parser.add_argument("--sampling_draws", type=int, default=256,
+                        help="Number of posterior samples to compute.")
+    parser.add_argument("--warmup", type=int, nargs="*", default=[256],
+                        help="Number of iterations of warm-up/burn-in.")
+    parser.add_argument("--max_treedepth", type=int, default=9,
+                        help="log_2 of the max number of points along an HMC trajectory.")
+    parser.add_argument("--full_cov", type=int, default=1,
+                        help=("switch; tunr on/off the estimation of a full (as opposed to "
+                        "diagonal) mass matrix during warm-up."))
+    parser.add_argument("--progressbar", type=int, default=0,
+                        help=("switch; turn on/off the printing of a tqdm sampling progress "
+                              "bar."))
 
     # -------
     # dis-patching
