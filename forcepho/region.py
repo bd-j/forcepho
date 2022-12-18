@@ -7,10 +7,10 @@ for a given patch or area of the sky defined in celestial coordinates.
 """
 
 import numpy as np
-from astropy.wcs import WCS
+from .utils.wcs import FWCS
 
 __all__ = ["Region", "CircularRegion", "RectangularRegion",
-           "polygons_intersect"]
+           "polygons_overlap"]
 
 
 class Region:
@@ -21,7 +21,7 @@ class Region:
     def __init__(self, *args, **kwargs):
         pass
 
-    def contains(self, x, y, wcs, origin=0):
+    def contains(self, x, y, wcs):
         """Given a set of x and y pixel coordinates, determine
         whether the pixel is within the region.
 
@@ -31,7 +31,7 @@ class Region:
             x coordinates of the (super-)pixel
         y : ndarray of shape (n_pixel, ...)
             y coordinates of the (super-)pixel
-        wcs : astropy.wcs.WCS()
+        wcs : forcepho.utils.wcs.FWCS()
 
         Returns
         -------
@@ -49,14 +49,13 @@ class Region:
         """Check for overlap of the bounding box with a rectangular image based
         on the WCS in its header.
         """
-        from astropy.wcs import WCS
-        wcs = WCS(hdr)
+        wcs = FWCS(header=hdr)
         imsize = hdr["NAXIS1"], hdr["NAXIS2"]
 
         # Compute image bounding box, and check if bounding boxes overlap
         pcorners = np.array([[0, imsize[0], imsize[0], 0],
                             [0, 0, imsize[1], imsize[1]]])
-        ira, idec = wcs.all_pix2world(pcorners[0], pcorners[1], 1)
+        ira, idec = wcs.pixel_to_world_values(pcorners[0], pcorners[1])
         im_bb = RectangularRegion(ira.min(), ira.max(), idec.min(), idec.max())
         overlap = polygons_overlap(self, im_bb)
 
@@ -89,7 +88,7 @@ class CircularRegion(Region):
         self.radius = radius  # degrees of arc
         self.shape = "CircularRegion"
 
-    def contains(self, xcorners, ycorners, wcs, origin=0):
+    def contains(self, xcorners, ycorners, wcs):
         """
         Parameters
         ----------
@@ -110,8 +109,8 @@ class CircularRegion(Region):
         # Get the center and radius in pixel coodrinates
         # This is a bit hacky (assumes square pixels)
         # could also use the wcs.pixel_scale_matrix determinant to get pixels per degree.
-        xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
-        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
+        xc, yc = wcs.world_to_pixel_values(self.ra, self.dec)
+        xr, yr = wcs.world_to_pixel_values(self.ra, self.dec + self.radius)
         r2 = (xc - xr)**2 + (yc - yr)**2
         d2 = (xc - xcorners)**2 + (yc - ycorners)**2
         inreg = np.any(d2 < r2, axis=-1)
@@ -166,7 +165,7 @@ class RectangularRegion(Region):
         self.dec_max = dec_max     # degrees
         self.shape = "RectangularRegion"
 
-    def contains(self, xcorners, ycorners, wcs, origin=0):
+    def contains(self, xcorners, ycorners, wcs):
         """
         Parameters
         ----------
@@ -185,7 +184,7 @@ class RectangularRegion(Region):
              least one corner within the Region
         """
         # Get the corners in ra, dec coodrinates
-        ra, dec = wcs.all_pix2world(xcorners, ycorners, origin)
+        ra, dec = wcs.pixel_to_world_values(xcorners, ycorners)
         valid = ((ra > self.ra_min) & (ra < self.ra_max) &
                  (dec > self.dec_min) & (dec < self.dec_max))
         inreg = np.any(valid, axis=-1)

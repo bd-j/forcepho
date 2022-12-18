@@ -407,7 +407,7 @@ class MetaStore:
                 # Check region bounding box has a corner in the exposure.
                 # NOTE: If bounding box entirely contains image this might fail
                 wcs = self.wcs[band][expID]
-                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
+                bx, by = wcs.world_to_pixel_values(bra, bdec, wcs_origin)
 
                 inim = np.any((bx > 0) & (bx < imsize[0]) &
                               (by > 0) & (by < imsize[1]))
@@ -504,7 +504,7 @@ class PSFStore:
         There are npsf_per_source rows in this array.
         """
         if wcs is not None:
-            xy = wcs.all_world2pix(source.ra, source.dec)
+            xy = wcs.world_to_pixel_values(source.ra, source.dec)
         else:
             xy = None
         psf = self.lookup(band, xy=xy)

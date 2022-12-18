@@ -238,7 +238,6 @@ class Patch(PatchBase):
         self.spline_smoothing = spline_smoothing
 
         self.patch_reference_coordinates = np.zeros(2)
-        self.wcs_origin = 0
 
     def pack_meta(self, scene):
         """This method packs all the exposure and source metadata.  Most of
@@ -336,7 +335,7 @@ class Patch(PatchBase):
                 self.CW[j, i] = CW_mat
                 # source specific:
                 self.crval[j, i] = ssky - self.patch_reference_coordinates
-                self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], self.wcs_origin)
+                self.crpix[j, i] = wcs.world_to_pixel_values(ssky[0], ssky[1])
 
     def _pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
         """A nominal flux calibrartion has been applied to all images,

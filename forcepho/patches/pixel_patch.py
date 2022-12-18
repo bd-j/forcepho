@@ -3,11 +3,10 @@
 import numpy as np
 
 from astropy.io import fits
-from astropy.wcs import WCS
 
 from .storage import MetaStore, PixelStore
 from .patch import Patch
-
+from ..utils.wcs import FWCS
 
 __all__ = ["PixelPatch",
            "StorePatch", "FITSPatch",
@@ -163,10 +162,10 @@ class PixelPatch(Patch):
             pixdat = self.find_pixels(self.epaths[e], wcs, region)
             # use size instead of len here because we are going to flatten.
             n_pix = pixdat[0].size
-            msg = "There were no valid pixels in exposure {}".format(self.epaths[e])
+            msg = f"There were no valid pixels in exposure {self.epaths[e]}"
             assert n_pix > 0, msg
             if self.debug > 0:
-                msg = "There were non-finite pixels in exposure {}".format(self.epaths[e])
+                msg = f"There were non-finite pixels in exposure {self.epaths[e]}"
                 assert np.all(np.isfinite(pixdat[0] * pixdat[1])), msg
 
             # HACK: this could be cleaned up
@@ -283,14 +282,14 @@ class StorePatch(PixelPatch):
                 wcs = self.metastore.wcs[band][expID]
                 # Check region bounding box has a corner in the exposure.
                 # NOTE: If bounding box entirely contains image this might fail
-                bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
+                bx, by = wcs.world_to_pixel_values(bra, bdec)
                 inim = np.any((bx > 0) & (bx < imsize[0]) &
                               (by > 0) & (by < imsize[1]))
                 if inim:
                     # check in more detail
                     sx, sy = region.contains(super_corners[..., 0],
-                                             super_corners[..., 1], wcs,
-                                             origin=self.wcs_origin)
+                                             super_corners[..., 1],
+                                             wcs)
                     if len(sx) == 0:
                         # skip this exposure
                         continue
@@ -337,8 +336,7 @@ class StorePatch(PixelPatch):
         corners = self.pixelstore.superpixel_corners()
         # this returns the superpixel coordinates of every pixel "contained"
         # within a region:
-        sx, sy = region.contains(corners[..., 0], corners[..., 1],
-                                 wcs, origin=self.wcs_origin)
+        sx, sy = region.contains(corners[..., 0], corners[..., 1], wcs)
         data = self.pixelstore.data[epath + "/data"][:]
         xpix = self.pixelstore.xpix[sx, sy, :]
         ypix = self.pixelstore.ypix[sx, sy, :]
@@ -414,13 +412,13 @@ class FITSPatch(PixelPatch):
                 if not s:
                     continue
                 hdr = fits.getheader(fitsfiles[i], self.sci_ext)
-                wcs = WCS(hdr)
+                wcs = FWCS(header=hdr)
                 # rough check for region coverage
                 # NOTE: If bounding box entirely contains image this might fail
                 if (region is not None) & do_check:
                     bra, bdec = region.bounding_box
                     imsize = hdr["NAXIS1"], hdr["NAXIS2"]
-                    bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
+                    bx, by = wcs.world_to_pixel_values(bra, bdec)
                     inim = np.any((bx > 0) & (bx < imsize[0]) &
                                   (by > 0) & (by < imsize[1]))
                     around_im = (imsize[0] < bx.max()) & (bx.min() < 0) & (imsize[1] < by.max()) & (by.min() < 0)
@@ -462,8 +460,7 @@ class FITSPatch(PixelPatch):
             lower_left = np.array([xp, yp])
             corners = offsets[:, :, None, None] + lower_left[None, :, :, :]
             corners = corners.transpose(2, 3, 0, 1)
-            sx, sy = region.contains(corners[..., 0], corners[..., 1],
-                                     wcs, origin=self.wcs_origin)
+            sx, sy = region.contains(corners[..., 0], corners[..., 1], wcs)
 
         flux = flux[sx, sy].reshape(-1)
         ie = ie[sx, sy].reshape(-1)

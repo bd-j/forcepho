@@ -14,8 +14,11 @@ class FWCS:
     """Wrapper to provide common API for astropyWCS and gwcs objects.
     """
 
-    def __init__(self, wcs=None):
+    def __init__(self, wcs=None, header=None):
+        if header is not None:
+            wcs = AWCS(header)
         self.wcsobj = wcs
+        self.origin = 0
 
     @property
     def is_normal(self):
@@ -37,19 +40,25 @@ class FWCS:
             raise TypeError("gWCS does not have well defined pixel scale")
         return pixscale
 
-    def all_pix2world(self, x, y, origin=0):
+    def all_pix2world(self, *args, **kwargs):
+        return self.pixel_to_world_values(*args, **kwargs)
+
+    def all_world2pix(self, *args, **kwargs):
+        return self.world_to_pixel_values(*args, **kwargs)
+
+    def pixel_to_world_values(self, x, y):
         if self.is_normal:
-            ra, dec = self.wcsobj.all_pix2world(x, y, origin, ra_dec_order=True)
+            ra, dec = self.wcsobj.all_pix2world(x, y, self.origin, ra_dec_order=True)
         else:
-            ra, dec = self.wcsobj.forward_transform(x - origin, y - origin)
+            ra, dec = self.wcsobj.forward_transform(x - self.origin, y - self.origin)
         return np.array([ra, dec])
 
-    def all_world2pix(self, ra, dec, origin=0):
+    def world_to_pixel_values(self, ra, dec):
         if self.is_normal:
-            x, y = self.wcsobj.all_world2pix(ra, dec, origin, ra_dec_order=True)
+            x, y = self.wcsobj.all_world2pix(ra, dec, self.origin, ra_dec_order=True)
         else:
             x, y = self.wcsobj.backward_transform(ra, dec)
-            x, y = x + origin, y + origin
+            x, y = x + self.origin, y + self.origin
         return np.array([x, y])
 
     def from_image(self, imname, extension=1):
@@ -61,7 +70,7 @@ class FWCS:
             hdr = fits.getheader(imname, extension)
             self.wcsobj = AWCS(hdr)
 
-    def scale_at_sky(self, sky, dpix=1.0, origin=1, make_approx=False):
+    def scale_at_sky(self, sky, dpix=1.0, make_approx=False):
         """Get the local linear approximation of the scale and CW matrix at the
         celestial position given by `sky`.  This is a simple numerical calculation
 
@@ -73,9 +82,6 @@ class FWCS:
 
         dpix : optional, float, default; 1.0
             The number of pixels to offset to compute the local linear approx
-
-        origin : optiona, default; 1
-            The astropy wcs `origin` keyword
 
         Returns
         --------
@@ -92,11 +98,11 @@ class FWCS:
         # get dsky for step dx, dy = dpix
         if self.has_distortion or make_approx:
             pos0_sky = np.array([ra, dec])
-            pos0_pix = self.all_world2pix(*pos0_sky, origin)
+            pos0_pix = self.world_to_pixel_values(*pos0_sky)
             pos1_pix = pos0_pix + np.array([dpix, 0.0])
             pos2_pix = pos0_pix + np.array([0.0, dpix])
-            pos1_sky = self.all_pix2world(*pos1_pix, origin)
-            pos2_sky = self.all_pix2world(*pos2_pix, origin)
+            pos1_sky = self.pixel_to_world_values(*pos1_pix)
+            pos2_sky = self.pixel_to_world_values(*pos2_pix)
 
             # compute dpix_dsky matrix
             P = np.eye(2) * dpix
@@ -122,7 +128,8 @@ def scale_at_sky(sky, wcs, dpix=1.0, origin=0, make_approx=False):
         fwcs = wcs
     else:
         fwcs = FWCS(wcs)
-    return fwcs.scale_at_sky(sky, dpix=dpix, origin=origin, make_approx=make_approx)
+    fwcs.origin = origin
+    return fwcs.scale_at_sky(sky, dpix=dpix, make_approx=make_approx)
 
 
 def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
