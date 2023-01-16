@@ -23,7 +23,8 @@ def write_table(out, cats, extnames=[], **header):
                 pass
     for i, ext in enumerate(extnames):
         full[i+1].header["EXTNAME"] = ext
-    full.writeto(out, overwrite=True)
+    if out:
+        full.writeto(out, overwrite=True)
     return full
 
 
