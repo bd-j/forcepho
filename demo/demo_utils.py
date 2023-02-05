@@ -75,7 +75,7 @@ def make_stamp(band, scale=0.03, nx=64, ny=64, dither=(0, 0)):
     return stamp
 
 
-def make_scene(stamps, nsource=1, dist_frac=1.0,
+def make_scene(stamps, nsource=1, dist_frac=1.0, ra=None, dec=None,
                rhalf=0.15, sersic=1, flux=1.0, q=0.9, pa=np.pi/2):
     """Convert a configuration namespace to a structured ndarray in the forcepho
     catalog format.
@@ -118,13 +118,16 @@ def make_scene(stamps, nsource=1, dist_frac=1.0,
         cat[band] = np.array(flux)
 
     # Add sources locations based on central coordinate of first stamp
-    stamp = stamps[0]
-    hdul, wcs = stamp.to_fits()
-    ra, dec = wcs.all_pix2world((stamp.nx-1) / 2.,
-                                (stamp.ny-1) / 2.,
-                                origin, ra_dec_order=True)
-    cat["ra"] = ra
-    cat["dec"] = dec + np.arange(nsource) * (np.array(rhalf) * dist_frac) / 3600
+    if (ra is None):
+        stamp = stamps[0]
+        hdul, wcs = stamp.to_fits()
+        ra, dec = wcs.pixel_to_world_values((stamp.nx-1) / 2., (stamp.ny-1) / 2.)
+        cat["ra"] = ra
+        cat["dec"] = dec + np.arange(nsource) * (np.array(rhalf) * dist_frac) / 3600
+
+    else:
+        cat["ra"] = ra
+        cat["dec"] = dec
 
     return cat
 
@@ -152,14 +155,14 @@ def galsim_model(scene, stamp, psf=None, verbose=False):
     hdul, wcs = stamp.to_fits()
     hdul.close()
     band = stamp.filtername
-    pixel_scale = 1 / np.sqrt(np.linalg.det(stamp.scale))
+    pixel_scale = 1 / np.sqrt(np.abs(np.linalg.det(stamp.scale)))
     image = galsim.ImageF(stamp.nx, stamp.ny, scale=pixel_scale)
 
     for catrow in scene:
         gal = galsim.Sersic(half_light_radius=catrow["rhalf"],
                             n=catrow["sersic"], flux=catrow[band])
         # shift the galaxy
-        x, y = wcs.all_world2pix(catrow["ra"], catrow["dec"], 0)
+        x, y = wcs.world_to_pixel_values(catrow["ra"], catrow["dec"])
         dx, dy = x - (stamp.nx-1) / 2., y - (stamp.ny-1) / 2.
         if np.hypot(dx, dy) > 1e-2:
             offset = dx, dy
@@ -172,6 +175,53 @@ def galsim_model(scene, stamp, psf=None, verbose=False):
         # in forcepho q = sqrt(b/a), and PA is in radians
         if catrow["q"] != 1:
             gal = gal.shear(q=catrow["q"]**2, beta=catrow["pa"] * galsim.radians)
+
+        if psf is not None:
+            gal = galsim.Convolve([psf, gal])
+
+        gal.drawImage(image, offset=offset, add_to_image=True)
+
+    return image.array.T
+
+
+def galsim_star(scene, stamp, psf=None, verbose=False):
+    """
+    Parameters
+    ----------
+    scene : structured ndarray
+        Source parameters as a forcepho standard catalog format
+
+    stamp : forcepho.slow.stamp.PostageStamp() instance.
+        The image parameters to use for the model
+
+    psf : optional
+        A GalSim object that represent the PSF
+
+    Returns
+    -------
+    model : ndarray of shape (nx, ny)
+        The GalSim model image, after convolution with the PSF
+    """
+    import galsim
+
+    hdul, wcs = stamp.to_fits()
+    hdul.close()
+    band = stamp.filtername
+    pixel_scale = 1 / np.sqrt(np.abs(np.linalg.det(stamp.scale)))
+    image = galsim.ImageF(stamp.nx, stamp.ny, scale=pixel_scale)
+
+    for catrow in scene:
+        gal = galsim.DeltaFunction(flux=catrow[band])
+        # shift the galaxy
+        x, y = wcs.world_to_pixel_values(catrow["ra"], catrow["dec"])
+        dx, dy = x - (stamp.nx-1) / 2., y - (stamp.ny-1) / 2.
+        if np.hypot(dx, dy) > 1e-2:
+            offset = dx, dy
+            if verbose:
+                print(f"applying shift of {dx*pixel_scale}, {dy*pixel_scale}"
+                      f" arcsec to {stamp.filtername}")
+        else:
+            offset = 0, 0
 
         if psf is not None:
             gal = galsim.Convolve([psf, gal])
@@ -244,11 +294,11 @@ def compute_noise_level(scene, config):
 def write_fits_to(out, im, unc, hdr, bands=[], noise=None, scene=None):
     """Write a FITS image with multuple extensions for image and uncertainty
     """
-    image = fits.PrimaryHDU((im).T, header=hdr)
-    uncertainty = fits.ImageHDU(unc.T, header=hdr)
-    hdus = [image, uncertainty]
+    image = fits.ImageHDU((im).T, header=hdr, name="SCI")
+    uncertainty = fits.ImageHDU(unc.T, header=hdr, name="ERR")
+    hdus = [fits.PrimaryHDU(), image, uncertainty]
     if noise is not None:
-        hdus.append(fits.ImageHDU(noise.T, header=hdr))
+        hdus.append(fits.ImageHDU(noise.T, header=hdr, name="NOISE"))
 
     if scene is not None:
         catalog = fits.BinTableHDU(scene)

@@ -76,6 +76,8 @@ if __name__ == "__main__":
     for i, stamp in enumerate(stamps):
         band = stamp.filtername
         hdul, wcs = stamp.to_fits()
+        hdul[0].header["EXTNAME"] = "SCI"
+        hdul[1].header["EXTNAME"] = "ERR"
         hdr = hdul[0].header
         hdr["FILTER"] = band.upper()
         hdr["SNR"] = config.snr

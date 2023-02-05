@@ -35,9 +35,9 @@ def drizzle_combine(ditherlist, args, wt_scale=1e-4):
     for exp in ditherlist:
         # get the input
         with fits.open(exp) as hdul:
-            sci = hdul[0].data.astype(np.float32)
-            wht = 1 / (hdul[1].data)**2  # inverse variance
-            hdr = hdul[1].header
+            sci = hdul["SCI"].data.astype(np.float32)
+            wht = 1 / (hdul["ERR"].data)**2  # inverse variance
+            hdr = hdul["SCI"].header
             wcs_in = stwcs.wcsutil.HSTWCS(hdul, wcskey=' ')
 
         #wht = wht / np.median(wht)
