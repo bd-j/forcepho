@@ -90,11 +90,15 @@ def sample(patcher, scene, config, logger,
     scratchpad.q_sampling = q.copy()
     if cov is None:
         cov = np.eye(len(q))
+    if "n_iter" in active.dtype.names:
+        weight = max(10, active["n_iter"].min())
+    else:
+        weight = 10
     out, step, stats = run_lmc(model, q.copy(),
                                n_draws=config.sampling_draws,
                                warmup=config.warmup,
                                z_cov=cov, full=True,
-                               weight=max(10, active["n_iter"].min()),
+                               weight=weight,
                                discard_tuned_samples=False,
                                max_treedepth=config.max_treedepth,
                                progressbar=config.progressbar)
