@@ -326,7 +326,7 @@ class MetaStore:
                 except(KeyError):
                     w = FWCS(hdr)
                     # remove extraneous axes
-                    if w.wcsobj.naxis == 3:
+                    if getattr(w.wcsobj, "naxis", 2) == 3:
                         w.wcsobj = w.wcsobj.dropaxis(2)
                 self.wcs[band][expID] = w
 
