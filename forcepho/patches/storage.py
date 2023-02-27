@@ -324,7 +324,7 @@ class MetaStore:
                 try:
                     w = FWCS(self.tree[band][expID])
                 except(KeyError):
-                    w = FWCS(hdr)
+                    w = FWCS(header=hdr)
                     # remove extraneous axes
                     if getattr(w.wcsobj, "naxis", 2) == 3:
                         w.wcsobj = w.wcsobj.dropaxis(2)
