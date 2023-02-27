@@ -392,7 +392,7 @@ class MetaStore:
 
         return headers
 
-    def find_exposures(self, sky, bandlist, wcs_origin=0):
+    def find_exposures(self, sky, bandlist):
         """Find all exposures in the specified bands that cover the given sky
         position
         """
@@ -407,7 +407,7 @@ class MetaStore:
                 # Check region bounding box has a corner in the exposure.
                 # NOTE: If bounding box entirely contains image this might fail
                 wcs = self.wcs[band][expID]
-                bx, by = wcs.world_to_pixel_values(bra, bdec, wcs_origin)
+                bx, by = wcs.world_to_pixel_values(bra, bdec)
 
                 inim = np.any((bx > 0) & (bx < imsize[0]) &
                               (by > 0) & (by < imsize[1]))
