@@ -46,20 +46,11 @@ class FWCS:
     def all_world2pix(self, *args, **kwargs):
         return self.world_to_pixel_values(*args, **kwargs)
 
-    def pixel_to_world_values(self, x, y):
-        if self.is_normal:
-            ra, dec = self.wcsobj.all_pix2world(x, y, self.origin, ra_dec_order=True)
-        else:
-            ra, dec = self.wcsobj.forward_transform(x - self.origin, y - self.origin)
-        return np.array([ra, dec])
+    def pixel_to_world_values(self, x, y, **extras):
+        return self.wcsobj.pixel_to_world_values(x, y)
 
-    def world_to_pixel_values(self, ra, dec):
-        if self.is_normal:
-            x, y = self.wcsobj.all_world2pix(ra, dec, self.origin, ra_dec_order=True)
-        else:
-            x, y = self.wcsobj.backward_transform(ra, dec)
-            x, y = x + self.origin, y + self.origin
-        return np.array([x, y])
+    def world_to_pixel_values(self, ra, dec, **extras):
+        return self.wcsobj.world_to_pixel_values(ra, dec)
 
     def from_image(self, imname, extension=1):
         try:
