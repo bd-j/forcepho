@@ -11,7 +11,8 @@ import numpy as np
 import h5py
 from astropy.io import fits
 
-from ..utils.wcs import FWCS
+from ..region import polygon_contains
+from ..utils.wcs import AWCS as WCS
 
 # astropy is very noisy
 import warnings
@@ -299,32 +300,36 @@ class MetaStore:
     wcs : dict
         Dictionary of wcs objects, keyed by band and expID
     """
-    def __init__(self, metastorefile=None, no_gwcs=False):
+    def __init__(self, metastorefile=None, use_gwcs=False):
         self.headers = {}
         self.tree = {}
         if metastorefile is not None:
             self.headers = self.read_from_file(metastorefile)
-            self.gwcs_file = metastorefile.replace(".json", ".asdf")
-            if (not os.path.exists(self.gwcs_file)) or no_gwcs:
+            # GWCS?
+            gwcs_file = metastorefile.replace(".json", ".asdf")
+            if os.path.exists(gwcs_file) & use_gwcs:
+                self.gwcs_file = gwcs_file
+            else:
                 self.gwcs_file = None
 
+            # build all the wcses
             self.populate_wcs(gwcs_file=self.gwcs_file)
 
     def populate_wcs(self, gwcs_file=None):
-        """Fill the dict of dict with FWCS instances (based on either normal
+        """Fill the dict of dict with WCS instances (based on either normal
         astropy WCS objects or gWCS instances)
         """
-        if gwcs_file is not None:
+        self.wcs = {}
+        if gwcs_file:
             import asdf
             self.tree = asdf.open(gwcs_file).tree
-        self.wcs = {}
         for band, exps in self.headers.items():
             self.wcs[band] = {}
             for expID, hdr in exps.items():
-                try:
-                    w = FWCS(self.tree[band][expID])
-                except(KeyError):
-                    w = FWCS(hdr)
+                if gwcs_file:
+                    w = self.tree[band][expID]
+                else:
+                    w = WCS(hdr)
                     # remove extraneous axes
                     if getattr(w.wcsobj, "naxis", 2) == 3:
                         w.wcsobj = w.wcsobj.dropaxis(2)
@@ -392,11 +397,28 @@ class MetaStore:
 
         return headers
 
-    def find_exposures(self, sky, bandlist, wcs_origin=0):
+    def find_exposures(self, sky, bandlist):
         """Find all exposures in the specified bands that cover the given sky
         position
+
+        Parameters
+        ----------
+        sky : sequence of length 2
+            ra, dec in decimal degrees of the target location
+
+        bandlist : list of strings
+            The bands to search for images
+
+        Returns
+        -------
+        epaths : list of strings
+            Exposure IDs for the exposures that cover the target.
+
+        bands : list of strings
+            List of bands from the initial `bandlist` that actually have
+            relevant images.
         """
-        bra, bdec = sky
+        #bra, bdec = sky
         epaths, bands = [], []
         for band in bandlist:
             if band not in self.headers:
@@ -404,13 +426,16 @@ class MetaStore:
             for expID in self.headers[band].keys():
                 hdr = self.headers[band][expID]
                 imsize = hdr["NAXIS1"], hdr["NAXIS2"]
-                # Check region bounding box has a corner in the exposure.
-                # NOTE: If bounding box entirely contains image this might fail
                 wcs = self.wcs[band][expID]
-                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
-
-                inim = np.any((bx > 0) & (bx < imsize[0]) &
-                              (by > 0) & (by < imsize[1]))
+                # check celestial points are in celestial square defined by image.
+                # doing it this way avoids WCS inaccuracies far from image center
+                bbox = np.array([[0, 0],
+                                 [0, imsize[1]],
+                                 [imsize[0], imsize[0]],
+                                 [imsize[0], 0]]).T
+                bbox = wcs.pixel_to_world_values(bbox[0], bbox[1])
+                bbox = np.array(bbox).T
+                inim = polygon_contains(bbox, np.atleast_2d(sky))[0]
                 if inim:
                     epaths.append(expID)
                     bands.append(band)
@@ -504,7 +529,7 @@ class PSFStore:
         There are npsf_per_source rows in this array.
         """
         if wcs is not None:
-            xy = wcs.all_world2pix(source.ra, source.dec)
+            xy = wcs.world_to_pixel_values(source.ra, source.dec)
         else:
             xy = None
         psf = self.lookup(band, xy=xy)

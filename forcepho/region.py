@@ -10,7 +10,7 @@ import numpy as np
 from astropy.wcs import WCS
 
 __all__ = ["Region", "CircularRegion", "RectangularRegion",
-           "polygons_intersect"]
+           "polygons_overlap", "polygon_contains"]
 
 
 class Region:
@@ -21,7 +21,7 @@ class Region:
     def __init__(self, *args, **kwargs):
         pass
 
-    def contains(self, x, y, wcs, origin=0):
+    def contains(self, x, y, wcs):
         """Given a set of x and y pixel coordinates, determine
         whether the pixel is within the region.
 
@@ -56,7 +56,7 @@ class Region:
         # Compute image bounding box, and check if bounding boxes overlap
         pcorners = np.array([[0, imsize[0], imsize[0], 0],
                             [0, 0, imsize[1], imsize[1]]])
-        ira, idec = wcs.all_pix2world(pcorners[0], pcorners[1], 1)
+        ira, idec = wcs.pixel_to_world_values(pcorners[0], pcorners[1])
         im_bb = RectangularRegion(ira.min(), ira.max(), idec.min(), idec.max())
         overlap = polygons_overlap(self, im_bb)
 
@@ -89,7 +89,7 @@ class CircularRegion(Region):
         self.radius = radius  # degrees of arc
         self.shape = "CircularRegion"
 
-    def contains(self, xcorners, ycorners, wcs, origin=0):
+    def contains(self, xcorners, ycorners, wcs):
         """
         Parameters
         ----------
@@ -110,8 +110,8 @@ class CircularRegion(Region):
         # Get the center and radius in pixel coodrinates
         # This is a bit hacky (assumes square pixels)
         # could also use the wcs.pixel_scale_matrix determinant to get pixels per degree.
-        xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
-        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
+        xc, yc = wcs.world_to_pixel_values(self.ra, self.dec)
+        xr, yr = wcs.world_to_pixel_values(self.ra, self.dec + self.radius)
         r2 = (xc - xr)**2 + (yc - yr)**2
         d2 = (xc - xcorners)**2 + (yc - ycorners)**2
         inreg = np.any(d2 < r2, axis=-1)
@@ -166,7 +166,7 @@ class RectangularRegion(Region):
         self.dec_max = dec_max     # degrees
         self.shape = "RectangularRegion"
 
-    def contains(self, xcorners, ycorners, wcs, origin=0):
+    def contains(self, xcorners, ycorners, wcs):
         """
         Parameters
         ----------
@@ -185,7 +185,8 @@ class RectangularRegion(Region):
              least one corner within the Region
         """
         # Get the corners in ra, dec coodrinates
-        ra, dec = wcs.all_pix2world(xcorners, ycorners, origin)
+        ra, dec = wcs.pixel_to_world_values(xcorners, ycorners)
+        # TODO: use polygon_contains for this.  have to be careful about shapes
         valid = ((ra > self.ra_min) & (ra < self.ra_max) &
                  (dec > self.dec_min) & (dec < self.dec_max))
         inreg = np.any(valid, axis=-1)
@@ -262,3 +263,41 @@ def polygons_overlap(a, b):
             return False
 
     return True
+
+
+def polygon_contains(poly, points):
+    """
+    Parameters
+    ----------
+    poly : nrarray shape (nside, 2)
+        x, y coordinates of polygon vertices, in clockwise or counterclockise
+        order
+
+    points : ndarray of shape (npoint, 2)
+        x, y coordinates of the points to test.
+
+    Returns
+    -------
+    inside : ndarray of shape (npoints,), bool
+        whether the test point is inside th polygon
+
+    >>> poly = np.array([[0,0], [1., 0], [1,1], [0, 1]])
+    >>> points = np.atleast_2d([[0.5, 0.5], [0.5, 1.1], [-0.1, 0.5]])
+    >>> polygon_contains(poly, points)
+    [True, False, False]
+
+    >>> poly = np.array([[0,0], [0., 1], [1,1], [1, 0]])
+    >>> polygon_contains(poly, points)
+    [True, False, False]
+
+    >>> poly = np.array([[0,0], [0, 3.0], [1,1], [1, 0]])
+    >>> polygon_contains(poly, points)
+    [True, True, False]
+    """
+    vert = np.vstack([poly, poly[:1, :]])      # nside+1, 2
+    ds = np.diff(vert, axis=0)                 # nside, 2
+    dX = points[:, None, :] - poly[None, :, :] # npoints, nside, 2
+    k = ds[:, 0] * dX[:, :, 1] - ds[:, 1] * dX[:, :, 0] # npoints, nside
+    sign = np.sign(k)                          # npoints, nside
+    inside = np.all((sign.T - sign[:, 0]) == 0, axis=0)
+    return inside

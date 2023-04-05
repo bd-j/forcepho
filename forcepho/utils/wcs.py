@@ -55,8 +55,8 @@ class FWCS:
     def from_image(self, imname, extension=1):
         try:
             import asdf
-            fa = asdf.open(imname)
-            self.wcsobj = fa.search(type="WCS").node
+            with asdf.open(imname) as fa:
+                self.wcsobj = fa.search(type="WCS").node
         except:
             hdr = fits.getheader(imname, extension)
             self.wcsobj = AWCS(hdr)
