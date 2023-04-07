@@ -8,11 +8,12 @@ Interface with data on disk through storage objects.
 import os
 from collections import namedtuple
 import numpy as np
+
 import h5py
 from astropy.io import fits
+from astropy.wcs import WCS
 
 from ..region import polygon_contains
-from ..utils.wcs import AWCS as WCS
 
 # astropy is very noisy
 import warnings
@@ -35,14 +36,23 @@ PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 PSF_DTYPE = np.dtype([(c, np.float32) for c in PSF_COLS] + [("sersic_bin", np.int32)])
 
 
-def header_to_id(hdr, name, framedir=None):
-    band = hdr["FILTER"]
+def header_to_id(hdr, name, framedir=None, split_by_detector=[]):
+    # Figure out the band
+    filt = hdr["FILTER"]
+    if filt in split_by_detector:
+        module = hdr["DETECTOR"][3] # for jwst this is A and B modules
+        band = f"{filt.upper()}{module.upper()}"
+    else:
+        band = filt.upper()
+
+    # Figure out the exposure ID
     expID = os.path.basename(name).replace(".fits", "")
     if framedir:
         assert framedir in os.path.dirname(name)
         rpath = os.path.dirname(name).replace(framedir, "")
-        if rpath[0] == "/":
-            rpath = rpath[1:]
+        if len(rpath) > 0:
+            if rpath[0] == "/":
+                rpath = rpath[1:]
         expID = os.path.join(rpath, expID)
     return band, expID
 
@@ -96,7 +106,7 @@ class PixelStore:
         except(KeyError, OSError):
             # file or attrs do not exist, create them
             nside_full = np.array(nside_full)
-            print("Adding nside_full={}, super_pixel_size={} to attrs".format(nside_full, super_pixel_size))
+            print(f"Adding nside_full={nside_full}, super_pixel_size={super_pixel_size} to attrs")
             #super_pixel_size = np.array(super_pixel_size)
             with h5py.File(self.h5file, "a") as h5:
                 h5.attrs["nside_full"] = nside_full
@@ -206,7 +216,7 @@ class PixelStore:
             path = f"{band}/{expID}"
             try:
                 exp = h5.create_group(path)
-            except(ValueError):
+            except ValueError:
                 del h5[path]
                 print(f"deleted existing data for {path}")
                 exp = h5.create_group(path)
@@ -216,13 +226,13 @@ class PixelStore:
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
             if imset.names:
-                if type(imset.names) is str:
+                if isinstance(imset.names, str):
                     pdat.attrs["image_name"] = imset.names
                 try:
                     for i, f in enumerate(imset.names._fields):
-                        if type(imset.names[i]) is str:
+                        if isinstance(imset.names[i], str):
                             pdat.attrs[f] = imset.names[i]
-                except(AttributeError):
+                except AttributeError:
                     pass
 
     def superpixelize(self, im, ierr, pix_dtype=None):
@@ -277,7 +287,7 @@ class PixelStore:
     def data(self):
         try:
             return self._read_handle
-        except(AttributeError):
+        except AttributeError:
             self._read_handle = h5py.File(self.h5file, "r", swmr=True)
             return self._read_handle
 
@@ -285,7 +295,7 @@ class PixelStore:
         try:
             self._read_handle.close()
             del self._read_handle
-        except(AttributeError):
+        except AttributeError:
             pass
 
 

@@ -47,9 +47,8 @@ class Region:
 
     def overlaps(self, hdr):
         """Check for overlap of the bounding box with a rectangular image based
-        on the WCS in its header.
+        on the WCS and size in its header.
         """
-        from astropy.wcs import WCS
         wcs = WCS(hdr)
         imsize = hdr["NAXIS1"], hdr["NAXIS2"]
 
@@ -259,7 +258,7 @@ def polygons_overlap(a, b):
         minB = proj.min(axis=-1)
         maxB = proj.max(axis=-1)
 
-        if (np.any((maxA < minB) | (maxB < minA))):
+        if np.any((maxA < minB) | (maxB < minA)):
             return False
 
     return True
@@ -279,7 +278,7 @@ def polygon_contains(poly, points):
     Returns
     -------
     inside : ndarray of shape (npoints,), bool
-        whether the test point is inside th polygon
+        whether the test point is inside the polygon
 
     >>> poly = np.array([[0,0], [1., 0], [1,1], [0, 1]])
     >>> points = np.atleast_2d([[0.5, 0.5], [0.5, 1.1], [-0.1, 0.5]])
