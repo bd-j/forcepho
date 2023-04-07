@@ -331,8 +331,8 @@ class MetaStore:
                 else:
                     w = WCS(hdr)
                     # remove extraneous axes
-                    if getattr(w.wcsobj, "naxis", 2) == 3:
-                        w.wcsobj = w.wcsobj.dropaxis(2)
+                    if getattr(w, "naxis", 2) == 3:
+                        w = w.dropaxis(2)
                 self.wcs[band][expID] = w
 
     def add_exposure(self, imset):
