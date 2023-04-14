@@ -101,8 +101,9 @@ def scale_at_sky(sky, wcs, dpix=1.0, make_approx=False):
     dpix : optional, float, default; 1.0
         The number of pixels to offset to compute the local linear approx
 
-    origin : optiona, default; 1
-        The astropy wcs `origin` keyword
+    wcs : instance of WCS
+        The World Coordinate System  object, must have
+        :py:meth:`pixel_to_world_values` method.
 
     Returns
     --------
@@ -119,11 +120,11 @@ def scale_at_sky(sky, wcs, dpix=1.0, make_approx=False):
     # get dsky for step dx, dy = dpix
     if getattr(wcs, "has_distortion", True) or make_approx:
         pos0_sky = np.array([ra, dec])
-        pos0_pix = wcs.pixel_to_world_values(*pos0_sky)
+        pos0_pix = np.array(wcs.world_to_pixel_values(*pos0_sky))
         pos1_pix = pos0_pix + np.array([dpix, 0.0])
         pos2_pix = pos0_pix + np.array([0.0, dpix])
-        pos1_sky = wcs.pixel_to_world_values(*pos1_pix)
-        pos2_sky = wcs.pixel_to_world_values(*pos2_pix)
+        pos1_sky = np.array(wcs.pixel_to_world_values(*pos1_pix))
+        pos2_sky = np.array(wcs.pixel_to_world_values(*pos2_pix))
 
         # compute dpix_dsky matrix
         P = np.eye(2) * dpix
@@ -142,7 +143,6 @@ def scale_at_sky(sky, wcs, dpix=1.0, make_approx=False):
         CW_mat = np.matmul(D_mat * 3600.0, W)
 
     return CW_mat, D_mat
-
 
 
 def sky_to_pix(ra, dec, exp=None, ref_coords=0.):
