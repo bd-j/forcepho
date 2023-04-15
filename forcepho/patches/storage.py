@@ -8,10 +8,12 @@ Interface with data on disk through storage objects.
 import os
 from collections import namedtuple
 import numpy as np
+
 import h5py
 from astropy.io import fits
+from astropy.wcs import WCS
 
-from ..utils.wcs import FWCS
+from ..region import polygon_contains
 
 # astropy is very noisy
 import warnings
@@ -34,14 +36,23 @@ PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 PSF_DTYPE = np.dtype([(c, np.float32) for c in PSF_COLS] + [("sersic_bin", np.int32)])
 
 
-def header_to_id(hdr, name, framedir=None):
-    band = hdr["FILTER"]
+def header_to_id(hdr, name, framedir=None, split_by_detector=[]):
+    # Figure out the band
+    filt = hdr["FILTER"]
+    if filt in split_by_detector:
+        module = hdr["DETECTOR"][3] # for jwst this is A and B modules
+        band = f"{filt.upper()}{module.upper()}"
+    else:
+        band = filt.upper()
+
+    # Figure out the exposure ID
     expID = os.path.basename(name).replace(".fits", "")
     if framedir:
         assert framedir in os.path.dirname(name)
         rpath = os.path.dirname(name).replace(framedir, "")
-        if rpath[0] == "/":
-            rpath = rpath[1:]
+        if len(rpath) > 0:
+            if rpath[0] == "/":
+                rpath = rpath[1:]
         expID = os.path.join(rpath, expID)
     return band, expID
 
@@ -95,7 +106,7 @@ class PixelStore:
         except(KeyError, OSError):
             # file or attrs do not exist, create them
             nside_full = np.array(nside_full)
-            print("Adding nside_full={}, super_pixel_size={} to attrs".format(nside_full, super_pixel_size))
+            print(f"Adding nside_full={nside_full}, super_pixel_size={super_pixel_size} to attrs")
             #super_pixel_size = np.array(super_pixel_size)
             with h5py.File(self.h5file, "a") as h5:
                 h5.attrs["nside_full"] = nside_full
@@ -205,7 +216,7 @@ class PixelStore:
             path = f"{band}/{expID}"
             try:
                 exp = h5.create_group(path)
-            except(ValueError):
+            except ValueError:
                 del h5[path]
                 print(f"deleted existing data for {path}")
                 exp = h5.create_group(path)
@@ -215,13 +226,13 @@ class PixelStore:
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
             if imset.names:
-                if type(imset.names) is str:
+                if isinstance(imset.names, str):
                     pdat.attrs["image_name"] = imset.names
                 try:
                     for i, f in enumerate(imset.names._fields):
-                        if type(imset.names[i]) is str:
+                        if isinstance(imset.names[i], str):
                             pdat.attrs[f] = imset.names[i]
-                except(AttributeError):
+                except AttributeError:
                     pass
 
     def superpixelize(self, im, ierr, pix_dtype=None):
@@ -276,7 +287,7 @@ class PixelStore:
     def data(self):
         try:
             return self._read_handle
-        except(AttributeError):
+        except AttributeError:
             self._read_handle = h5py.File(self.h5file, "r", swmr=True)
             return self._read_handle
 
@@ -284,7 +295,7 @@ class PixelStore:
         try:
             self._read_handle.close()
             del self._read_handle
-        except(AttributeError):
+        except AttributeError:
             pass
 
 
@@ -299,35 +310,39 @@ class MetaStore:
     wcs : dict
         Dictionary of wcs objects, keyed by band and expID
     """
-    def __init__(self, metastorefile=None, no_gwcs=False):
+    def __init__(self, metastorefile=None, use_gwcs=False):
         self.headers = {}
         self.tree = {}
         if metastorefile is not None:
             self.headers = self.read_from_file(metastorefile)
-            self.gwcs_file = metastorefile.replace(".json", ".asdf")
-            if (not os.path.exists(self.gwcs_file)) or no_gwcs:
+            # GWCS?
+            gwcs_file = metastorefile.replace(".json", ".asdf")
+            if os.path.exists(gwcs_file) & use_gwcs:
+                self.gwcs_file = gwcs_file
+            else:
                 self.gwcs_file = None
 
+            # build all the wcses
             self.populate_wcs(gwcs_file=self.gwcs_file)
 
     def populate_wcs(self, gwcs_file=None):
-        """Fill the dict of dict with FWCS instances (based on either normal
+        """Fill the dict of dict with WCS instances (based on either normal
         astropy WCS objects or gWCS instances)
         """
-        if gwcs_file is not None:
+        self.wcs = {}
+        if gwcs_file:
             import asdf
             self.tree = asdf.open(gwcs_file).tree
-        self.wcs = {}
         for band, exps in self.headers.items():
             self.wcs[band] = {}
             for expID, hdr in exps.items():
-                try:
-                    w = FWCS(self.tree[band][expID])
-                except(KeyError):
-                    w = FWCS(hdr)
+                if gwcs_file:
+                    w = self.tree[band][expID]
+                else:
+                    w = WCS(hdr)
                     # remove extraneous axes
-                    if getattr(w.wcsobj, "naxis", 2) == 3:
-                        w.wcsobj = w.wcsobj.dropaxis(2)
+                    if getattr(w, "naxis", 2) == 3:
+                        w = w.dropaxis(2)
                 self.wcs[band][expID] = w
 
     def add_exposure(self, imset):
@@ -392,11 +407,28 @@ class MetaStore:
 
         return headers
 
-    def find_exposures(self, sky, bandlist, wcs_origin=0):
+    def find_exposures(self, sky, bandlist):
         """Find all exposures in the specified bands that cover the given sky
         position
+
+        Parameters
+        ----------
+        sky : sequence of length 2
+            ra, dec in decimal degrees of the target location
+
+        bandlist : list of strings
+            The bands to search for images
+
+        Returns
+        -------
+        epaths : list of strings
+            Exposure IDs for the exposures that cover the target.
+
+        bands : list of strings
+            List of bands from the initial `bandlist` that actually have
+            relevant images.
         """
-        bra, bdec = sky
+        #bra, bdec = sky
         epaths, bands = [], []
         for band in bandlist:
             if band not in self.headers:
@@ -404,13 +436,16 @@ class MetaStore:
             for expID in self.headers[band].keys():
                 hdr = self.headers[band][expID]
                 imsize = hdr["NAXIS1"], hdr["NAXIS2"]
-                # Check region bounding box has a corner in the exposure.
-                # NOTE: If bounding box entirely contains image this might fail
                 wcs = self.wcs[band][expID]
-                bx, by = wcs.all_world2pix(bra, bdec, wcs_origin)
-
-                inim = np.any((bx > 0) & (bx < imsize[0]) &
-                              (by > 0) & (by < imsize[1]))
+                # check celestial points are in celestial square defined by image.
+                # doing it this way avoids WCS inaccuracies far from image center
+                bbox = np.array([[0, 0],
+                                 [0, imsize[1]],
+                                 [imsize[0], imsize[0]],
+                                 [imsize[0], 0]]).T
+                bbox = wcs.pixel_to_world_values(bbox[0], bbox[1])
+                bbox = np.array(bbox).T
+                inim = polygon_contains(bbox, np.atleast_2d(sky))[0]
                 if inim:
                     epaths.append(expID)
                     bands.append(band)
@@ -504,7 +539,7 @@ class PSFStore:
         There are npsf_per_source rows in this array.
         """
         if wcs is not None:
-            xy = wcs.all_world2pix(source.ra, source.dec)
+            xy = wcs.world_to_pixel_values(source.ra, source.dec)
         else:
             xy = None
         psf = self.lookup(band, xy=xy)
