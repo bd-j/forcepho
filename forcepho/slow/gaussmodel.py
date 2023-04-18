@@ -625,7 +625,7 @@ def fast_dot_dot_2x2(a, b, c):
 #@numba.guvectorize([(numba.float64[:,:],numba.float64[:,:],numba.float64[:,:],numba.float64[:,:]),
 #                    (numba.float32[:,:],numba.float32[:,:],numba.float32[:,:],numba.float32[:,:])],
 #                   '(n,n),(n,n),(n,n)->(n,n)', nopython=True)
-def fast_matmul_matmul_2x2(A, B, C, res):
+def fast_matmul_matmul_2x2(A, B, C):
     """Fast matmul(A, matmul(B,C)) for 2x2 matrices. Obeys np.matmul
     broadcasting semantics as long as the last two dimensions are shape (2,2).
 
