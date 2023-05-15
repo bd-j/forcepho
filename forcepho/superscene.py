@@ -469,7 +469,7 @@ class SuperScene:
 
     def exp_weight(self):
         # just one for inactive, zero if active
-        w = (~self.sourcecat["is_valid"]).astype(np.float)
+        w = (~self.sourcecat["is_valid"]).astype(np.float64)
         # multiply by exponential
         n = np.abs(self.sourcecat["n_iter"])
         #mu = min(n.min(), self.target_niter)
@@ -479,7 +479,7 @@ class SuperScene:
 
     def sigmoid_weight(self):
         # just one for inactive, zero if active
-        w = (~self.sourcecat["is_active"]).astype(np.float)
+        w = (~self.sourcecat["is_active"]).astype(np.float32)
 
         # multiply by something inversely correlated with niter
         # sigmoid ?  This is ~ 0.5 at niter ~ntarget

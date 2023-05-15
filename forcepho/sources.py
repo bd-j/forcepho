@@ -436,7 +436,7 @@ class Source:
                 ["{}".format(b) for b in self.filternames] +
                 self.SHAPE_COLS)
         cols += extra_cols
-        self._cat_dtype = np.dtype([(c, np.float) for c in cols])
+        self._cat_dtype = np.dtype([(c, np.float32) for c in cols])
         return self._cat_dtype
 
     def to_catalog_row(self, extra_cols=[]):

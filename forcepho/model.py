@@ -22,7 +22,7 @@ except ImportError:
     from argparse import Namespace
     tt = Namespace(fscalar=np.float32, fvector=np.ndarray,
                    dscalar=np.float64, dvector=np.ndarray,
-                   scalar=np.float, vector=np.ndarray)
+                   scalar=np.float32, vector=np.ndarray)
 
 try:
     import pycuda
