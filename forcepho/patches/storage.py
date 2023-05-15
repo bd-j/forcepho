@@ -504,7 +504,7 @@ class PSFStore:
     where `psfs` is a dataset like:
     ``
     >>> psfs = np.zeros(nloc, nradii, ngauss, dtype=pdt)
-    >>> pdt = np.dtype([('gauss_params', np.float, 6), ('sersic_bin', np.int32)])
+    >>> pdt = np.dtype([('gauss_params', np.float32, 6), ('sersic_bin', np.int32)])
     ``
     and the order of gauss_params is given in ``patch.cu``; amp, x, y, Cxx, Cyy, Cxy
 

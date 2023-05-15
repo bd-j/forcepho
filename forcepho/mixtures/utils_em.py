@@ -100,7 +100,7 @@ def psf_mixture(psfimname, band, nmix, nrepeat=5,
 
     # Make some useful arrays and lists.
     cols = ["x", "y", "vxx", "vyy", "vxy", "amp"]
-    dtype = np.dtype([(c, np.float) for c in cols])
+    dtype = np.dtype([(c, np.float32) for c in cols])
     parameters = np.zeros([nrepeat, nmix], dtype=dtype)
     models, lnlike = [], []
     for i, r in enumerate(results):
