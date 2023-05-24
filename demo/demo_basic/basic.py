@@ -100,6 +100,7 @@ if __name__ == "__main__":
 
     # load the image data
     patcher = Patcher(fitsfiles=[config.image_name],
+                      sci_ext="SCI", unc_ext="ERR",
                       psfstore=config.psfstore,
                       splinedata=config.splinedatafile,
                       return_residual=True)

@@ -61,6 +61,7 @@ if __name__ == "__main__":
 
     # --- load the image data ---
     patcher = Patcher(fitsfiles=config.image_names,
+                      sci_ext="SCI", unc_ext="ERR",
                       psfstore=config.psfstorefile,
                       splinedata=config.splinedatafile,
                       return_residual=True)
