@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, os, glob
+import sys, os
 import argparse
-from copy import deepcopy
 import numpy as np
 
 import matplotlib.pyplot as pl
@@ -11,7 +10,6 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.ticker import FormatStrFormatter
 
 from forcepho.postprocess import Samples, Residuals
-from prospect.plotting.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
 
 fsize = 8, 9.5
 
@@ -100,10 +98,14 @@ def get_map(s):
 
 if __name__ == "__main__":
 
-    tdir = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prefix", type=str, default="")
+    args = parser.parse_args()
+
+    tdir = args.prefix #sys.argv[1]
     patchname = f"{tdir}_samples.h5"
     dirname = os.path.dirname(patchname)
-    dirname = "."
+    #dirname = "."
     tag = os.path.basename(patchname).replace(".h5", "")
     title = tag.replace("_", ", ")
 

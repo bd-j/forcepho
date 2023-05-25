@@ -5,11 +5,9 @@ import os
 import numpy as np
 
 from astropy.io import fits
-from astropy.wcs import WCS
 
-from forcepho.region import CircularRegion
 from forcepho.patches import FITSPatch, CPUPatchMixin
-from forcepho.superscene import make_bounds, Galaxy
+from forcepho.superscene import LinkedSuperScene
 from forcepho.utils import write_to_disk
 from forcepho.fitting import run_lmc
 
@@ -78,7 +76,7 @@ if __name__ == "__main__":
     if config.add_noise:
         im += noise
 
-    # write the test image cutout
+    # write the test image
     hdul, wcs = stamp.to_fits()
     hdr = hdul[0].header
     hdr["FILTER"] = band
@@ -89,20 +87,14 @@ if __name__ == "__main__":
 
     # --------------------
     # --- Fit the data ---
-    # build the scene
+    # build the scene server
     cat = fits.getdata(config.image_name, -1)
     bands = fits.getheader(config.image_name, -1)["FILTERS"].split(",")
-    active, fixed = cat.copy(), None
-    bounds_kwargs = dict(dpos=2 * [2*config.scales[0]])
-    shape_cols = Galaxy.SHAPE_COLS
-    bounds = make_bounds(active, bands, shapenames=shape_cols, **bounds_kwargs)
-
-    # get a region that covers the whole image
-    wcs = WCS(fits.getheader(config.image_name, "SCI"))
-    ra, dec = wcs.pixel_to_world_values(config.nx/2, config.ny/2)
-    radius = np.max(config.nx * np.array(config.scales))  / np.sqrt(2) * 1.1 / 3600.
-    region = CircularRegion(float(ra), float(dec), radius)
-    print(type(ra), type(dec), type(radius))
+    sceneDB = LinkedSuperScene(sourcecat=cat, bands=bands,
+                               statefile=os.path.join(config.outdir, "final_scene.fits"),
+                               roi=cat["rhalf"] * 5,
+                               bounds_kwargs=dict(n_pix=1.0),
+                               target_niter=config.sampling_draws)
 
     # load the image data
     patcher = Patcher(fitsfiles=[config.image_name],
@@ -111,14 +103,18 @@ if __name__ == "__main__":
                       splinedata=config.splinedatafile,
                       return_residual=True)
 
+    # check out scene & bounds
+    region, active, fixed = sceneDB.checkout_region(seed_index=-1)
+    bounds, cov = sceneDB.bounds_and_covs(active["source_index"])
+
     # prepare model and data, and sample
     patcher.build_patch(region, None, allbands=bands)
     model, q = patcher.prepare_model(active=active, fixed=fixed,
-                                     bounds=bounds, shapes=shape_cols)
+                                     bounds=bounds, shapes=sceneDB.shape_cols)
     out, step, stats = run_lmc(model, q.copy(),
                                n_draws=config.sampling_draws,
                                warmup=config.warmup,
-                               z_cov=np.eye(len(q)), full=True,
+                               z_cov=cov, full=True,
                                weight=max(10, active["n_iter"].min()),
                                discard_tuned_samples=False,
                                max_treedepth=config.max_treedepth,
@@ -128,4 +124,6 @@ if __name__ == "__main__":
     final, covs = out.fill(region, active, fixed, model, bounds=bounds,
                            step=step, stats=stats, patchID=0)
     write_to_disk(out, outroot, model, config)
-
+    sceneDB.checkin_region(final, fixed, config.sampling_draws,
+                           block_covs=covs, taskID=0)
+    sceneDB.writeout()
