@@ -102,7 +102,6 @@ if __name__ == "__main__":
     ra, dec = wcs.pixel_to_world_values(config.nx/2, config.ny/2)
     radius = np.max(config.nx * np.array(config.scales))  / np.sqrt(2) * 1.1 / 3600.
     region = CircularRegion(float(ra), float(dec), radius)
-    print(type(ra), type(dec), type(radius))
 
     # load the image data
     patcher = Patcher(fitsfiles=[config.image_name],
