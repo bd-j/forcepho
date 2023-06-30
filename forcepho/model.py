@@ -27,7 +27,7 @@ except ImportError:
 try:
     import pycuda
     import pycuda.autoinit
-except ImportError:
+except (ImportError, RuntimeError):
     pass
 
 from .kernel_limits import MAXBANDS, MAXRADII, MAXSOURCES, NPARAMS

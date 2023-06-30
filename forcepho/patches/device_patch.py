@@ -14,7 +14,7 @@ from .. import source_dir
 try:
     import pycuda
     import pycuda.driver as cuda
-except ImportError:
+except (ImportError, RuntimeError):
     pass
 
 __all__ = ["GPUPatchMixin", "CPUPatchMixin"]

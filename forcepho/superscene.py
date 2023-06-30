@@ -965,7 +965,7 @@ def flux_bounds(flux, unc1, snr_max=10, precisions=None):
     return lo, hi
 
 
-def adjust_bounds(sceneDB, bands, config,
+def adjust_bounds(sceneDB, bands, config=None,
                   active=None, eps=0.001,
                   minflux=None, maxfluxfactor=None):
     if isinstance(sceneDB, np.ndarray):
