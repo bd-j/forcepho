@@ -258,7 +258,7 @@ def rectify_config(config):
             setattr(config, k, np.array(v))
         # turn dtype strings into dtypes
         if "dtype" in k:
-            setattr(config, k, np.typeDict[v])
+            setattr(config, k, np.sctypeDict[v])
 
     config.bounds_kwargs = make_bounds_kwargs(config)
 
