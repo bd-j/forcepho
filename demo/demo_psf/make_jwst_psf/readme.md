@@ -36,7 +36,7 @@ ngauss_neg=0
 snr=50
 outname="./mixtures/psf_jwst_${tag}_ng${ngauss}m${ngauss_neg}.h5"
 
-options="--snr ${snr} --ngauss ${ngauss} --ngaus_neg ${ngauss_neg}"
+options="--snr ${snr} --ngauss ${ngauss} --ngauss_neg ${ngauss_neg}"
 options=$options" --fitsout 1 --savefig --outname ${outname}"
 echo $options
 
