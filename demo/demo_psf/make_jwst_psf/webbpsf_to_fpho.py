@@ -2,9 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse, os, glob
-import numpy as np
-import matplotlib.pyplot as pl
-
 from astropy.io import fits
 
 
@@ -28,4 +25,4 @@ if __name__ == "__main__":
             im = hdul[ext].data
             hdr = hdul[ext].header
         outname = os.path.join(args.outdir, f"{band.lower()}_psf.fits")
-        fits.writeto(outname, im, hdr)
+        fits.writeto(outname, im, hdr, overwrite=True)

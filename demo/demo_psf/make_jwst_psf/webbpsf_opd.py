@@ -7,7 +7,6 @@ import matplotlib.pyplot as pl
 
 import webbpsf
 
-
 JWST_BANDS = ["F070W", "F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W",
               "F182M", "F210M", "F430M", "F460M", "F480M",
@@ -21,7 +20,6 @@ JWST_BANDS = ["F070W", "F090W", "F115W", "F150W", "F200W",
 #PIXELSCL=              0.01575 / Scale in arcsec/pix (after oversampling)
 #FOV     =               10.017 / Field of view in arcsec (full array)
 #NWAVES  =                    9 / Number of wavelengths used in calculation
-
 
 
 def trend(year, month):

@@ -36,7 +36,7 @@ def smooth_psf(image, sigma):
 
 def psf_prediction(xpix, ypix, x=0, y=0,
                    a=1, weight=1,
-                   sx=3, sy=3, rho=0,
+                   sx=3, q=3, rho=0,
                    bg=0):
     """Predict the flux for a GMM model.  This method should match, in both math
     and parameter names, the specification of the model in `twod_model`.  Note
@@ -44,6 +44,7 @@ def psf_prediction(xpix, ypix, x=0, y=0,
     Gaussian mixture (where scalar parameters are repeated for as many Gaussians
     as necessary.)
     """
+    sy = q * sx
     norm = a * weight / (2 * np.pi * sx * sy * jnp.sqrt(1 - rho**2))
     dx = (xpix[:, None] - x) / sx
     dy = (ypix[:, None] - y) / sy
@@ -54,8 +55,13 @@ def psf_prediction(xpix, ypix, x=0, y=0,
     return mu
 
 
-def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
-              afix=None, amax=2, dcen=2, smax=[10], smin=0.6, maxbg=0):
+def psf_model(image=None, xpix=None, ypix=None, unc=1,
+              ngauss=1, ngauss_neg=0,
+              afix=None, amax=2,
+              dcen=2,
+              smax=[10], smin=0.6,
+              rho_max=0.3,
+              maxbg=0):
     """numpyro model for a 2d mixture of gaussians with optional constant
     background component. Assumes PSF is (roughly) centered in the supplied
     image (i.e. x, y \approx mean(xpix), mean(ypix))
@@ -72,7 +78,10 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
         y-coordinate of pixels
 
     ngauss : int
-        number of Gaussian components
+        number of (positive) Gaussian components
+
+    ngauss_neg : int
+        number of negative Gaussian components
 
     afix : float or None
         If supplied, the *fixed* total combined amplitude of the gaussian
@@ -80,7 +89,8 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
 
     amax : float
         If the amplitude is not fixed, this gives the upper limit on the total
-        combined amplitude of the mixture
+        combined amplitude of the (positive) mixture.  The negative mixture is
+        constrained to half this.
 
     dcen : float
         1-sigma width of the positional priors, in number of pixels from the
@@ -93,6 +103,9 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
     smin : float, default 0.7
         The minimum number of pixels for the width of a gaussian; this keeps the
         gaussians from getting 'way too far' into the undersampled regime.
+
+    rho_max : float
+        Absolute value of the maximum correlation coefficient between sx and sy
 
     maxbg : float, optional
         If > 0, gives the upper and negative lower limit on a constant
@@ -126,10 +139,12 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
     x = numpyro.sample("x", dist.Normal(xcen * jnp.ones(ngauss), dcen))
     y = numpyro.sample("y", dist.Normal(ycen * jnp.ones(ngauss), dcen))
     sx = numpyro.sample("sx", dist.Uniform(smin, jnp.array(smax)))
-    sy = numpyro.sample("sy", dist.Uniform(smin, jnp.array(smax)))
-    rho = numpyro.sample("rho", dist.Uniform(-0.5, 0.5 * jnp.ones(ngauss)))
+    qwidth = 0.1
+    q = numpyro.sample("q", dist.Normal(1.0* jnp.ones(ngauss), qwidth))
+    # sy = numpyro.sample("sy", dist.Uniform(smin, jnp.array(smax)))
+    rho = numpyro.sample("rho", dist.Uniform(-rho_max, rho_max * jnp.ones(ngauss)))
 
-    mu = psf_prediction(xpix, ypix, x=x, y=y, a=tot, weight=w, sx=sx, sy=sy, rho=rho, bg=bg)
+    mu = psf_prediction(xpix, ypix, x=x, y=y, a=tot, weight=w, sx=sx, q=q, rho=rho, bg=bg)
 
     # --- add negative gaussians? ---
     if ngauss_neg > 0:
@@ -138,12 +153,13 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1, ngauss=1, ngauss_neg=0,
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
         ym = numpyro.sample("y_m", dist.Normal(ycen * jnp.ones(ng), dcen))
         sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
-        sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
-        rhom = numpyro.sample("rho_m", dist.Uniform(-0.5, 0.5 * jnp.ones(ng)))
+        qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ngauss), qwidth))
+        #sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
+        rhom = numpyro.sample("rho_m", dist.Uniform(-rho_max, rho_max * jnp.ones(ng)))
         mmin = amax / 2.
         wm = numpyro.sample("weight_m", dist.Uniform(0, jnp.ones(ng) * mmin))
 
-        mum = psf_prediction(xpix, ypix, x=xm, y=ym, a=1.0, weight=wm, sx=sxm, sy=sym, rho=rhom)
+        mum = psf_prediction(xpix, ypix, x=xm, y=ym, a=1.0, weight=wm, sx=sxm, q=qm, rho=rhom)
 
         mu -= mum
 

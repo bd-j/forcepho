@@ -88,7 +88,7 @@ def fit_image(image, args, a=None, oversample=1, **kwargs):
     if args.fix_amplitude:
         kwargs["afix"] = a
     else:
-        kwargs["amax"] = a * 2
+        kwargs["amax"] = a * 3
     if args.fit_bg:
         kwargs["maxbg"] = np.abs(np.median(image.data))
 
@@ -119,12 +119,9 @@ def rectify(best, image):
     from copy import deepcopy
     # get neg gaussian params
     best_p, best_m = deepcopy(best), {}
-    gpnames = ["a", "sx", "sy", "rho", "x", "y", "weight"]
-    for p in gpnames:
-        try:
-            best_m[p] = best.pop(f"{p}_m")
-        except(KeyError):
-            pass
+    for k in best_p.keys():
+        if k[-2:] == "_m":
+            best_m[k[:-2]] = best.pop(k)
 
     # predict postive gaussians
     model = psf_prediction(image.xpix, image.ypix, **best)
@@ -134,7 +131,7 @@ def rectify(best, image):
     if len(best_m):
         model_m = psf_prediction(image.xpix, image.ypix, **best_m)
         model -= model_m
-        for p in gpnames[1:]:
+        for p in best_m.keys():
             v = best_m[p]
             if p == "weight":
                 v *= -1
