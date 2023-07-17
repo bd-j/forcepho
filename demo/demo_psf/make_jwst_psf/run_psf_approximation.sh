@@ -35,6 +35,7 @@ options=$options" --fitsout 1 --savefig --outname ${outname}"
 echo $options
 
 for b in ${bands[*]}; do
+    echo "working on ${b}"
     python webbpsf_to_fpho.py --indir $psfdir --outdir $workdir --bands $b
     bopt="--band ${b} --psf_image_name ${workdir}/${b}_psf.fits --sci_pix_scale $pscale --trim $trim"
     python make_psf.py $bopt $options

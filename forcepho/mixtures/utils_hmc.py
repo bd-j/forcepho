@@ -189,7 +189,10 @@ def draw_ellipses(best, ax, cmap=None):
         # need to swap axes here, not sure why
         mu = np.array([best["x"][i], best["y"][i]])
         sy = best["sx"][i]
-        sx = best["sy"][i]
+        if "sy" in best:
+            sx = (best["sy"][i])
+        elif "q" in best:
+            sx = best["sx"][i] * best["q"][i]
         sxy = best["rho"][i] * sx * sy
         # construct covar matrix and get eigenvalues
         S = np.array([[sx**2, sxy],[sxy, sy**2]])

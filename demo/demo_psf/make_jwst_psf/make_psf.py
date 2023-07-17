@@ -191,7 +191,10 @@ def convert_psf_data(best, cx, cy, nloc=1, nradii=9, oversample=1):
     pars["xcr"] = (best["x"][o] - cx) * scale_factor
     pars["ycr"] = (best["y"][o] - cy) * scale_factor
     sx = (best["sx"][o] * scale_factor)
-    sy = (best["sy"][o] * scale_factor)
+    if "sy" in best:
+        sy = (best["sy"][o] * scale_factor)
+    elif "q" in best:
+        sy = sx * best["q"]
     pars["Cxx"] = sx**2
     pars["Cyy"] = sy**2
     cxy = sx * sy * best["rho"][o]

@@ -105,7 +105,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
         gaussians from getting 'way too far' into the undersampled regime.
 
     rho_max : float
-        Absolute value of the maximum correlation coefficient between sx and sy
+        Absolute value of the maximal correlation coefficient between sx and sy
 
     maxbg : float, optional
         If > 0, gives the upper and negative lower limit on a constant
@@ -149,11 +149,11 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
     # --- add negative gaussians? ---
     if ngauss_neg > 0:
         ng = ngauss_neg
-        smax_neg = np.max(smax) / 2
+        smax_neg = np.max(smax) / 1.5
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
         ym = numpyro.sample("y_m", dist.Normal(ycen * jnp.ones(ng), dcen))
         sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
-        qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ngauss), qwidth))
+        qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ng), qwidth))
         #sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
         rhom = numpyro.sample("rho_m", dist.Uniform(-rho_max, rho_max * jnp.ones(ng)))
         mmin = amax / 2.
