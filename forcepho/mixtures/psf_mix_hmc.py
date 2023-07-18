@@ -39,7 +39,7 @@ def psf_prediction(xpix, ypix, x=0, y=0,
                    sx=3, q=3, rho=0,
                    bg=0):
     """Predict the flux for a GMM model.  This method should match, in both math
-    and parameter names, the specification of the model in `twod_model`.  Note
+    and parameter names, the specification of the model in `psf_model`.  Note
     that vectors can be supplied for any of the parameters to implement a
     Gaussian mixture (where scalar parameters are repeated for as many Gaussians
     as necessary.)
@@ -60,7 +60,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
               afix=None, amax=2,
               dcen=2,
               smax=[10], smin=0.6,
-              rho_max=0.3,
+              rho_max=0.5, qwidth=0.2, qfactor=2.0,
               maxbg=0):
     """numpyro model for a 2d mixture of gaussians with optional constant
     background component. Assumes PSF is (roughly) centered in the supplied
@@ -136,28 +136,32 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
     else:
         w = 1.0
 
+    dq = jnp.linspace(qfactor, 1.1, ngauss)
+
     x = numpyro.sample("x", dist.Normal(xcen * jnp.ones(ngauss), dcen))
     y = numpyro.sample("y", dist.Normal(ycen * jnp.ones(ngauss), dcen))
-    sx = numpyro.sample("sx", dist.Uniform(smin, jnp.array(smax)))
-    qwidth = 0.1
-    q = numpyro.sample("q", dist.Normal(1.0* jnp.ones(ngauss), qwidth))
-    # sy = numpyro.sample("sy", dist.Uniform(smin, jnp.array(smax)))
     rho = numpyro.sample("rho", dist.Uniform(-rho_max, rho_max * jnp.ones(ngauss)))
+    sx = numpyro.sample("sx", dist.Uniform(smin, jnp.array(smax)))
+    q = numpyro.sample("q", dist.Uniform(1 / dq, 1 * dq))
+    #q = numpyro.sample("q", dist.Uniform((1-qwidth) * jnp.ones(ngauss), (1+qwidth)))
+    #q = numpyro.sample("q", dist.Normal(1.0* jnp.ones(ngauss), qwidth))
+    # sy = numpyro.sample("sy", dist.Uniform(smin, jnp.array(smax)))
 
     mu = psf_prediction(xpix, ypix, x=x, y=y, a=tot, weight=w, sx=sx, q=q, rho=rho, bg=bg)
 
     # --- add negative gaussians? ---
     if ngauss_neg > 0:
         ng = ngauss_neg
-        smax_neg = np.max(smax) / 1.5
+        smax_neg = np.max(smax) / 4.0
+        mmin = amax / 1.5
+        wm = numpyro.sample("weight_m", dist.Uniform(0, jnp.ones(ng) * mmin))
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
         ym = numpyro.sample("y_m", dist.Normal(ycen * jnp.ones(ng), dcen))
-        sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
-        qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ng), qwidth))
-        #sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
         rhom = numpyro.sample("rho_m", dist.Uniform(-rho_max, rho_max * jnp.ones(ng)))
-        mmin = amax / 2.
-        wm = numpyro.sample("weight_m", dist.Uniform(0, jnp.ones(ng) * mmin))
+        sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
+        qm = numpyro.sample("q_m", dist.Uniform((1-qwidth) * jnp.ones(ng), (1+qwidth)))
+        #qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ng), qwidth))
+        #sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
 
         mum = psf_prediction(xpix, ypix, x=xm, y=ym, a=1.0, weight=wm, sx=sxm, q=qm, rho=rhom)
 

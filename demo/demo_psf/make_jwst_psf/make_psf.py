@@ -88,7 +88,7 @@ def fit_image(image, args, a=None, oversample=1, **kwargs):
     if args.fix_amplitude:
         kwargs["afix"] = a
     else:
-        kwargs["amax"] = a * 3
+        kwargs["amax"] = a * 4
     if args.fit_bg:
         kwargs["maxbg"] = np.abs(np.median(image.data))
 
@@ -194,7 +194,7 @@ def convert_psf_data(best, cx, cy, nloc=1, nradii=9, oversample=1):
     if "sy" in best:
         sy = (best["sy"][o] * scale_factor)
     elif "q" in best:
-        sy = sx * best["q"]
+        sy = sx * best["q"][o]
     pars["Cxx"] = sx**2
     pars["Cyy"] = sy**2
     cxy = sx * sy * best["rho"][o]
