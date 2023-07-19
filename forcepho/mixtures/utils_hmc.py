@@ -160,18 +160,47 @@ def radial_plot(image, model, times_r=True):
     ax.set_ylim(max(model.min(), image.data.min()) * 0.1, image.data.max() * 2)
     ax.set_yscale("log")
 
+    label = r"(model - data)"
     if times_r:
         factor = r
+        label += r" $\times r$"
     else:
         factor = 1
 
     ax = axes[1]
     ax.plot(r, factor * (model-image.data), ".", color="firebrick",
-            rasterized=True, label=r"(model - data) $\times \, r$")
+            rasterized=True, label=label)
     ax.axhline(image.data.max() * 0.01, linestyle=":", color="k",
                label=r"1% of max pixel")
     ax.axhline(0, linestyle="--", color="k")
     ax.legend()
+
+    ax.set_xlabel(r"$r$ (pixels)")  # for ax in axes]
+
+    return fig, axes
+
+
+def ee_plot(image, model, n=500):
+    r = np.hypot(image.xpix-image.cx, image.ypix-image.cy)
+    mt = np.nansum(model)
+    dt = np.nansum(image.data)
+
+    rr = np.linspace(np.min(r), np.max(r), n)
+    eed, eem = np.zeros(n), np.zeros(n)
+    for i, x in enumerate(rr):
+        sel = r <= x
+        eem[i] = np.sum(model[sel]) / mt
+        eed[i] = np.sum(image.data[sel]) / dt
+
+    import matplotlib.pyplot as pl
+    fig, axes = pl.subplots(1, sharex=True)
+    ax = axes
+    ax.plot(rr, eed, "-.", color="royalblue", label=r"data", rasterized=True)
+    ax.plot(rr, eem, "-.", color="darkorange", label=r"model", rasterized=True)
+    ax.legend()
+    #ax.set_xscale("log")
+    ax.set_ylim(0, 1)
+    #ax.set_yscale("log")
 
     ax.set_xlabel(r"$r$ (pixels)")  # for ax in axes]
 
