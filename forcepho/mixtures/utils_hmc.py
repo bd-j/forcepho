@@ -182,24 +182,28 @@ def radial_plot(image, model, times_r=True):
 
 def ee_plot(image, model, n=500):
     r = np.hypot(image.xpix-image.cx, image.ypix-image.cy)
-    mt = np.nansum(model)
-    dt = np.nansum(image.data)
+    mt = np.nansum(model[r < image.nx/2])
+    dt = np.nansum(image.data[r < image.nx/2])
 
     rr = np.linspace(np.min(r), np.max(r), n)
     eed, eem = np.zeros(n), np.zeros(n)
-    for i, x in enumerate(rr):
-        sel = r <= x
-        eem[i] = np.sum(model[sel]) / mt
-        eed[i] = np.sum(image.data[sel]) / dt
+    eed, dedges = np.histogram(r, bins=rr, weights=image.data)
+    eed = np.cumsum(eed) / mt
+    eem, medges = np.histogram(r, bins=rr, weights=model)
+    eem = np.cumsum(eem) / mt
+    # for i, x in enumerate(rr):
+    #     sel = r <= x
+    #     eem[i] = np.sum(model[sel]) / mt
+    #     eed[i] = np.sum(image.data[sel]) / mt
 
     import matplotlib.pyplot as pl
     fig, axes = pl.subplots(1, sharex=True)
     ax = axes
-    ax.plot(rr, eed, "-.", color="royalblue", label=r"data", rasterized=True)
-    ax.plot(rr, eem, "-.", color="darkorange", label=r"model", rasterized=True)
+    ax.plot(rr[1:], eed, "-.", color="royalblue", label=r"data", rasterized=True)
+    ax.plot(rr[1:], eem, "-.", color="darkorange", label=r"model", rasterized=True)
     ax.legend()
     #ax.set_xscale("log")
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 1.2)
     #ax.set_yscale("log")
 
     ax.set_xlabel(r"$r$ (pixels)")  # for ax in axes]

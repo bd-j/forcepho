@@ -57,7 +57,7 @@ def psf_prediction(xpix, ypix, x=0, y=0,
 
 def psf_model(image=None, xpix=None, ypix=None, unc=1,
               ngauss=1, ngauss_neg=0,
-              afix=None, amax=2,
+              afix=None, amin=0.5, amax=2,
               dcen=2,
               smax=[10], smin=0.6,
               rho_max=0.5, qwidth=0.2, qfactor=2.0,
@@ -122,7 +122,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
     if afix:
         tot = afix
     else:
-        tot = numpyro.sample("a", dist.Uniform(0.5, amax))
+        tot = numpyro.sample("a", dist.Uniform(amin, amax))
     # Fit a background?
     if maxbg > 0:
         bg = numpyro.sample("bg", dist.Uniform(-maxbg, maxbg))
