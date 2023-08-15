@@ -310,7 +310,7 @@ class MetaStore:
     wcs : dict
         Dictionary of wcs objects, keyed by band and expID
     """
-    def __init__(self, metastorefile=None, use_gwcs=False):
+    def __init__(self, metastorefile=None, use_gwcs=False, load_all=False):
         self.headers = {}
         self.tree = {}
         if metastorefile is not None:
@@ -322,12 +322,15 @@ class MetaStore:
             else:
                 self.gwcs_file = None
 
-            # build all the wcses
-            self.populate_wcs(gwcs_file=self.gwcs_file)
+            if load_all:
+                # build all the wcses
+                self.populate_wcs(gwcs_file=self.gwcs_file)
 
     def populate_wcs(self, gwcs_file=None):
         """Fill the dict of dict with WCS instances (based on either normal
         astropy WCS objects or gWCS instances)
+
+        This is slow, so it;'s better to only make and cache wcs as needed.
         """
         self.wcs = {}
         if gwcs_file:
@@ -435,10 +438,32 @@ class MetaStore:
                 continue
             for expID in self.headers[band].keys():
                 hdr = self.headers[band][expID]
-                imsize = hdr["NAXIS1"], hdr["NAXIS2"]
-                wcs = self.wcs[band][expID]
+                # Do a rough check
+                try:
+                    # FIXME: this could use crval, crpix, CD matrix, and imsize to be more general
+                    polys = hdr["S_REGION"].split()[2:]
+                    rough_bb = np.array([float(p) for p in polys]).reshape(4, 2).T
+                    inim = polygon_contains(rough_bb, np.atleast_2d(sky))[0]
+                except(KeyError):
+                    inim = True
+                if not inim:
+                    continue
+                # if rough check passes, get the wcs and do better check.
+                # Also generate and add the wcs if not already present.
+                if band not in self.wcs:
+                    self.wcs[band] = {}
+                try:
+                    wcs = self.wcs[band][expID]
+                except(KeyError):
+                    wcs = WCS(hdr)
+                    # remove extraneous axes
+                    if getattr(wcs, "naxis", 2) == 3:
+                        wcs = wcs.dropaxis(2)
+                    self.wcs[band][expID] = wcs
+
                 # check celestial points are in celestial square defined by image.
                 # doing it this way avoids WCS inaccuracies far from image center
+                imsize = hdr["NAXIS1"], hdr["NAXIS2"]
                 bbox = np.array([[0, 0],
                                  [0, imsize[1]],
                                  [imsize[0], imsize[0]],
