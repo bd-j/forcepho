@@ -112,8 +112,9 @@ class Result(object):
             self.big = None
 
         # --- chain as structured array ---
-        self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
-                                      self.reference_coordinates, shapes=self.shapenames)
+        if hasattr(self, "chain")
+            self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
+                                          self.reference_coordinates, shapes=self.shapenames)
 
         # --- covariance ---
         if step is not None:
