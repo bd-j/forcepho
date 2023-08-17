@@ -112,7 +112,7 @@ class Result(object):
             self.big = None
 
         # --- chain as structured array ---
-        if hasattr(self, "chain")
+        if hasattr(self, "chain"):
             self.chaincat = make_chaincat(self.chain, self.bandlist, self.active,
                                           self.reference_coordinates, shapes=self.shapenames)
 
