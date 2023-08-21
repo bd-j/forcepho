@@ -325,6 +325,8 @@ class MetaStore:
             if load_all:
                 # build all the wcses
                 self.populate_wcs(gwcs_file=self.gwcs_file)
+            else:
+                self.wcs = {}
 
     def populate_wcs(self, gwcs_file=None):
         """Fill the dict of dict with WCS instances (based on either normal
@@ -442,7 +444,7 @@ class MetaStore:
                 try:
                     # FIXME: this could use crval, crpix, CD matrix, and imsize to be more general
                     polys = hdr["S_REGION"].split()[2:]
-                    rough_bb = np.array([float(p) for p in polys]).reshape(4, 2).T
+                    rough_bb = np.array([float(p) for p in polys]).reshape(4, 2)
                     inim = polygon_contains(rough_bb, np.atleast_2d(sky))[0]
                 except(KeyError):
                     inim = True
