@@ -7,7 +7,7 @@ import matplotlib.pyplot as pl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from forcepho.postprocess import Samples, Residuals
-from prospect.plotting.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
+from forcepho.utils.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
 
 
 def multispan(parsets):

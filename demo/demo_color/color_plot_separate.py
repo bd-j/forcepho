@@ -8,7 +8,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from forcepho.postprocess import Samples, Residuals
 from forcepho.utils import frac_sersic
-from prospect.plotting.corner import allcorner
+from forcepho.utils.corner import allcorner
 
 
 def plot_corner(patchname, band="CLEAR", smooth=0.05, hkwargs=dict(alpha=0.65),
