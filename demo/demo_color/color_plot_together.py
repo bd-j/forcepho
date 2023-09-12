@@ -11,7 +11,7 @@ from matplotlib.ticker import ScalarFormatter
 from matplotlib.colors import LinearSegmentedColormap, colorConverter
 
 from forcepho.postprocess import Samples, Residuals
-from prospect.plotting.corner import allcorner
+from forcepho.utils.corner import allcorner
 
 
 def total_corner(samples, bands=["BLUE", "RED"], smooth=0.05, hkwargs=dict(alpha=0.65),

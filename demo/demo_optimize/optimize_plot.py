@@ -11,7 +11,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.ticker import FormatStrFormatter
 
 from forcepho.postprocess import Samples, Residuals
-from prospect.plotting.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
+from forcepho.utils.corner import allcorner, scatter, marginal, corner, get_spans, prettify_axes
 
 fsize = 8, 9.5
 

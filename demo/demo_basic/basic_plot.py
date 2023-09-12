@@ -42,7 +42,7 @@ def plot_trace(patchname, title_fmt=".2g", fsize=fsize):
 
 def plot_corner(patchname, smooth=0.05, hkwargs=dict(alpha=0.65),
                 dkwargs=dict(color="red", marker="."), fsize=(8, 8)):
-    from prospect.plotting.corner import allcorner, scatter
+    from forcepho.utils.corner import allcorner, scatter
     samples = Samples(patchname)
     truth = np.atleast_2d(samples.starting_position)
     labels = samples.chaincat.dtype.names[1:]
