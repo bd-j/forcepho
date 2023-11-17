@@ -5,8 +5,6 @@ import numpy as np
 
 try:
     import jax.numpy as jnp
-    from jax import random, lax
-
     import numpyro
     import numpyro.distributions as dist
 except(ImportError):
@@ -152,7 +150,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
     # --- add negative gaussians? ---
     if ngauss_neg > 0:
         ng = ngauss_neg
-        smax_neg = np.max(smax) / 4.0
+        smax_neg = 10#np.max(smax) / 4.0
         mmin = amax / 1.5
         wm = numpyro.sample("weight_m", dist.Uniform(0, jnp.ones(ng) * mmin))
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
