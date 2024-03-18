@@ -58,7 +58,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
               afix=None, amin=0.5, amax=2,
               dcen=2,
               smax=[10], smin=0.6,
-              rho_max=0.5, qwidth=0.2, qfactor=2.0,
+              rho_max=[0.5], qwidth=0.2, qfactor=2.0,
               maxbg=0):
     """numpyro model for a 2d mixture of gaussians with optional constant
     background component. Assumes PSF is (roughly) centered in the supplied
@@ -128,7 +128,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
         bg = 0.0
     # Dirichlet for the weights
     if ngauss > 1:
-        # (weakly) identify the components
+        # (weakly) identify the components with highest weights for the lowest index
         concentration = jnp.linspace(2, 1, ngauss)
         w = numpyro.sample("weight", dist.Dirichlet(concentration))
     else:
@@ -138,7 +138,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
 
     x = numpyro.sample("x", dist.Normal(xcen * jnp.ones(ngauss), dcen))
     y = numpyro.sample("y", dist.Normal(ycen * jnp.ones(ngauss), dcen))
-    rho = numpyro.sample("rho", dist.Uniform(-rho_max, rho_max * jnp.ones(ngauss)))
+    rho = numpyro.sample("rho", dist.Normal(0, jnp.array(rho_max)))
     sx = numpyro.sample("sx", dist.Uniform(smin, jnp.array(smax)))
     q = numpyro.sample("q", dist.Uniform(1 / dq, 1 * dq))
     #q = numpyro.sample("q", dist.Uniform((1-qwidth) * jnp.ones(ngauss), (1+qwidth)))
@@ -155,7 +155,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
         wm = numpyro.sample("weight_m", dist.Uniform(0, jnp.ones(ng) * mmin))
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
         ym = numpyro.sample("y_m", dist.Normal(ycen * jnp.ones(ng), dcen))
-        rhom = numpyro.sample("rho_m", dist.Uniform(-rho_max, rho_max * jnp.ones(ng)))
+        rhom = numpyro.sample("rho_m", dist.Uniform(-np.max(rho_max), np.max(rho_max) * jnp.ones(ng)))
         sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
         qm = numpyro.sample("q_m", dist.Uniform((1-qwidth) * jnp.ones(ng), (1+qwidth)))
         #qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ng), qwidth))

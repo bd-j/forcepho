@@ -12,7 +12,7 @@ import h5py
 import arviz # this is required for the plots
 
 from forcepho.mixtures.utils_hmc import Image, infer
-from forcepho.mixtures.utils_hmc import display, radial_plot, draw_ellipses
+from forcepho.mixtures.utils_hmc import display, ee_plot, radial_plot, draw_ellipses
 from forcepho.mixtures.psf_mix_hmc import psf_model, psf_prediction
 
 
@@ -89,11 +89,15 @@ def fit_image(image, args, a=None, oversample=1, **kwargs):
         kwargs["afix"] = a
     else:
         kwargs["amax"] = a * 4
+    if kwargs.get("ngauss_neg", 0) > 0:
+        kwargs["amin"] = a * 3.5
     if args.fit_bg:
         kwargs["maxbg"] = np.abs(np.median(image.data))
 
     # let some big ole gaussians in
-    kwargs["smax"] = np.linspace(5, 20, args.ngauss) * oversample
+    kwargs["smax"] = np.linspace(5, 15, args.ngauss) * oversample
+    # make the bigger gaussians rounder
+    kwargs["rho_max"] = np.linspace(0.5, 0.1, args.ngauss)
     # keep teeny-tiny gaussians out.  This sets Gaussians to
     # have FWHM >~ 1 science pixels
     kwargs["smin"] = oversample * 0.4
@@ -206,7 +210,7 @@ def convert_psf_data(best, cx, cy, nloc=1, nradii=9, oversample=1):
 
 def package_output(h5file, band, pars, pixel_scale=None,
                    oversample=1, image=None, model=None,
-                   overwrite=False):
+                   hdr=None, overwrite=False):
     """
     """
     with h5py.File(h5file, "a") as h5:
@@ -238,6 +242,11 @@ def package_output(h5file, band, pars, pixel_scale=None,
             m = model.reshape(image.nx, image.ny)
             mdat.create_dataset("model", data=model)
             mdat.attrs["oversample"] = oversample
+        if hdr is not None:
+            try:
+                bg.attrs["psfimage_header"] = hdr.to_string()
+            except:
+                pass
 
 
 def combine_psfdatasets(in_files, out_file):
@@ -313,8 +322,8 @@ if __name__ == "__main__":
     irac_bands = ["irac1", "irac2"]
     nircam_sw_bands = ["f070w", "f090w", "f115w", "f150w", "f200w"]
     nircam_lw_bands = ["f277w", "f335m", "f356w", "f410m", "f444w"]
-    nircam_swm_bands = ["f182m", "f210m"]
-    nircam_lwm_bands = ["f430m", "f460m", "f480m"]
+    nircam_swm_bands = ["f162m", "f182m", "f210m"]
+    nircam_lwm_bands = ["f250m", "f300m", "f430m", "f460m", "f480m"]
 
     parser = argparse.ArgumentParser()
     # output
@@ -334,8 +343,8 @@ if __name__ == "__main__":
     parser.add_argument("--fix_amplitude", type=int, default=0)
     parser.add_argument("--fit_bg", type=int, default=0)
     # fitting
-    parser.add_argument("--num_warmup", type=int, default=1024)
-    parser.add_argument("--num_samples", type=int, default=1024)
+    parser.add_argument("--num_warmup", type=int, default=2048)
+    parser.add_argument("--num_samples", type=int, default=512)
     # display
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--savefig", action="store_true")
@@ -378,7 +387,7 @@ if __name__ == "__main__":
                                        nloc=1, nradii=9,
                                        oversample=args.oversample)
         package_output(outname, band.upper(), pars, overwrite=args.overwrite,
-                       pixel_scale=pixel_scale, image=None, model=None,
+                       pixel_scale=pixel_scale, image=None, model=None, hdr=hdr,
                        oversample=args.oversample)
         if args.fitsout:
             ff = fitsify_output(outname.replace(".h5", f"_{band}.fits"),
@@ -405,7 +414,7 @@ if __name__ == "__main__":
         azax = az.plot_trace(data, compact=True)
         azfig = azax.ravel()[0].figure
 
-        rfig, raxes = radial_plot(image, model)
+        rfig, raxes = radial_plot(image, model, times_r=False)
         d = image.data
         raxes[0].set_ylim(d[d > 0].min(), d.max()*1.1)
         if unc.shape == ():
@@ -417,6 +426,8 @@ if __name__ == "__main__":
         eax.set_ylim(0, image.ny)
         eax.grid()
 
+        nfig, nax = ee_plot(image, model)
+
         #mcmc.print_summary()
         logger.info(title)
         logger.info(f"Divergences: {mcmc.get_extra_fields('diverging')['diverging'].sum()}")
@@ -427,6 +438,7 @@ if __name__ == "__main__":
         with PdfPages(outname) as pdf:
             pdf.savefig(fig)
             pdf.savefig(rfig)
+            pdf.savefig(nfig)
             pdf.savefig(efig)
             pdf.savefig(azfig)
         pl.close('all')

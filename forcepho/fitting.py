@@ -577,8 +577,14 @@ def optimize_one_band(X, w, y, fixedX=0):
     Parameters
     ----------
     X : ndarray of shape (nsource, npix_band)
-        Normalized models for individual sources
-    w : ndarray
+        Normalized model pixel flux for each individual source
+
+    w : ndarray of shape (npix_band,)
+        The weights for each pixel (usually 1/sigma)
+
+    fixedX : optional, ndarray of shape (nfixed, npix_band)
+        Model pixel fluxes (not normalized) for any fixed sources that are being
+        subtracted from the scene.
     """
     Xp = X * w
     yp = (y - fixedX) * w
