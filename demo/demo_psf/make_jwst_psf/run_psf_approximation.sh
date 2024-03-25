@@ -15,10 +15,10 @@ mkdir -p $outdir
 
 while getopts ":sl" option; do
   case $option in
-    s) bands=( f090w f115w f150w f200w f182m f210m );
+    s) bands=( f090w f115w f150w f200w f162m f182m f210m );
        trim=576;
        pscale=0.03;;
-    l) bands=( f277w f335m f356w f410m f444w f430m f460m f480m );
+    l) bands=( f277w f356w f444w f250m f300m f335m f410m f430m f460m f480m );
        trim=256;
        pscale=0.06;;
      \?) # Invalid option

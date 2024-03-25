@@ -314,6 +314,17 @@ def scale_psf_data(pars, cx=0, cy=0, scale_factor=1):
     return best
 
 
+def blur_psf_data(pars, blur=0.0062/0.03):
+    """Smooth a given set of PSFs by a certain sigma in detector pixels.
+    Corresponds to a convolution with a circular, symmetric Gaussian kernel.
+    """
+
+    pars["Cxx"] += blur**2
+    pars["Cyy"] += blur**2
+
+    return pars
+
+
 if __name__ == "__main__":
 
     acs_bands = ["f435w", "f606w", "f775w", "f814w", "f850lp", ]
@@ -426,7 +437,10 @@ if __name__ == "__main__":
         eax.set_ylim(0, image.ny)
         eax.grid()
 
-        nfig, nax = ee_plot(image, model)
+        try:
+            nfig, nax = ee_plot(image, model)
+        except(ValueError):
+            nfig, nax, ee_curves = ee_plot(image, model)
 
         #mcmc.print_summary()
         logger.info(title)

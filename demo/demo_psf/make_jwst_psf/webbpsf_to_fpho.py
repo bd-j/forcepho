@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--bands", type=str, nargs="*", default=JWST_BANDS)
     args = parser.parse_args()
     bands = args.bands
-    ext = 0  # PSF oversampled by 4x relative to detector sampling.
+    ext = 2  # PSF oversampled by 4x relative to detector sampling, including physical blurring and distortion
     for band in bands:
         imname = os.path.join(args.indir, f"PSF_NIRCam_*_opd_filter_{band.upper()}.fits")
         imname = glob.glob(imname)[0]

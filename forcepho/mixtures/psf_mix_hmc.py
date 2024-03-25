@@ -56,7 +56,7 @@ def psf_prediction(xpix, ypix, x=0, y=0,
 def psf_model(image=None, xpix=None, ypix=None, unc=1,
               ngauss=1, ngauss_neg=0,
               afix=None, amin=0.5, amax=2,
-              dcen=2,
+              dcen=1,
               smax=[10], smin=0.6,
               rho_max=[0.5], qwidth=0.2, qfactor=2.0,
               maxbg=0):
@@ -138,7 +138,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
 
     x = numpyro.sample("x", dist.Normal(xcen * jnp.ones(ngauss), dcen))
     y = numpyro.sample("y", dist.Normal(ycen * jnp.ones(ngauss), dcen))
-    rho = numpyro.sample("rho", dist.Normal(0, jnp.array(rho_max)))
+    rho = numpyro.sample("rho", dist.Uniform(-jnp.array(rho_max), jnp.array(rho_max)))
     sx = numpyro.sample("sx", dist.Uniform(smin, jnp.array(smax)))
     q = numpyro.sample("q", dist.Uniform(1 / dq, 1 * dq))
     #q = numpyro.sample("q", dist.Uniform((1-qwidth) * jnp.ones(ngauss), (1+qwidth)))

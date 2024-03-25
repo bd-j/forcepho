@@ -43,20 +43,21 @@ if __name__ == "__main__":
     outdir = f"./webbpsf-v{webbpsf.__version__}"
 
     tag = f"{year}-{month:02.0f}-{day:02.0f}"
-    os.makedirs(f"{outdir}/{tag}_opd", exist_ok=True)
     oversamp, det_samp = 4, 4
     fov = 10.015 # arcsec
     detectors = dict(short="NRCA1", long="NRCA5")  # This is the default and was used for the ground computations.
     cd_nick = dict(short="NIRCAM_SW", long="NIRCAM_LW")
     nwave = dict(M=9, W=21)
     pos = (1024, 1024)
+    iso_date = f"{year}-{month:02.0f}-{day:02.0f}T00:00:00"
+
+    os.makedirs(f"{outdir}/{tag}_opd", exist_ok=True)
     table = trend(year, month)
     fig = pl.gcf()
     fig.savefig(f"{outdir}/{tag}_opd/{tag}_opd.png")
-    iso_date = f"{year}-{month:02.0f}-{day:02.0f}T00:00:00"
 
-    nrc = webbpsf.NIRCam()
     for band in JWST_BANDS:
+        nrc = webbpsf.NIRCam()
         nrc.filter = band
         nrc.detector = detectors[nrc.channel]
         nick = cd_nick[nrc.channel]
@@ -72,7 +73,7 @@ if __name__ == "__main__":
                                 nlambda=nwave[band[-1]],
                                 fft_oversample=oversamp,
                                 detector_oversample=det_samp)
-        for hdu in psf_hdul:
+        for hdu in psf_hdul[2:]:
             hdu.header["CHRGDIFF"] = nrc.options['charge_diffusion_sigma']
             hdu.header["ADD_IPC"] = nrc.options['add_ipc']
 

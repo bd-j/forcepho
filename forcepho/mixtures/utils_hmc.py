@@ -153,8 +153,8 @@ def radial_plot(image, model, times_r=True):
     import matplotlib.pyplot as pl
     fig, axes = pl.subplots(2, sharex=True)
     ax = axes[0]
-    ax.plot(r, image.data, ".", color="royalblue", label=r"data", rasterized=True)
-    ax.plot(r, model, ".", color="darkorange", label=r"model", rasterized=True)
+    ax.plot(r, image.data, ".", color="royalblue", alpha=0.5, label=r"data", rasterized=True)
+    ax.plot(r, model, ".", color="darkorange", alpha=0.5, label=r"model", rasterized=True)
     ax.legend()
     #ax.set_xscale("log")
     ax.set_ylim(max(model.min(), image.data.min()) * 0.1, image.data.max() * 2)
@@ -180,17 +180,20 @@ def radial_plot(image, model, times_r=True):
     return fig, axes
 
 
-def ee_plot(image, model, n=500):
+def ee_plot(image, model, n=500, renormalize=False):
     r = np.hypot(image.xpix-image.cx, image.ypix-image.cy)
     mt = np.nansum(model[r < image.nx/2])
     dt = np.nansum(image.data[r < image.nx/2])
 
-    rr = np.linspace(np.min(r), np.max(r), n)
+    rr = np.linspace(np.min(r), np.max(r) / 1.4, n)
     eed, eem = np.zeros(n), np.zeros(n)
     eed, dedges = np.histogram(r, bins=rr, weights=image.data)
-    eed = np.cumsum(eed) / mt
+    eed = np.cumsum(eed)
     eem, medges = np.histogram(r, bins=rr, weights=model)
-    eem = np.cumsum(eem) / mt
+    eem = np.cumsum(eem)
+    if renormalize:
+        eed /= dt
+        eem /= dt
     # for i, x in enumerate(rr):
     #     sel = r <= x
     #     eem[i] = np.sum(model[sel]) / mt
@@ -208,7 +211,7 @@ def ee_plot(image, model, n=500):
 
     ax.set_xlabel(r"$r$ (pixels)")  # for ax in axes]
 
-    return fig, axes
+    return fig, axes, (rr, eed, eem, dt)
 
 
 def draw_ellipses(best, ax, cmap=None):
