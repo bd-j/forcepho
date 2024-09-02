@@ -1,10 +1,10 @@
 from .patch import Patch
 from .device_patch import GPUPatchMixin, CPUPatchMixin
-from .pixel_patch import PixelPatch, StorePatch, FITSPatch
+from .pixel_patch import PixelPatch, StorePatch, FITSPatch, DirectPatch
 
 __all__ = ["Patch",
            "PixelPatch",
-           "StorePatch", "FITSPatch",
+           "StorePatch", "FITSPatch", "DirectPatch",
            "JadesPatch",
            "SimplePatch"]
 

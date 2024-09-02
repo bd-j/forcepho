@@ -10,7 +10,7 @@ from .patch import Patch
 
 
 __all__ = ["PixelPatch",
-           "StorePatch", "FITSPatch",
+           "StorePatch", "FITSPatch", "DirectPatch",
            "JWST_BANDS"]
 
 
