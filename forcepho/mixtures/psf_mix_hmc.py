@@ -57,7 +57,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
               ngauss=1, ngauss_neg=0,
               afix=None, amin=0.5, amax=2,
               dcen=1,
-              smax=[10], smin=0.6,
+              smax=[10], smin=0.6, smax_neg=10,
               rho_max=[0.5], qwidth=0.2, qfactor=2.0,
               maxbg=0):
     """numpyro model for a 2d mixture of gaussians with optional constant
@@ -156,7 +156,7 @@ def psf_model(image=None, xpix=None, ypix=None, unc=1,
         xm = numpyro.sample("x_m", dist.Normal(xcen * jnp.ones(ng), dcen))
         ym = numpyro.sample("y_m", dist.Normal(ycen * jnp.ones(ng), dcen))
         rhom = numpyro.sample("rho_m", dist.Uniform(-np.max(rho_max), np.max(rho_max) * jnp.ones(ng)))
-        sxm = numpyro.sample("sx_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))
+        sxm = numpyro.sample("sx_m", dist.Uniform(smin*2, jnp.ones(ng) * smax_neg))
         qm = numpyro.sample("q_m", dist.Uniform((1-qwidth) * jnp.ones(ng), (1+qwidth)))
         #qm = numpyro.sample("q_m", dist.Normal(1.0* jnp.ones(ng), qwidth))
         #sym = numpyro.sample("sy_m", dist.Uniform(smin, jnp.ones(ng) * smax_neg))

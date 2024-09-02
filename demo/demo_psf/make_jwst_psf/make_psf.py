@@ -97,10 +97,12 @@ def fit_image(image, args, a=None, oversample=1, **kwargs):
     # let some big ole gaussians in
     kwargs["smax"] = np.linspace(5, 15, args.ngauss) * oversample
     # make the bigger gaussians rounder
-    kwargs["rho_max"] = np.linspace(0.5, 0.1, args.ngauss)
+    kwargs["rho_max"] = np.linspace(0.3, 0.1, args.ngauss)
     # keep teeny-tiny gaussians out.  This sets Gaussians to
     # have FWHM >~ 1 science pixels
     kwargs["smin"] = oversample * 0.4
+    # size of the airy ring
+    kwargs["smax_neg"] = 10
 
     best, samples, mcmc = infer(psf_model, image=image.data,
                                 xpix=image.xpix, ypix=image.ypix,
@@ -441,6 +443,8 @@ if __name__ == "__main__":
             nfig, nax = ee_plot(image, model)
         except(ValueError):
             nfig, nax, ee_curves = ee_plot(image, model)
+            rr, eed, eem, dt = ee_curves
+            print(dt, eed[-1], eem[-1])
 
         #mcmc.print_summary()
         logger.info(title)
