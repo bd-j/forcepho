@@ -483,3 +483,68 @@ class FITSPatch(PixelPatch):
             yp = np.append(yp, np.zeros(pad, dtype=yp.dtype)-1)
 
         return flux, ie, xp, yp
+
+
+class DirectPatch(PixelPatch):
+
+    """Supply pixel data directly as dictionaries keyed by image 'name' (epath)
+
+    These should have the form:
+
+    pixel_dict[epath] = dict(flux=ndarray, # image flux in each pixel
+                             ierr=ndarray, # inverse uncertainty in each pixel
+                             xpix=ndarray, # x-coordinate of the pixel in the image (corresponding to the header)
+                             ypix=ndarray, # y-coordinate of the pixel in the image (corresponding to the header)
+                             )
+        Note that this need not be a dictionary, but the above arrays must be
+        accessible by name in a dict-like way (e.g. a structured ndarray is ok)
+
+    header_dict[epath] = Dict-like giving header information for this image.
+        This dict-like must have the key "FILTER"
+        Must be able to produce a valid WCS via astropy.wcs.WCS(hdr)
+    """
+
+    def __init__(self,
+                 pixel_dict={},
+                 header_dict={},
+                 psfstore="",
+                 splinedata="",
+                 spline_smoothing=None,
+                 return_residual=False,
+                 meta_dtype=np.float32,
+                 pix_dtype=np.float32,
+                 debug=0,
+                 ):
+
+        super().__init__(return_residual=return_residual,
+                         meta_dtype=meta_dtype,
+                         pix_dtype=pix_dtype,
+                         debug=debug,
+                         psfstore=psfstore,
+                         splinedata=splinedata,
+                         spline_smoothing=spline_smoothing)
+
+
+        self.pixel_dict = pixel_dict
+        self.header_dict = header_dict
+        self.snr = None
+        self.unc = None
+
+    def find_exposures(self, region, bandlist, do_check=True):
+        epaths = list(self.wcs_dict.keys())
+        bands, hdrs, wcses = [], [], []
+
+        for epath in epaths:
+            hdr = self.header_dict[epath]
+            wcs = WCS(hdr)
+            band = hdr["FILTER"]
+
+            wcses.append(wcs)
+            bands.append(band)
+            hdrs.append(hdr)
+
+        return hdrs, wcses, epaths, bands
+
+    def find_pixels(self, epath, wcs, region):
+        pdat = self.pixel_dict[epath]
+        return pdat["flux"], pdat["ierr"], pdat["xpix"], pdat["ypix"]
