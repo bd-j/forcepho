@@ -583,7 +583,7 @@ class Transform(object):
     def lndetjac(self, z):
         """ln(|dq/dz|)
         """
-        return np.log(np.abs(np.product(self.jacobian(z))))
+        return np.log(np.abs(np.prod(self.jacobian(z))))
         # return np.sum(np.log(self.jacobian(z)))
 
     def lndetjac_grad(self, z):
