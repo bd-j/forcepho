@@ -595,15 +595,21 @@ def optimize_one_band(X, w, y, fixedX=0):
     """
     Xp = X * w
     invalid = np.all(Xp == 0, axis=1)
+    # restrict to valid sources
     Xp = Xp[~invalid, :]
 
+    # do the fit
     yp = (y - fixedX) * w
     ATA = np.dot(Xp, Xp.T)
     Xyp = np.dot(Xp, yp[:, None])
     vflux = np.linalg.solve(ATA, Xyp)
 
+    # instert back into full arrays
     flux = np.zeros(X.shape[0])
     flux[~invalid] = np.squeeze(vflux)
+    precision = np.zeros((X.shape[0], X.shape[0]))
+    inds = np.ix_(~invalid, ~invalid)
+    precision[inds] = ATA
 
     return flux, ATA
 
