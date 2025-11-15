@@ -7,11 +7,9 @@ Routines for fitting a Scene model to data, using older CPU-based
 likelihood methods.
 """
 
-import sys, os, time
-from functools import partial as argfix
+import os, time
 import numpy as np
 
-from .model import ConstrainedTransformedPosterior as Posterior
 from .utils import make_statscat, make_chaincat, get_sample_cat, extract_block_diag
 from .region import CircularRegion
 
@@ -582,15 +580,31 @@ def optimize_one_band(X, w, y, fixedX=0):
     w : ndarray of shape (npix_band,)
         The weights for each pixel (usually 1/sigma)
 
-    fixedX : optional, ndarray of shape (nfixed, npix_band)
+    y : ndarray of shape (npix_band,)
+        The data pixel fluxes
+
+    fixedX : optional, ndarray broadcastable to (npix_band)
         Model pixel fluxes (not normalized) for any fixed sources that are being
         subtracted from the scene.
+    Returns
+    -------
+    flux : ndarray of shape (nsource, 1)
+
+    precision : ndarray of shape (nsource, nsource)
+        The flux precision matrix (inverse of the flux covariance matrix)
     """
     Xp = X * w
+    invalid = np.all(Xp == 0, axis=1)
+    Xp = Xp[~invalid, :]
+
     yp = (y - fixedX) * w
     ATA = np.dot(Xp, Xp.T)
     Xyp = np.dot(Xp, yp[:, None])
-    flux = np.linalg.solve(ATA, Xyp)
+    vflux = np.linalg.solve(ATA, Xyp)
+
+    flux = np.zeros(X.shape[0])
+    flux[~invalid] = np.squeeze(vflux)
+
     return flux, ATA
 
 
